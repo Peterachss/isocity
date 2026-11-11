@@ -170,7 +170,7 @@ html, body { height: 100%; overflow: hidden; background: #162b1f; }
   position: absolute;
   bottom: calc(max(12px, env(safe-area-inset-bottom)) + 58px);
   right: 12px;
-  width: 280px;
+  width: 296px;
   background: var(--surface);
   border-radius: 16px;
   padding: 12px;
@@ -193,7 +193,7 @@ html, body { height: 100%; overflow: hidden; background: #162b1f; }
 
 .pop-head { display: grid; gap: 8px; }
 .pop-head h2 { font-size: 14px; font-weight: 650; }
-.pop-io { display: flex; gap: 6px; }
+.pop-io { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip.small { padding: 6px 10px; font-size: 12px; }
 .slot-list { display: grid; gap: 6px; }
 

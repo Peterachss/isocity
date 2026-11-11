@@ -12,6 +12,7 @@
     shop:   { name: 'Shop',     cost: 250, color: '#e0c25b', jobs: 5, h: 28, inset: 0.1, grow: true },
     office: { name: 'Office',   cost: 600, color: '#7fa6c9', jobs: 16, h: 118, inset: 0.1, grow: true },
     park:   { name: 'Park',     cost: 150, color: '#8cbf5c', radius: 2 },
+    plaza:  { name: 'Plaza',    cost: 300, color: '#c4b59d', radius: 3 },
     clinic: { name: 'Clinic',   cost: 350, color: '#d95f59', jobs: 6, h: 30, inset: 0.12, radius: 4 },
     school: { name: 'School',   cost: 450, color: '#5f8c7a', jobs: 8, h: 34, inset: 0.1, radius: 4 },
     forest: { name: 'Forest',   cost: 5,   color: '#d9a21f' },
@@ -19,7 +20,7 @@
     bridge: { name: 'Bridge',   cost: 35,  color: '#8e8372' },
     bulldoze:{ name: 'Bulldoze',cost: 0,   color: '#b4513f' },
   };
-  const ORDER = ['pan', 'road', 'house', 'apt', 'shop', 'office', 'park', 'clinic', 'school', 'forest', 'water', 'bulldoze'];
+  const ORDER = ['pan', 'road', 'house', 'apt', 'shop', 'office', 'park', 'plaza', 'clinic', 'school', 'forest', 'water', 'bulldoze'];
   const LVL_MULT = [1, 1, 1.5, 2.2];
 
   const canvas = document.getElementById('stage');
@@ -28,8 +29,8 @@
 
   let grid, levels, money, tool = 'road';
   let cam = { x: 0, y: 0, z: 1 };
-  let hover = null, cars = [], walkers = [], orphansList = [];
-  let hour = 17.4, auto = false, stats = {};
+  let hover = null, cars = [], walkers = [], boats = [], orphansList = [];
+  let hour = 17.4, auto = false, simSpeed = 1, stats = {};
   let dpr = 1, W = 0, H = 0;
   const rnd = (a, b) => a + Math.random() * (b - a);
   const inb = (x, y) => x >= 0 && y >= 0 && x < N && y < N;
@@ -62,6 +63,12 @@
     vy: rnd(0.012, 0.025),
     phase: rnd(0, 6.28),
     col: ['#d9a21f', '#e08a2c', '#c9612f', '#e8b832'][i % 4],
+  }));
+
+  const fireflies = Array.from({ length: 12 }, (_, i) => ({
+    x: ((i * 271 + 91) % 1000) / 1000,
+    y: ((i * 419 + 43) % 1000) / 1000,
+    phase: rnd(0, 6.28),
   }));
 
   // ---------- sound ----------
@@ -203,10 +210,10 @@
       const t = grid[x][y];
       if (t === 'clinic' && connected(x, y)) stampMask(clinicCov, x, y, TYPES.clinic.radius);
       else if (t === 'school' && connected(x, y)) stampMask(schoolCov, x, y, TYPES.school.radius);
-      else if (t === 'park') stampMask(parkCov, x, y, TYPES.park.radius);
+      else if (t === 'park' || t === 'plaza') stampMask(parkCov, x, y, TYPES[t].radius);
     }
 
-    let pop = 0, jobs = 0, parks = 0, roads = 0, orphans = 0, blds = 0, trees = 0, waterfront = 0, coveredPop = 0, schooledPop = 0;
+    let pop = 0, jobs = 0, parks = 0, plazas = 0, roads = 0, orphans = 0, blds = 0, trees = 0, waterfront = 0, coveredPop = 0, schooledPop = 0;
     orphansList = [];
     for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
       const t = grid[x][y];
@@ -214,6 +221,7 @@
       if (t === 'forest') { trees++; continue; }
       if (isRoad(t)) { roads++; continue; }
       if (t === 'park') { parks++; if (nearWater(x, y)) waterfront++; continue; }
+      if (t === 'plaza') { plazas++; if (nearWater(x, y)) waterfront++; continue; }
       blds++;
       if (!connected(x, y)) { orphans++; orphansList.push([x, y, TYPES[t].h]); continue; }
       const lv = levels[x][y] || 1;
@@ -230,9 +238,9 @@
       }
     }
     const employed = Math.min(pop, jobs);
-    const income = employed * 3 + Math.min(pop, jobs * 2) * 0.5 + waterfront * 2;
-    const upkeep = roads * 0.4 + parks * 2 + blds * 0.5;
-    let happy = 48 + Math.min(parks * 5, 22) + Math.min(trees * 0.1, 12) + Math.min(waterfront * 2, 10) - orphans * 6;
+    const income = employed * 3 + Math.min(pop, jobs * 2) * 0.5 + waterfront * 2 + plazas * 4;
+    const upkeep = roads * 0.4 + parks * 2 + plazas * 2 + blds * 0.5;
+    let happy = 48 + Math.min(parks * 5 + plazas * 6, 24) + Math.min(trees * 0.1, 12) + Math.min(waterfront * 2, 10) - orphans * 6;
     if (pop > 0) {
       happy += (employed / pop - 0.6) * 28;
       happy += (coveredPop / pop) * 8 + (schooledPop / pop) * 8;
@@ -282,38 +290,56 @@
     }
   }
 
-  // ---------- cars & walkers ----------
+  // ---------- cars, walkers & river boats ----------
   function roadTiles() {
     const r = [];
     for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) if (isRoad(grid[x][y])) r.push([x, y]);
     return r;
   }
+  function waterTiles() {
+    const w = [];
+    for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) if (isWater(grid[x][y])) w.push([x, y]);
+    return w;
+  }
   function syncAgents() {
     cars = cars.filter((c) => isRoad(grid[c.tx]?.[c.ty]) && isRoad(grid[c.fx]?.[c.fy]));
     walkers = walkers.filter((w) => isRoad(grid[w.tx]?.[w.ty]) && isRoad(grid[w.fx]?.[w.fy]));
-    const r = roadTiles();
-    if (!r.length) { cars.length = 0; walkers.length = 0; return; }
-    const wantCars = Math.min(48, Math.floor(r.length / 3));
-    while (cars.length < wantCars) {
-      const [x, y] = r[Math.floor(Math.random() * r.length)];
-      cars.push({ fx: x, fy: y, tx: x, ty: y, t: 1, px: x, py: y, speed: rnd(0.9, 1.7),
-        color: ['#c0463a', '#2f5d8a', '#e6e2d6', '#d89a2b', '#3d3f45', '#4f8f6a'][Math.floor(Math.random() * 6)] });
-    }
-    if (cars.length > wantCars) cars.length = wantCars;
+    boats = boats.filter((b) => isWater(grid[b.tx]?.[b.ty]) && isWater(grid[b.fx]?.[b.fy]));
 
-    const wantWalkers = Math.min(24, Math.floor(stats.pop / 8));
-    while (walkers.length < wantWalkers) {
-      const [x, y] = r[Math.floor(Math.random() * r.length)];
-      walkers.push({ fx: x, fy: y, tx: x, ty: y, t: 1, px: x, py: y, speed: rnd(0.28, 0.48),
-        color: ['#e6ded0', '#c95d43', '#3b6978', '#d4a23a', '#5b7a52'][Math.floor(Math.random() * 5)] });
+    const r = roadTiles();
+    if (!r.length) { cars.length = 0; walkers.length = 0; }
+    else {
+      const wantCars = Math.min(48, Math.floor(r.length / 3));
+      while (cars.length < wantCars) {
+        const [x, y] = r[Math.floor(Math.random() * r.length)];
+        cars.push({ fx: x, fy: y, tx: x, ty: y, t: 1, px: x, py: y, speed: rnd(0.9, 1.7),
+          color: ['#c0463a', '#2f5d8a', '#e6e2d6', '#d89a2b', '#3d3f45', '#4f8f6a'][Math.floor(Math.random() * 6)] });
+      }
+      if (cars.length > wantCars) cars.length = wantCars;
+
+      const wantWalkers = Math.min(24, Math.floor(stats.pop / 8));
+      while (walkers.length < wantWalkers) {
+        const [x, y] = r[Math.floor(Math.random() * r.length)];
+        walkers.push({ fx: x, fy: y, tx: x, ty: y, t: 1, px: x, py: y, speed: rnd(0.28, 0.48),
+          color: ['#e6ded0', '#c95d43', '#3b6978', '#d4a23a', '#5b7a52'][Math.floor(Math.random() * 5)] });
+      }
+      if (walkers.length > wantWalkers) walkers.length = wantWalkers;
     }
-    if (walkers.length > wantWalkers) walkers.length = wantWalkers;
+
+    const w = waterTiles();
+    const wantBoats = Math.min(5, Math.floor(w.length / 12));
+    while (boats.length < wantBoats) {
+      const [x, y] = w[Math.floor(Math.random() * w.length)];
+      boats.push({ fx: x, fy: y, tx: x, ty: y, t: 1, px: x, py: y, speed: rnd(0.35, 0.55),
+        color: ['#b35a38', '#d8cbb5', '#3d6e70', '#c48f36'][Math.floor(Math.random() * 4)] });
+    }
+    if (boats.length > wantBoats) boats.length = wantBoats;
   }
-  function stepList(list, dt) {
+  function stepList(list, dt, passable = isRoad) {
     for (const c of list) {
       c.t += dt * c.speed;
       if (c.t >= 1) {
-        const opts = NB.map(([dx,dy]) => [c.tx+dx, c.ty+dy]).filter(([x,y]) => inb(x,y) && isRoad(grid[x][y]));
+        const opts = NB.map(([dx,dy]) => [c.tx+dx, c.ty+dy]).filter(([x,y]) => inb(x,y) && passable(grid[x][y]));
         if (!opts.length) { c.t = 1; continue; }
         const fwd = opts.filter(([x,y]) => !(x === c.fx && y === c.fy));
         const pool = fwd.length ? fwd : opts;
@@ -420,6 +446,12 @@
       }
       return;
     }
+    if (t === 'plaza') {
+      const ax = px(x + 0.5, y + 0.5), ay = py(x + 0.5, y + 0.5, 10);
+      rctx.fillStyle = 'rgba(255,214,130,0.42)';
+      rctx.beginPath(); rctx.arc(ax, ay, 22 * rcam.z, 0, 7); rctx.fill();
+      return;
+    }
     const h = bldHeight(t, levels[x][y] || 1);
     if (!h) return;
     const i = TYPES[t].inset;
@@ -456,10 +488,10 @@
     }
   }
 
-  function drawRoad(x, y, L, bridge = false) {
+  function drawRoad(x, y, L, bridge = false, skipWater = false) {
     const z = bridge ? 2 : 0;
     if (bridge) {
-      drawWater(x, y, L);
+      if (!skipWater) drawWater(x, y, L);
       box(x + 0.05, y + 0.05, x + 0.95, y + 0.95, -5, z, '#8c806e', L, { roof: '#525961' });
     } else {
       quadZ(x, y, x + 1, y + 1, 0, shade('#4a5159', 1, L));
@@ -536,7 +568,7 @@
     }
     if (t === 'road' || t === 'bridge') {
       if (hs < 1) rctx.globalAlpha = hs;
-      drawRoad(x, y, L, t === 'bridge');
+      drawRoad(x, y, L, t === 'bridge', skipGround);
       if (hs < 1) rctx.globalAlpha = 1;
       return;
     }
@@ -545,6 +577,12 @@
       tree(x + 0.3, y + 0.3, hs, L, 0);
       tree(x + 0.7, y + 0.55, 0.85 * hs, L, 1);
       if (sd % 2) tree(x + 0.35, y + 0.78, 0.7 * hs, L, 0);
+      return;
+    }
+    if (t === 'plaza') {
+      quadZ(x + 0.06, y + 0.06, x + 0.94, y + 0.94, 0.5, shade('#c8baa3', 1, L));
+      box(x + 0.25, y + 0.25, x + 0.75, y + 0.75, 0.5, 4 * hs, '#a79a86', L, { roof: '#3c7b80' });
+      box(x + 0.45, y + 0.45, x + 0.55, y + 0.55, 4 * hs, 11 * hs, '#dcd3c2', L, { roof: '#ffd98a' });
       return;
     }
     const d = TYPES[t];
@@ -619,6 +657,14 @@
     rctx.fillRect(sx - 1.5 * sz, sy - 5 * sz, 3 * sz, 5 * sz);
     rctx.fillStyle = '#e7c6a5';
     rctx.fillRect(sx - 1 * sz, sy - 7 * sz, 2 * sz, 2 * sz);
+  }
+
+  function drawBoat(b, L) {
+    const dx = b.tx - b.fx, dy = b.ty - b.fy;
+    const x = b.px + 0.5, y = b.py + 0.5;
+    const lx = dx ? 0.22 : 0.1, ly = dy ? 0.22 : 0.1;
+    box(x - lx, y - ly, x + lx, y + ly, -5, -1, b.color, L, { roof: '#efe7d6' });
+    box(x - 0.06, y - 0.06, x + 0.06, y + 0.06, -1, 3, '#f2ece0', L);
   }
 
   // ---------- offscreen world & night light caches ----------
@@ -806,6 +852,19 @@
       addOccluders(Math.floor(w.px), Math.floor(w.py));
     }
 
+    for (let i = 0; i < boats.length; i++) {
+      const b = boats[i];
+      const bx0 = px(b.px + 0.5, b.py + 0.5), by0 = py(b.px + 0.5, b.py + 0.5);
+      if (bx0 < -40 || bx0 > W + 40 || by0 < -40 || by0 > H + 40) continue;
+      ov.push({ k: 3, s: b.px + b.py, b });
+      const rx = Math.round(b.px), ry = Math.round(b.py);
+      if (inb(rx, ry) && grid[rx][ry] === 'bridge' && !seen[rx * N + ry]) {
+        seen[rx * N + ry] = 1;
+        ov.push({ k: 0, s: rx + ry + 1.1, x: rx, y: ry, t: 'bridge', hs: 1 });
+      }
+      addOccluders(Math.floor(b.px), Math.floor(b.py));
+    }
+
     if (ov.length) {
       const savedW = warm; warm = 0;
       if (ov.length > 1) ov.sort((a, b) => a.s - b.s || a.k - b.k);
@@ -813,7 +872,8 @@
         const it = ov[i];
         if (it.k === 1) drawCar(it.c, 1, false);
         else if (it.k === 2) drawWalker(it.w);
-        else drawTile(it.x, it.y, it.t, 1, it.hs, true);
+        else if (it.k === 3) drawBoat(it.b, 1);
+        else drawTile(it.x, it.y, it.t, 1, it.hs, it.t !== 'bridge');
       }
       warm = savedW;
     }
@@ -850,6 +910,16 @@
         ctx.fillRect(lf.x * W, lf.y * H, 3, 2);
       }
       ctx.globalAlpha = 1;
+    } else if (!reduceMotion && L <= 0.45) {
+      for (let i = 0; i < fireflies.length; i++) {
+        const ff = fireflies[i];
+        const a = Math.max(0, Math.sin(now * 0.003 + ff.phase)) * (0.45 - L) * 1.8;
+        if (a < 0.05) continue;
+        ctx.fillStyle = `rgba(255,235,140,${a.toFixed(2)})`;
+        const fx = (ff.x + Math.sin(now * 0.0005 + ff.phase) * 0.02) * W;
+        const fy = (ff.y + Math.cos(now * 0.0006 + ff.phase) * 0.02) * H;
+        ctx.fillRect(fx, fy, 2.5, 2.5);
+      }
     }
 
     if (orphansList.length) {
@@ -1023,6 +1093,7 @@
     if (t === 'bridge') return 'Bridge. Connects roads across water.';
     if (t === 'water') return 'Water. Build roads across it for bridges, or place homes beside it for a waterfront bonus.';
     if (t === 'park') return 'Park. Raises happiness.' + (nearWater(x, y) ? ' Waterfront bonus.' : '');
+    if (t === 'plaza') return 'Town Plaza. Boosts nearby happiness and income.' + (nearWater(x, y) ? ' Waterfront bonus.' : '');
     if (t === 'forest') return 'Forest. Clear it with the Bulldoze tool, or build over it.';
     const d = TYPES[t];
     const lv = levels[x][y] || 1;
@@ -1101,6 +1172,17 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
   $('importBtn').onclick = () => $('importFile').click();
+  $('pngBtn').onclick = () => {
+    const prevHover = hover;
+    hover = null;
+    draw(performance.now(), 0);
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = 'isocity-snapshot.png';
+    a.click();
+    hover = prevHover;
+    sfx('build');
+  };
   $('importFile').onchange = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -1184,16 +1266,31 @@
     const b = document.createElement('button');
     b.className = 'tool'; b.type = 'button'; b.dataset.tool = id;
     b.setAttribute('aria-pressed', 'false');
-    const key = i < 9 ? String(i + 1) : i === 11 ? 'B' : '';
+    const key = i < 9 ? String(i + 1) : id === 'bulldoze' ? 'B' : '';
     b.setAttribute('aria-label', `${d.name}${d.cost ? ', costs ' + d.cost : ''}${key ? ', shortcut ' + key : ''}`);
     b.innerHTML = `<span class="swatch" style="background:${d.color}"></span><span class="name">${d.name}</span><span class="cost">${d.cost ? '$' + d.cost : ''}</span>`;
     b.onclick = () => setTool(id);
     toolsEl.appendChild(b);
     toolBtns.push(b);
   });
+  const SPEEDS = [1, 2, 0];
+  function setSpeed(s) {
+    simSpeed = s;
+    const b = $('speedBtn');
+    b.textContent = s === 0 ? 'Paused' : s + 'x';
+    b.setAttribute('aria-pressed', String(s !== 1));
+    b.setAttribute('aria-label', `Simulation speed: ${s === 0 ? 'Paused' : s + 'x'}`);
+  }
+  $('speedBtn').onclick = () => {
+    const idx = (SPEEDS.indexOf(simSpeed) + 1) % SPEEDS.length;
+    setSpeed(SPEEDS[idx]);
+    sfx('tap');
+  };
+
   addEventListener('keydown', (e) => {
     if (e.key === 'Escape') setCitiesOpen(false);
     if (e.target.matches('input')) return;
+    if (e.code === 'Space') { e.preventDefault(); setSpeed(simSpeed === 0 ? 1 : 0); return; }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); return e.shiftKey ? redo() : undo(); }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); return redo(); }
     const k = e.key.toLowerCase();
@@ -1241,8 +1338,9 @@
 
   let last = performance.now(), acc = 0, growTick = 0, lastLabel = '';
   function frame(now) {
-    const dt = Math.min(0.1, (now - last) / 1000); last = now;
-    if (auto) hour = (hour + dt * 0.35) % 24;
+    const rawDt = Math.min(0.1, (now - last) / 1000); last = now;
+    const dt = rawDt * simSpeed;
+    if (auto && simSpeed > 0) hour = (hour + dt * 0.35) % 24;
     const hh = Math.floor(hour), mm = Math.floor((hour % 1) * 60);
     const label = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
     if (label !== lastLabel) {
@@ -1250,16 +1348,19 @@
       $('clockText').textContent = label;
       if (document.activeElement !== $('clock')) $('clock').value = hour;
     }
-    stepList(cars, dt);
-    stepList(walkers, dt);
-    acc += dt;
-    if (acc >= 3) {
-      acc = 0;
-      money += stats.net;
-      render_stats();
-      scheduleSave();
-      growTick++;
-      if (growTick % 2 === 0) tryGrow();
+    if (simSpeed > 0) {
+      stepList(cars, dt, isRoad);
+      stepList(walkers, dt, isRoad);
+      stepList(boats, dt, isWater);
+      acc += dt;
+      if (acc >= 3) {
+        acc = 0;
+        money += stats.net;
+        render_stats();
+        scheduleSave();
+        growTick++;
+        if (growTick % 2 === 0) tryGrow();
+      }
     }
     draw(now, dt);
     requestAnimationFrame(frame);

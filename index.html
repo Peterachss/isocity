@@ -8,7 +8,7 @@
   <meta property="og:title" content="Isocity, build your own city" />
   <meta property="og:description" content="Lay roads, place buildings and watch the city grow through day and night." />
   <meta property="og:type" content="website" />
-  <link rel="stylesheet" href="city.css?v=8" />
+  <link rel="stylesheet" href="city.css?v=9" />
 </head>
 <body>
   <main class="app">
@@ -28,6 +28,7 @@
       <label for="clock" class="stat-label">Time <span id="clockText" class="tnum">12:00</span></label>
       <input id="clock" type="range" min="0" max="24" step="0.05" value="12" />
       <button id="autoBtn" class="chip" type="button" aria-pressed="false">Auto cycle</button>
+      <button id="speedBtn" class="chip tnum" type="button" aria-label="Simulation speed">1x</button>
     </section>
 
     <section class="actions" aria-label="City actions">
@@ -46,6 +47,7 @@
         <div class="pop-io">
           <button id="exportBtn" class="chip small" type="button">Export JSON</button>
           <button id="importBtn" class="chip small" type="button">Import JSON</button>
+          <button id="pngBtn" class="chip small" type="button">Save PNG</button>
           <input id="importFile" type="file" accept=".json,application/json" hidden />
         </div>
       </div>
@@ -55,6 +57,6 @@
     <div id="tip" class="tip" role="status" hidden></div>
     <p class="hint" id="hint">Click or drag to build. Right drag, or the Pan tool, moves the map. Scroll to zoom. Ctrl+Z undoes.</p>
   </main>
-  <script src="city.js?v=8"></script>
+  <script src="city.js?v=9"></script>
 </body>
 </html>
