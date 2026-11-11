@@ -175,13 +175,22 @@
   }
   const hex = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
   let warm = 0;
+  const shadeCache = new Map();
   function shade(c, k, light) {
+    const lq = Math.round(light * 40) / 40, wq = Math.round(warm * 20) / 20;
+    const key = c + k + '|' + lq + '|' + wq;
+    let out = shadeCache.get(key);
+    if (out) return out;
     const [r, g, b] = hex(c);
+    light = lq;
     const n = 1 - light;
     const tint = [0.55, 0.62, 0.9];
-    const w = [1 + 0.2 * warm, 1 + 0.05 * warm, 1 - 0.28 * warm];
+    const w = [1 + 0.2 * wq, 1 + 0.05 * wq, 1 - 0.28 * wq];
     const f = (v, i) => Math.round(Math.min(255, v * w[i] * k * (light + n * 0.38 * tint[i] / 0.55 * 0.75)));
-    return `rgb(${f(r,0)},${f(g,1)},${f(b,2)})`;
+    out = `rgb(${f(r,0)},${f(g,1)},${f(b,2)})`;
+    if (shadeCache.size > 4000) shadeCache.clear();
+    shadeCache.set(key, out);
+    return out;
   }
   function mix(a, b, t) {
     const A = hex(a), B = hex(b);
@@ -255,10 +264,10 @@
   ];
   function tree(x, y, z, s, L, seed = 0) {
     const [dark, light] = CROWNS[Math.abs(seed) % CROWNS.length];
-    box(x - 0.025, y - 0.025, x + 0.025, y + 0.025, 0, 8 * s, '#4a3624', L);
+    if (!seed) box(x - 0.025, y - 0.025, x + 0.025, y + 0.025, 0, 8 * s, '#4a3624', L);
     const [cx, cy] = P(x, y, 8 * s + 11 * s);
     const R = 10 * s * cam.z;
-    ctx.fillStyle = shade('#16301a', 1, L) ;
+    ctx.fillStyle = shade('#16301a', 1, L);
     ctx.beginPath(); ctx.ellipse(cx + 3 * cam.z, cy + 14 * s * cam.z, R * 0.95, R * 0.45, 0, 0, 7); ctx.fill();
     ctx.fillStyle = shade(dark, 1, L);
     ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.fill();
@@ -361,6 +370,8 @@
       for (let x = Math.max(0, s - N + 1); x <= Math.min(N - 1, s); x++) {
         const y = s - x;
         const key = x * 100 + y;
+        const [cx0, cy0] = P(x + 0.5, y + 0.5);
+        if (cx0 < -90 * cam.z - 40 || cx0 > W + 90 * cam.z + 40 || cy0 < -220 * cam.z || cy0 > H + 60 * cam.z) continue;
         const an = anims.get(key);
         let hs = 1, t = grid[x][y];
         if (an) {
@@ -551,13 +562,13 @@
   }
   addEventListener('resize', () => { resize(); });
 
-  let last = performance.now(), acc = 0;
+  let last = performance.now(), acc = 0, lastLabel = '';
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
     if (auto) hour = (hour + dt * 0.35) % 24;
-    $('clock').value = hour;
     const hh = Math.floor(hour), mm = Math.floor((hour % 1) * 60);
-    $('clockText').textContent = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+    const label = `:`;
+    if (label !== lastLabel) { lastLabel = label; $('clockText').textContent = label; if (document.activeElement !== $('clock')) $('clock').value = hour; }
     stepCars(dt);
     acc += dt;
     if (acc >= 3) { acc = 0; money += stats.net; render_stats(); save(); }
