@@ -17,7 +17,7 @@
   const ORDER = ['pan', 'road', 'house', 'apt', 'shop', 'office', 'park', 'forest', 'bulldoze'];
 
   const canvas = document.getElementById('stage');
-  const ctx = canvas.getContext('2d');
+  let ctx = canvas.getContext('2d');
   const $ = (id) => document.getElementById(id);
 
   let grid, money, tool = 'road';
@@ -67,7 +67,14 @@
     }
   }
 
+  let saveTimer = 0;
   function save() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(flushSave, 250);
+  }
+  function flushSave() {
+    clearTimeout(saveTimer);
+    saveTimer = 0;
     try { localStorage.setItem(SAVE_KEY, JSON.stringify({ grid, money, hour })); } catch (e) { /* storage unavailable */ }
   }
   function load() {
@@ -346,10 +353,46 @@
     }
   }
 
+  // Keep one sprite per tile. Camera translation never invalidates scenery.
+  // Cap raster density to bound memory on high-DPI displays at maximum zoom.
+  const tileSprites = new Map();
+  function drawCachedTile(x, y, t, L, hs) {
+    if (hs !== 1 || t === 'road' || (TYPES[t]?.h && !connected(x, y))) {
+      drawTile(x, y, t, L, hs);
+      return;
+    }
+    const scale = dpr;
+    const key = x * N + y;
+    const signature = `${t}|${L}|${warm}|${scale}`;
+    let sprite = tileSprites.get(key);
+    if (!sprite || sprite.signature !== signature) {
+      const top = TYPES[t]?.h ? TYPES[t].h + 12 : 36;
+      const surface = sprite?.surface || document.createElement('canvas');
+      surface.width = Math.ceil(68 * scale);
+      surface.height = Math.ceil((top + 34) * scale);
+      const sceneCtx = ctx, sceneCam = cam;
+      try {
+        ctx = surface.getContext('2d');
+        ctx.setTransform(scale, 0, 0, scale, 0, 0);
+        cam = { x: 34 - (x - y) * TW / 2, y: top - (x + y) * TH / 2, z: 1 };
+        drawTile(x, y, t, L);
+      } finally {
+        ctx = sceneCtx;
+        cam = sceneCam;
+      }
+      sprite = { surface, signature, top, scale };
+      tileSprites.set(key, sprite);
+    }
+    const [sx, sy] = P(x, y);
+    ctx.drawImage(sprite.surface, sx - 34 * cam.z, sy - sprite.top * cam.z,
+      sprite.surface.width / sprite.scale * cam.z, sprite.surface.height / sprite.scale * cam.z);
+  }
+
   function draw() {
-    const L = daylight(hour);
+    const L = Math.round(daylight(hour) * 40) / 40;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     warm = Math.max(0, 1 - Math.abs(hour - 17.6) / 2.2, 1 - Math.abs(hour - 6.4) / 1.6);
+    warm = Math.round(warm * 20) / 20;
     const sky = mix('#07110c', '#1f3b2a', L);
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, W, H);
@@ -380,7 +423,7 @@
           else if (an.out) { t = an.type; hs = 1 - easeOut(p); }
           else hs = easeOut(p);
         }
-        drawTile(x, y, t, L, hs);
+        drawCachedTile(x, y, t, L, hs);
         const cs = bucket.get(x * 100 + y);
         if (cs) cs.forEach((cr) => drawCar(cr, L));
       }
@@ -546,7 +589,7 @@
       return;
     }
     clearTimeout(resetArmed); resetArmed = 0; b.textContent = 'New city';
-    history.length = 0; starter(); recompute(); save(); center();
+    history.length = 0; anims.clear(); tileSprites.clear(); starter(); recompute(); save(); center();
   };
   $('undoBtn').onclick = undo;
 
@@ -562,24 +605,36 @@
   }
   addEventListener('resize', () => { resize(); });
 
+  let frameId = 0;
   let last = performance.now(), acc = 0, lastLabel = '';
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
     if (auto) hour = (hour + dt * 0.35) % 24;
     const hh = Math.floor(hour), mm = Math.floor((hour % 1) * 60);
-    const label = `:`;
+    const label = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
     if (label !== lastLabel) { lastLabel = label; $('clockText').textContent = label; if (document.activeElement !== $('clock')) $('clock').value = hour; }
     stepCars(dt);
     acc += dt;
     if (acc >= 3) { acc = 0; money += stats.net; render_stats(); save(); }
     draw();
-    requestAnimationFrame(frame);
+    frameId = requestAnimationFrame(frame);
   }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      cancelAnimationFrame(frameId);
+      flushSave();
+    } else {
+      last = performance.now();
+      frameId = requestAnimationFrame(frame);
+    }
+  });
+  addEventListener('pagehide', flushSave);
 
   resize();
   if (!load()) starter();
   center();
   recompute();
   setTool('road');
-  requestAnimationFrame(frame);
+  frameId = requestAnimationFrame(frame);
 })();
