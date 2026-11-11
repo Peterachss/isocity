@@ -141,6 +141,8 @@ html, body { height: 100%; overflow: hidden; background: #162b1f; }
 .chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 
 .tip {
+  top: 0;
+  left: 0;
   pointer-events: none;
   padding: 8px 12px;
   font-size: 13px;

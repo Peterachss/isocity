@@ -28,9 +28,10 @@
   const rnd = (a, b) => a + Math.random() * (b - a);
   const inb = (x, y) => x >= 0 && y >= 0 && x < N && y < N;
 
-  // Active render target (swapped between offscreen worldCanvas and main ctx)
+  // Active render target (swapped between worldCanvas, nightCanvas, and main ctx)
   let rctx = ctx, rcam = cam;
   let worldDirty = true;
+  const dirtyCols = new Set();
 
   // ---------- motion ----------
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -167,7 +168,6 @@
   // ---------- projection ----------
   const px = (x, y) => (x - y) * (TW / 2) * rcam.z + rcam.x;
   const py = (x, y, z = 0) => (x + y) * (TH / 2) * rcam.z + rcam.y - z * rcam.z;
-  const P = (x, y, z = 0) => [px(x, y), py(x, y, z)];
   function pick(mx, my) {
     const u = (mx - cam.x) / cam.z / (TW / 2);
     const v = (my - cam.y) / cam.z / (TH / 2);
@@ -217,11 +217,8 @@
   }
 
   function box(x0, y0, x1, y1, z0, z1, color, L, opts = {}) {
-    // left face (y = y1)
     poly4(px(x0,y1), py(x0,y1,z0), px(x1,y1), py(x1,y1,z0), px(x1,y1), py(x1,y1,z1), px(x0,y1), py(x0,y1,z1), shade(color, 0.82, L));
-    // right face (x = x1)
     poly4(px(x1,y0), py(x1,y0,z0), px(x1,y1), py(x1,y1,z0), px(x1,y1), py(x1,y1,z1), px(x1,y0), py(x1,y0,z1), shade(color, 0.64, L));
-    // top face
     quadZ(x0, y0, x1, y1, z1, shade(opts.roof || color, 1.05, L));
     if (opts.windows) windows(x0, y0, x1, y1, z0, z1, L, opts.windows);
   }
@@ -241,6 +238,38 @@
         poly4(px(lx0,y1), py(lx0,y1,zz0), px(lx1,y1), py(lx1,y1,zz0), px(lx1,y1), py(lx1,y1,zz1), px(lx0,y1), py(lx0,y1,zz1), lit ? '#ffd98a' : darkL);
         const ry0 = y0 + dy * a, ry1 = y0 + dy * b;
         poly4(px(x1,ry0), py(x1,ry0,zz0), px(x1,ry1), py(x1,ry1,zz0), px(x1,ry1), py(x1,ry1,zz1), px(x1,ry0), py(x1,ry0,zz1), lit ? '#f0b862' : darkR);
+      }
+    }
+  }
+
+  // Lit-only pass baked into nightCanvas (drawn un-multiplied at night)
+  function drawTileNight(x, y, t) {
+    if (!t) return;
+    if (t === 'road') {
+      if ((x + y) % 3 === 0) {
+        const ax = px(x + 0.5, y + 0.5), ay = py(x + 0.5, y + 0.5);
+        rctx.fillStyle = 'rgba(255,214,130,0.28)';
+        rctx.beginPath(); rctx.arc(ax, ay, 18 * rcam.z, 0, 7); rctx.fill();
+      }
+      return;
+    }
+    const d = TYPES[t];
+    if (!d || !d.h) return;
+    const i = d.inset;
+    const x0 = x + i, y0 = y + i, x1 = x + 1 - i, y1 = y + 1 - i;
+    const seed = x * 11 + y * 5;
+    const rows = Math.max(1, Math.floor(d.h / 14));
+    const cols = Math.max(1, Math.round((x1 - x0) * 3));
+    const dx = x1 - x0, dy = y1 - y0;
+    for (let r = 0; r < rows; r++) {
+      const zz0 = 6 + r * 14, zz1 = zz0 + 7;
+      for (let c = 0; c < cols; c++) {
+        if (((seed * 31 + r * 17 + c * 13) % 7) >= 4) continue;
+        const a = (c + 0.25) / cols, b = (c + 0.75) / cols;
+        const lx0 = x0 + dx * a, lx1 = x0 + dx * b;
+        poly4(px(lx0,y1), py(lx0,y1,zz0), px(lx1,y1), py(lx1,y1,zz0), px(lx1,y1), py(lx1,y1,zz1), px(lx0,y1), py(lx0,y1,zz1), '#ffd98a');
+        const ry0 = y0 + dy * a, ry1 = y0 + dy * b;
+        poly4(px(x1,ry0), py(x1,ry0,zz0), px(x1,ry1), py(x1,ry1,zz0), px(x1,ry1), py(x1,ry1,zz1), px(x1,ry0), py(x1,ry0,zz1), '#f0b862');
       }
     }
   }
@@ -268,48 +297,44 @@
     }
   }
 
-  // ---------- cached tree crown sprites ----------
+  // ---------- cached daylight tree crown sprites ----------
   const CROWNS = [
     ['#2c5a2b', '#3f7a35'], ['#3a6b2e', '#5a8f3c'], ['#c98a14', '#e8b832'],
     ['#d9a21f', '#f0c64a'], ['#b8601a', '#e08a2c'], ['#8a9a2a', '#b7b93a'],
   ];
   const SPR_W = 36, SPR_H = 42, SPR_CX = 16, SPR_CY = 14, SPR_S = 2;
-  let crownSprites = [];
-  let spriteLightKey = '';
+  const crownSprites = CROWNS.map(([dark, light]) => {
+    const c = document.createElement('canvas');
+    c.width = SPR_W * SPR_S; c.height = SPR_H * SPR_S;
+    const sc = c.getContext('2d');
+    sc.setTransform(SPR_S, 0, 0, SPR_S, 0, 0);
+    const R = 10;
+    sc.fillStyle = '#16301a';
+    sc.beginPath(); sc.ellipse(SPR_CX + 3, SPR_CY + 14, R * 0.95, R * 0.45, 0, 0, 7); sc.fill();
+    sc.fillStyle = dark;
+    sc.beginPath(); sc.arc(SPR_CX, SPR_CY, R, 0, 7); sc.fill();
+    sc.fillStyle = light;
+    sc.beginPath(); sc.arc(SPR_CX - R * 0.25, SPR_CY - R * 0.3, R * 0.68, 0, 7); sc.fill();
+    return c;
+  });
 
-  function ensureTreeSprites(L) {
-    const key = `${Math.round(L * 48)}|${Math.round(warm * 24)}`;
-    if (key === spriteLightKey && crownSprites.length) return;
-    spriteLightKey = key;
-    if (!crownSprites.length) {
-      crownSprites = CROWNS.map(() => {
-        const c = document.createElement('canvas');
-        c.width = SPR_W * SPR_S; c.height = SPR_H * SPR_S;
-        return c;
-      });
-    }
-    const sh = shade('#16301a', 1, L);
-    for (let i = 0; i < CROWNS.length; i++) {
-      const [dark, light] = CROWNS[i];
-      const sc = crownSprites[i].getContext('2d');
-      sc.setTransform(SPR_S, 0, 0, SPR_S, 0, 0);
-      sc.clearRect(0, 0, SPR_W, SPR_H);
-      const R = 10;
-      sc.fillStyle = sh;
-      sc.beginPath(); sc.ellipse(SPR_CX + 3, SPR_CY + 14, R * 0.95, R * 0.45, 0, 0, 7); sc.fill();
-      sc.fillStyle = shade(dark, 1, L);
-      sc.beginPath(); sc.arc(SPR_CX, SPR_CY, R, 0, 7); sc.fill();
-      sc.fillStyle = shade(light, 1, L);
-      sc.beginPath(); sc.arc(SPR_CX - R * 0.25, SPR_CY - R * 0.3, R * 0.68, 0, 7); sc.fill();
-    }
-  }
-
-  function tree(x, y, s, L, seed = 0) {
+  function tree(x, y, s, L, seed = 0, useSprite = true) {
     if (!seed) box(x - 0.025, y - 0.025, x + 0.025, y + 0.025, 0, 8 * s, '#4a3624', L);
     const cx = px(x, y), cy = py(x, y, 19 * s);
-    const k = s * rcam.z;
-    const spr = crownSprites[Math.abs(seed) % crownSprites.length];
-    rctx.drawImage(spr, cx - SPR_CX * k, cy - SPR_CY * k, SPR_W * k, SPR_H * k);
+    if (useSprite) {
+      const k = s * rcam.z;
+      const spr = crownSprites[Math.abs(seed) % crownSprites.length];
+      rctx.drawImage(spr, cx - SPR_CX * k, cy - SPR_CY * k, SPR_W * k, SPR_H * k);
+      return;
+    }
+    const [dark, light] = CROWNS[Math.abs(seed) % CROWNS.length];
+    const R = 10 * s * rcam.z;
+    rctx.fillStyle = shade('#16301a', 1, L);
+    rctx.beginPath(); rctx.ellipse(cx + 3 * rcam.z, cy + 14 * s * rcam.z, R * 0.95, R * 0.45, 0, 0, 7); rctx.fill();
+    rctx.fillStyle = shade(dark, 1, L);
+    rctx.beginPath(); rctx.arc(cx, cy, R, 0, 7); rctx.fill();
+    rctx.fillStyle = shade(light, 1, L);
+    rctx.beginPath(); rctx.arc(cx - R * 0.25, cy - R * 0.3, R * 0.68, 0, 7); rctx.fill();
   }
 
   const FOREST_SPOTS = [[0.28, 0.25], [0.74, 0.3], [0.5, 0.52], [0.25, 0.78], [0.76, 0.76]];
@@ -322,7 +347,7 @@
     quadZ(x, y, x + 1, y + 1, 0, shade(base, 1, L));
   }
 
-  function drawTile(x, y, t, L, hs = 1, skipGround = false) {
+  function drawTile(x, y, t, L, hs = 1, skipGround = false, useSprite = true) {
     if (!skipGround && t !== 'road') drawGround(x, y, t, L);
     if (!t) return;
     if (t === 'forest') {
@@ -331,7 +356,7 @@
         const [a, b] = FOREST_SPOTS[i];
         const sc = (0.8 + ((Math.imul(sd + i * 331, 2246822519) >>> 24) % 4) * 0.1) * hs;
         const cs = Math.imul(sd + i * 977, 2654435761) >>> 20;
-        tree(x + a, y + b, sc, L, cs);
+        tree(x + a, y + b, sc, L, cs, useSprite);
       }
       return;
     }
@@ -343,9 +368,9 @@
     }
     if (t === 'park') {
       const sd = x * 7 + y * 3;
-      tree(x + 0.3, y + 0.3, hs, L, 0);
-      tree(x + 0.7, y + 0.55, 0.85 * hs, L, 1);
-      if (sd % 2) tree(x + 0.35, y + 0.78, 0.7 * hs, L, 0);
+      tree(x + 0.3, y + 0.3, hs, L, 0, useSprite);
+      tree(x + 0.7, y + 0.55, 0.85 * hs, L, 1, useSprite);
+      if (sd % 2) tree(x + 0.35, y + 0.78, 0.7 * hs, L, 0, useSprite);
       return;
     }
     const d = TYPES[t];
@@ -373,57 +398,114 @@
     }
   }
 
-  function drawCar(c, L) {
+  function drawCar(c, L, headlightsOnly = false) {
     const s = 0.12;
     const dx = c.tx - c.fx, dy = c.ty - c.fy;
     const ox = -dy * 0.16, oy = dx * 0.16;
     const x = c.px + 0.5 + ox, y = c.py + 0.5 + oy;
-    const lx = dx ? 0.16 : s, ly = dy ? 0.16 : s;
-    box(x - lx, y - ly, x + lx, y + ly, 0, 7, c.color, L);
-    if (L < 0.5) {
+    if (!headlightsOnly) {
+      const lx = dx ? 0.16 : s, ly = dy ? 0.16 : s;
+      box(x - lx, y - ly, x + lx, y + ly, 0, 7, c.color, L);
+    } else if (L < 0.5) {
       const hx = px(x + dx * 0.2, y + dy * 0.2), hy = py(x + dx * 0.2, y + dy * 0.2, 4);
       rctx.fillStyle = 'rgba(255,230,160,0.55)';
       rctx.beginPath(); rctx.arc(hx, hy, 7 * rcam.z, 0, 7); rctx.fill();
     }
   }
 
-  // ---------- offscreen world cache & vignette cache ----------
+  // ---------- offscreen world & night light caches (baked at neutral daylight) ----------
   const PAD_X = 64, OY = 176;
   const OX = N * (TW / 2) + PAD_X;
   const WW = N * TW + PAD_X * 2;
   const WH = OY + N * TH + 48;
-  const WS = 2;
+  const WS = 1.5;
 
   const worldCanvas = document.createElement('canvas');
-  worldCanvas.width = WW * WS;
-  worldCanvas.height = WH * WS;
+  worldCanvas.width = Math.round(WW * WS);
+  worldCanvas.height = Math.round(WH * WS);
   const wctx = worldCanvas.getContext('2d');
-  let worldLightKey = '';
 
-  function buildWorld(L) {
-    ensureTreeSprites(L);
-    rctx = wctx;
-    rcam = { x: OX, y: OY, z: 1 };
-    wctx.setTransform(WS, 0, 0, WS, 0, 0);
-    wctx.clearRect(0, 0, WW, WH);
+  const nightCanvas = document.createElement('canvas');
+  nightCanvas.width = WW;
+  nightCanvas.height = WH;
+  const nctx = nightCanvas.getContext('2d');
 
+  function drawSlab(L) {
     const dep = 26;
     const bx = px(N, 0), by = py(N, 0);
     const cx = px(N, N), cy = py(N, N);
     const dx = px(0, N), dy = py(0, N);
     poly4(dx, dy, cx, cy, cx, cy + dep, dx, dy + dep, shade('#7a6a55', 0.9, L));
     poly4(cx, cy, bx, by, bx, by + dep, cx, cy + dep, shade('#675846', 0.9, L));
+  }
+
+  function buildWorld() {
+    const savedW = warm; warm = 0;
+    rcam = { x: OX, y: OY, z: 1 };
+
+    rctx = wctx;
+    wctx.setTransform(WS, 0, 0, WS, 0, 0);
+    wctx.clearRect(0, 0, WW, WH);
+    drawSlab(1);
+
+    rctx = nctx;
+    nctx.setTransform(1, 0, 0, 1, 0, 0);
+    nctx.clearRect(0, 0, WW, WH);
 
     for (let s = 0; s <= 2 * N - 2; s++) {
       for (let x = Math.max(0, s - N + 1); x <= Math.min(N - 1, s); x++) {
         const y = s - x;
         const key = x * 100 + y;
-        if (anims.has(key)) drawGround(x, y, grid[x][y], L);
-        else drawTile(x, y, grid[x][y], L, 1);
+        rctx = wctx;
+        if (anims.has(key)) drawGround(x, y, grid[x][y], 1);
+        else {
+          drawTile(x, y, grid[x][y], 1, 1, false, true);
+          rctx = nctx;
+          drawTileNight(x, y, grid[x][y]);
+        }
       }
     }
+    warm = savedW;
     worldDirty = false;
-    worldLightKey = `${Math.round(L * 48)}|${Math.round(warm * 24)}`;
+    dirtyCols.clear();
+  }
+
+  function patchColumn(u) {
+    const savedW = warm; warm = 0;
+    rcam = { x: OX, y: OY, z: 1 };
+    const clipX = Math.max(0, OX + u * (TW / 2) - 48);
+    const clipW = Math.min(WW - clipX, 96);
+
+    rctx = wctx;
+    wctx.save();
+    wctx.setTransform(WS, 0, 0, WS, 0, 0);
+    wctx.beginPath(); wctx.rect(clipX, 0, clipW, WH); wctx.clip();
+    wctx.clearRect(clipX, 0, clipW, WH);
+    drawSlab(1);
+
+    rctx = nctx;
+    nctx.save();
+    nctx.setTransform(1, 0, 0, 1, 0, 0);
+    nctx.beginPath(); nctx.rect(clipX, 0, clipW, WH); nctx.clip();
+    nctx.clearRect(clipX, 0, clipW, WH);
+
+    for (let s = 0; s <= 2 * N - 2; s++) {
+      for (let x = Math.max(0, s - N + 1); x <= Math.min(N - 1, s); x++) {
+        const y = s - x;
+        if (Math.abs((x - y) - u) > 2) continue;
+        const key = x * 100 + y;
+        rctx = wctx;
+        if (anims.has(key)) drawGround(x, y, grid[x][y], 1);
+        else {
+          drawTile(x, y, grid[x][y], 1, 1, false, true);
+          rctx = nctx;
+          drawTileNight(x, y, grid[x][y]);
+        }
+      }
+    }
+    wctx.restore();
+    nctx.restore();
+    warm = savedW;
   }
 
   // Pre-rendered night vignette
@@ -437,16 +519,21 @@
     vc.fillStyle = g; vc.fillRect(0, 0, 256, 256);
   })();
 
-  // Reusable buffers for depth-sorted car + occluder + animation overlay
   const seen = new Uint8Array(N * N);
   const ov = [];
 
   function draw(now) {
     const L = daylight(hour);
     warm = Math.max(0, 1 - Math.abs(hour - 17.6) / 2.2, 1 - Math.abs(hour - 6.4) / 1.6);
-    const lk = `${Math.round(L * 48)}|${Math.round(warm * 24)}`;
 
-    if (worldDirty || lk !== worldLightKey) buildWorld(L);
+    if (worldDirty) buildWorld();
+    else if (dirtyCols.size) {
+      if (dirtyCols.size > 18) buildWorld();
+      else {
+        for (const u of dirtyCols) patchColumn(u);
+        dirtyCols.clear();
+      }
+    }
 
     rctx = ctx;
     rcam = cam;
@@ -458,7 +545,7 @@
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(worldCanvas, cam.x - OX * cam.z, cam.y - OY * cam.z, WW * cam.z, WH * cam.z);
 
-    // Collect only: (a) cars, (b) animating tiles, (c) static non-road tiles in front of any car
+    // Collect animating tiles, cars, and foreground occluders
     seen.fill(0);
     ov.length = 0;
 
@@ -468,7 +555,7 @@
         const p = Math.min(1, (now - an.start) / an.dur);
         if (p >= 1) {
           anims.delete(key);
-          worldDirty = true;
+          dirtyCols.add(x - y);
         } else {
           const hs = an.out ? 1 - easeOut(p) : easeOut(p);
           const t = an.out ? an.type : grid[x][y];
@@ -484,10 +571,10 @@
       if (cx0 < -40 || cx0 > W + 40 || cy0 < -40 || cy0 > H + 40) continue;
       ov.push({ k: 1, s: c.px + c.py, c });
       const rx = Math.floor(c.px), ry = Math.floor(c.py);
-      for (let dx = 0; dx <= 4; dx++) {
+      for (let dx = 0; dx <= 3; dx++) {
         const tx = rx + dx;
         if (tx < 0 || tx >= N) continue;
-        for (let dy = 0; dy <= 4; dy++) {
+        for (let dy = 0; dy <= 3; dy++) {
           if (dx === 0 && dy === 0) continue;
           if (Math.abs(dx - dy) > 2) continue;
           const ty = ry + dy;
@@ -496,22 +583,49 @@
           if (seen[idx]) continue;
           const t = grid[tx][ty];
           if (!t || t === 'road') continue;
+          if ((dx > 1 || dy > 1) && t !== 'office' && t !== 'apt') continue;
           seen[idx] = 1;
           ov.push({ k: 0, s: tx + ty, x: tx, y: ty, t, hs: 1 });
         }
       }
     }
 
+    // Draw animating tiles, cars, and occluding tiles at daylight (1, warm=0) so they match worldCanvas seamlessly
     if (ov.length) {
+      const savedW = warm; warm = 0;
       if (ov.length > 1) ov.sort((a, b) => a.s - b.s || a.k - b.k);
       for (let i = 0; i < ov.length; i++) {
         const it = ov[i];
-        if (it.k === 1) drawCar(it.c, L);
-        else drawTile(it.x, it.y, it.t, L, it.hs, true);
+        if (it.k === 1) drawCar(it.c, 1, false);
+        else drawTile(it.x, it.y, it.t, 1, it.hs, true, true);
+      }
+      warm = savedW;
+    }
+
+    // One combined source-over time-of-day tint across worldCanvas + overlay
+    if (warm > 0.02 || L < 0.98) {
+      const wa = warm * 0.14;
+      const na = (1 - L) * 0.68;
+      const a = wa + na * (1 - wa);
+      if (a > 0.004) {
+        const r = Math.round((255 * wa + 10 * na * (1 - wa)) / a);
+        const g = Math.round((155 * wa + 18 * na * (1 - wa)) / a);
+        const b = Math.round((45 * wa + 40 * na * (1 - wa)) / a);
+        ctx.fillStyle = `rgba(${r},${g},${b},${a.toFixed(3)})`;
+        ctx.fillRect(0, 0, W, H);
       }
     }
 
-    // Bobbing markers only for disconnected buildings
+    // Lit windows, streetlights, and car headlights (un-darkened)
+    if (L < 0.65) {
+      ctx.globalAlpha = Math.min(1, (0.65 - L) * 2.4);
+      ctx.drawImage(nightCanvas, cam.x - OX * cam.z, cam.y - OY * cam.z, WW * cam.z, WH * cam.z);
+      ctx.globalAlpha = 1;
+    }
+    if (L < 0.5 && cars.length) {
+      for (let i = 0; i < ov.length; i++) if (ov[i].k === 1) drawCar(ov[i].c, L, true);
+    }
+
     if (orphansList.length) {
       const bob = Math.sin(now / 260) * 3;
       const rad = 9 * cam.z;
@@ -528,7 +642,6 @@
       }
     }
 
-    // Hover highlight
     if (hover && tool !== 'pan') {
       const [x, y] = hover;
       const T = TYPES[tool];
@@ -570,7 +683,7 @@
       animate(x, y, false);
     }
     if (history.length > 200) history.shift();
-    worldDirty = true;
+    dirtyCols.add(x - y);
     recompute(); scheduleSave();
   }
 
@@ -580,16 +693,17 @@
     if (h.prev) { grid[h.x][h.y] = h.prev; animate(h.x, h.y, false); }
     else { animate(h.x, h.y, true, grid[h.x][h.y]); grid[h.x][h.y] = null; }
     money += h.cost;
-    worldDirty = true;
+    dirtyCols.add(h.x - h.y);
     recompute(); scheduleSave();
   }
 
-  let flashTimer;
+  let flashTimer = 0;
   function flash(msg) {
     const tip = $('tip'); tip.textContent = msg; tip.hidden = false;
-    tip.style.left = '50%'; tip.style.top = '84px'; tip.style.transform = 'translateX(-50%)';
+    tip.style.transform = `translate3d(${Math.round(W / 2 - 70)}px, 84px, 0)`;
+    lastTipKey = '';
     clearTimeout(flashTimer);
-    flashTimer = setTimeout(() => { tip.hidden = true; tip.style.transform = ''; }, 1400);
+    flashTimer = setTimeout(() => { flashTimer = 0; tip.hidden = true; }, 1400);
   }
 
   function describe(x, y) {
@@ -604,7 +718,7 @@
   }
 
   // ---------- input ----------
-  let drag = null, lastTile = null;
+  let drag = null, lastTile = null, lastTipKey = '';
   const ptrs = new Map();
   const dist = () => { const [a, b] = [...ptrs.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -632,19 +746,24 @@
     const t = pick(e.clientX, e.clientY);
     hover = t;
     if (drag && !drag.pan && t && t.join() !== lastTile) { apply(t[0], t[1]); lastTile = t.join(); }
-    const tip = $('tip');
-    const txt = t && !drag ? describe(t[0], t[1]) : null;
-    if (txt) {
-      tip.textContent = txt; tip.hidden = false;
-      tip.style.transform = '';
-      tip.style.left = Math.min(W - 240, e.clientX + 16) + 'px';
-      tip.style.top = (e.clientY + 16) + 'px';
-    } else if (!flashTimer || tip.style.transform === '') tip.hidden = true;
+    if (!flashTimer) {
+      const tip = $('tip');
+      const txt = t && !drag ? describe(t[0], t[1]) : null;
+      if (txt) {
+        const tk = t[0] + ',' + t[1] + ':' + txt;
+        if (tk !== lastTipKey) { lastTipKey = tk; tip.textContent = txt; }
+        if (tip.hidden) tip.hidden = false;
+        tip.style.transform = `translate3d(${Math.min(W - 240, e.clientX + 16)}px, ${e.clientY + 16}px, 0)`;
+      } else if (!tip.hidden) {
+        tip.hidden = true;
+        lastTipKey = '';
+      }
+    }
   });
   const end = (e) => { ptrs.delete(e.pointerId); if (ptrs.size) return; drag = null; lastTile = null; canvas.style.cursor = tool === 'pan' ? 'grab' : 'crosshair'; };
   canvas.addEventListener('pointerup', end);
   canvas.addEventListener('pointercancel', end);
-  canvas.addEventListener('pointerleave', () => { hover = null; $('tip').hidden = true; });
+  canvas.addEventListener('pointerleave', () => { hover = null; if (!flashTimer) { $('tip').hidden = true; lastTipKey = ''; } });
 
   function zoomAt(f, mx = W / 2, my = H / 2) {
     const nz = Math.max(0.5, Math.min(2.4, cam.z * f));
@@ -698,9 +817,9 @@
 
   // ---------- loop ----------
   function resize() {
-    dpr = Math.min(2, devicePixelRatio || 1);
+    dpr = Math.min(1.5, devicePixelRatio || 1);
     W = innerWidth; H = innerHeight;
-    canvas.width = W * dpr; canvas.height = H * dpr;
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
   }
   function center() {
     cam.z = Math.max(0.55, Math.min(1.1, W / (N * TW) * 1.15, H / (N * TH + 120) * 1.15));
