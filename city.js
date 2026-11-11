@@ -1216,7 +1216,7 @@
       ctx.globalAlpha = 1;
     }
 
-    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(worldCanvas, cam.x - OX * cam.z, cam.y - OY * cam.z, WW * cam.z, WH * cam.z);
 
     if (!reduceMotion && waterCells.length && L > 0.25) {
@@ -2331,7 +2331,7 @@
 
   function zoomAt(f, mx = W / 2, my = H / 2) {
     camAnim = null;
-    const nz = Math.max(0.45, Math.min(2.4, cam.z * f));
+    const nz = Math.max(0.45, Math.min(2.0, cam.z * f));
     const k = nz / cam.z;
     cam.x = mx - (mx - cam.x) * k; cam.y = my - (my - cam.y) * k; cam.z = nz;
   }
@@ -2498,7 +2498,7 @@
     shownAgent = a ? [a, kind] : null;
     followAgent = a || null;
     agentCard.hidden = !a;
-    if (a) { selectedTile = null; renderInspect(); renderAgentCard(); }
+    if (a) { selectedTile = null; renderInspect(); renderAgentCard(); if (cam.z < 1.4) { const t = W / 2, u = H * 0.42, [sx, sy] = agentScreen(a); const nz = 1.4, k = nz / cam.z; cam.x = sx - (sx - cam.x) * k; cam.y = sy - (sy - cam.y) * k; cam.z = nz; } }
   }
   function renderAgentCard() {
     if (!shownAgent) return;
@@ -2511,7 +2511,9 @@
   $('agClose').onclick = () => showAgent(null);
   $('agFollow').onclick = () => { followOn = !followOn; renderAgentCard(); };
 
-  let downAt = null;
+  let downAt = null, lastInput = 0;
+  canvas.addEventListener('wheel', () => { lastInput = performance.now(); }, { passive: true, capture: true });
+  canvas.addEventListener('pointerdown', () => { lastInput = performance.now(); followOn = followOn; }, true);
   canvas.addEventListener('pointerdown', (e) => { downAt = { x: e.clientX, y: e.clientY }; }, true);
   canvas.addEventListener('pointerup', (e) => {
     if (!downAt || Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 5) return;
@@ -2586,9 +2588,15 @@
   }
 
   // --- sharper zoom: re-rasterise the world cache at higher resolution when zoomed in ---
-  function ensureWorldRes() {
-    const want = cam.z > 1.5 ? 2.5 : cam.z > 1.05 ? 2 : 1.5;
-    if (want === WS) return;
+  let resWantSince = 0, lastZ = 0, zStableAt = 0;
+  function ensureWorldRes(now) {
+    if (Math.abs(cam.z - lastZ) > 0.002) { lastZ = cam.z; zStableAt = now; }
+    if (now - zStableAt < 280) return;               // wait until zooming settles, avoids hitching mid-zoom
+    const need = cam.z * dpr * 0.92;
+    const want = need > 2 ? 2.5 : need > 1.5 ? 2 : 1.5;
+    if (want === WS) { resWantSince = 0; return; }
+    if (want < WS && now - (resWantSince || (resWantSince = now)) < 1500) return;   // downgrade slowly
+    resWantSince = 0;
     WS = want;
     worldCanvas.width = Math.round(WW * WS);
     worldCanvas.height = Math.round(WH * WS);
@@ -2597,7 +2605,7 @@
 
   let lastSelKey = '', lastClock = 0, driftPrev = 0;
   function tickExtras(now, dt) {
-    ensureWorldRes();
+    ensureWorldRes(now);
     if (cycleOn) hour = (hour + dt * (simOn ? SIM_RATE : DAY_RATE)) % 24;
     if (now - lastClock > 250) {
       lastClock = now;
@@ -2622,16 +2630,17 @@
       a.py = a.oy + Math.cos(now * 0.0005 + a.phase * 1.7) * 0.1;
       refreshInfo(a, now);
     }
-    // gentle sway while a building is selected, so the crew is seen from slightly different angles
-    if (selectedTile && !camAnim && !drag) {
-      const s = Math.sin(now * 0.00035) * 26;
-      cam.x += s - driftPrev; driftPrev = s;
+    // gentle sway while a building is selected, so the crew is seen from slightly different angles.
+    // It pauses while you pan or zoom so it never fights you.
+    const idle = now - lastInput > 1800;
+    if (selectedTile && !camAnim && !drag && idle) {
+      const sw = Math.sin(now * 0.00035) * 26;
+      cam.x += sw - driftPrev; driftPrev = sw;
     } else driftPrev = 0;
-    if (followAgent && followOn && !drag) {
+    if (followAgent && followOn && !drag && idle) {
       camAnim = null;
       const [sx, sy] = agentScreen(followAgent);
       cam.x += (W / 2 - sx) * 0.08; cam.y += (H * 0.42 - sy) * 0.08;
-      if (cam.z < 1.5) { const nz = Math.min(1.5, cam.z * 1.012), k = nz / cam.z; cam.x = W / 2 - (W / 2 - cam.x) * k; cam.y = H / 2 - (H / 2 - cam.y) * k; cam.z = nz; }
     }
   }
 
