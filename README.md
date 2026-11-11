@@ -1,23 +1,15 @@
-# Isocity
+# GitHub City
 
-A small isometric city builder set in an autumn forest at golden hour. It runs in the browser. No dependencies, no build step. One canvas, plain HTML, CSS and JavaScript.
+An interactive Google Maps style workspace for `Peterachss` GitHub repositories. Search projects, pan and zoom the isometric city map, click any labeled building to inspect live commits, files, CI status, and worker bots, or jump straight to the live website or `github.dev` editor.
 
-Live demo: https://isocity-mu.vercel.app/ (GitHub Pages: https://peterachss.github.io/isocity/)
+Live app: https://isocity-mu.vercel.app/ (GitHub Pages: https://peterachss.github.io/isocity/)
 
-## Play
+## Features
 
-- Pick a tool on the left (keys 1 to 9, U for Upgrade, B for Bulldoze, P for Pan) and click or drag on the map.
-- Click any building to inspect it, view animated worker bots (CommitBot, DeployBot, ReviewBot) pulling live status from its linked GitHub repository, switch which repository it represents, or open its live website and GitHub repo links.
-- Lay roads over water to build bridges. Homes and parks beside water earn a waterfront bonus.
-- Place Parks, Town Plazas, Clinics, Schools, Windmills, and a Ferris Wheel to raise happiness, generate clean energy, and grow buildings from Level 1 to Level 3.
-- Open Economy in the top bar to adjust tax rates (6%, 10%, 15%) and view service coverage and income vs upkeep.
-- Press R or Q (or Rotate) to turn the camera 90 degrees, Space (or the speed toggle) to pause or run at 2x speed, and Saves for 3 local slots, JSON export/import, or a PNG snapshot.
-- Forest tiles clear with Bulldoze or get built over.
-- Buildings only count when they touch a road. Unconnected ones show a red marker.
-- Residents need jobs. Parks raise happiness. Roads, parks and buildings cost upkeep.
-- Right drag, shift drag or the Pan tool moves the map. Scroll, pinch or +/- to zoom.
-- Ctrl+Z undoes. The city saves to local storage.
-- The time slider and auto cycle switch between day and night. At night windows, streetlights and headlights light up.
+- **Google Maps style search and filters:** Search repositories by name, language, or description, filter by Live web or language stack, and smoothly fly the camera directly to any pinned building.
+- **Floating map pin labels:** Every repository landmark carries a clickable pill label above its roof with live/private status indicators and automatic zoom-out collision handling.
+- **Workspace place card:** Click any building or label to open its live website link, `github.dev` browser editor, GitHub repository, copyable `git clone` command, live commit feed, root file list, and active bot statuses.
+- **2.5D isometric city backdrop:** Plain canvas renderer with animated cars, boats, walkers, patrolling coding bots, orbiting worker bots on the selected building, and Dusk/Day/Night lighting modes.
 
 ## Run locally
 
@@ -25,16 +17,12 @@ Live demo: https://isocity-mu.vercel.app/ (GitHub Pages: https://peterachss.gith
 node scripts/server.mjs
 ```
 
-Then open http://localhost:4173. Any static file server works.
+Open http://localhost:4173. Any static file server works.
 
 ## Files
 
-- `index.html`: layout and metadata
-- `city.css`: panels, tools and responsive layout
-- `city.js`: simulation, isometric renderer, input and day cycle
-
-## Notes
-
-Build and bulldoze animate height with an ease-out curve under 300ms and are skipped when `prefers-reduced-motion` is set.
+- `index.html`: map container, search dock, workspace drawer, and controls
+- `city.css`: surface palette, floating dock, responsive sheet, and reduced-motion rules
+- `city.js`: isometric renderer, label hit-testing, camera fly-to, and live GitHub REST API client
 
 MIT licensed.

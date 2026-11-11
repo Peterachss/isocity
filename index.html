@@ -3,123 +3,134 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Isocity, build your own city</title>
-  <meta name="description" content="An interactive isometric city builder. Lay roads, bridges, homes, civic services and landmarks, and manage taxes and growth." />
-  <meta property="og:title" content="Isocity, build your own city" />
-  <meta property="og:description" content="Lay roads, place buildings and manage a living autumn forest city through day and night." />
+  <title>GitHub City, Peterachss repository workspace</title>
+  <meta name="description" content="Interactive isometric map of Peterachss GitHub repositories. Search projects, inspect live commits and files, launch live sites, and open web editors directly." />
+  <meta property="og:title" content="GitHub City, Peterachss repository workspace" />
+  <meta property="og:description" content="Explore Peterachss GitHub repositories on an interactive map with live commits, files, deployments, and one-click editor links." />
   <meta property="og:type" content="website" />
-  <link rel="stylesheet" href="city.css?v=12" />
+  <link rel="stylesheet" href="city.css?v=13" />
 </head>
 <body>
   <main class="app">
-    <canvas id="stage" aria-label="Isometric city map. Click or drag to build."></canvas>
+    <canvas id="stage" aria-label="Interactive GitHub City map. Drag to pan, scroll to zoom, click any building or label to open its repository."></canvas>
 
-    <header class="stats" aria-label="City statistics">
-      <div class="stat"><span class="stat-label">Tier</span><span class="stat-value" id="sTier">Hamlet</span></div>
-      <div class="stat"><span class="stat-label">Funds</span><span class="stat-value" id="sMoney">0</span></div>
-      <div class="stat"><span class="stat-label">Residents</span><span class="stat-value" id="sPop">0</span></div>
-      <div class="stat"><span class="stat-label">Jobs</span><span class="stat-value" id="sJobs">0</span></div>
-      <div class="stat"><span class="stat-label">Happiness</span><span class="stat-value" id="sHappy">0</span></div>
-      <div class="stat"><span class="stat-label">Net per tick</span><span class="stat-value" id="sNet">0</span></div>
-      <button id="budgetBtn" class="chip stat-btn" type="button" aria-expanded="false" aria-controls="budgetPop">Economy</button>
-    </header>
-
-    <section id="budgetPop" class="pop budget-pop" role="dialog" aria-label="City economy and services" data-open="false">
-      <div class="pop-head">
-        <h2>City economy</h2>
-        <div class="tax-row" role="group" aria-label="Tax rate">
-          <button class="chip small tax-btn" type="button" data-tax="0.6" aria-pressed="false">Low 6%</button>
-          <button class="chip small tax-btn" type="button" data-tax="1" aria-pressed="true">Normal 10%</button>
-          <button class="chip small tax-btn" type="button" data-tax="1.45" aria-pressed="false">High 15%</button>
-        </div>
+    <section class="search-dock" aria-label="Repository search and navigation">
+      <div class="search-bar">
+        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="repoSearch" type="search" placeholder="Search GitHub repos..." autocomplete="off" aria-label="Search GitHub repositories" />
+        <button id="clearSearch" class="chip icon tiny" type="button" aria-label="Clear search" hidden>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+        <span id="repoCount" class="repo-count tnum">11 repos</span>
+        <button id="syncBtn" class="chip icon tiny" type="button" aria-label="Refresh GitHub data" title="Sync GitHub repositories">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        </button>
       </div>
-      <div class="meters" id="meters"></div>
-      <div class="ledger" id="ledger"></div>
+
+      <div class="filter-row" role="group" aria-label="Filter repositories">
+        <button class="filter-chip" type="button" data-filter="all" aria-pressed="true">All</button>
+        <button class="filter-chip" type="button" data-filter="web" aria-pressed="false">Live web</button>
+        <button class="filter-chip" type="button" data-filter="js" aria-pressed="false">JS / TS</button>
+        <button class="filter-chip" type="button" data-filter="other" aria-pressed="false">Python / HTML</button>
+      </div>
+
+      <div id="searchResults" class="search-results" role="listbox" aria-label="Matching repositories" hidden></div>
     </section>
 
-    <nav class="tools" aria-label="Build tools" id="tools"></nav>
-
-    <section class="time" aria-label="Time of day">
-      <label for="clock" class="stat-label">Time <span id="clockText" class="tnum">17:24</span></label>
-      <input id="clock" type="range" min="0" max="24" step="0.05" value="17.4" />
-      <button id="autoBtn" class="chip" type="button" aria-pressed="false">Auto cycle</button>
-      <button id="speedBtn" class="chip tnum" type="button" aria-label="Simulation speed: 1x">1x</button>
-    </section>
-
-    <section class="actions" aria-label="City actions">
+    <section class="map-controls" aria-label="Map view controls">
+      <button id="labelsBtn" class="chip" type="button" aria-pressed="true" aria-label="Toggle map labels">Labels</button>
+      <button id="lightBtn" class="chip" type="button" aria-label="Cycle lighting mode">Dusk</button>
+      <button id="centerBtn" class="chip icon" type="button" aria-label="Recenter map" title="Recenter map">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
+      </button>
+      <button id="rotBtn" class="chip icon" type="button" aria-label="Rotate map 90 degrees" title="Rotate view (R / Q)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+      </button>
       <button id="zoomIn" class="chip icon" type="button" aria-label="Zoom in" title="Zoom in (+)">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </button>
       <button id="zoomOut" class="chip icon" type="button" aria-label="Zoom out" title="Zoom out (-)">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </button>
-      <button id="rotBtn" class="chip icon" type="button" aria-label="Rotate camera 90 degrees" title="Rotate view (R / Q)">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+      <button id="moreBtn" class="chip icon" type="button" aria-expanded="false" aria-controls="morePop" aria-label="Map options" title="Map options">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
       </button>
-      <button id="soundBtn" class="chip icon" type="button" aria-pressed="true" aria-label="Toggle sound effects" title="Toggle sound">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
-      </button>
-      <button id="undoBtn" class="chip icon" type="button" aria-label="Undo last action" title="Undo (Ctrl+Z)" disabled>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
-      </button>
-      <button id="redoBtn" class="chip icon" type="button" aria-label="Redo last undone action" title="Redo (Ctrl+Y)" disabled>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></svg>
-      </button>
-      <button id="citiesBtn" class="chip" type="button" aria-expanded="false" aria-controls="citiesPop">Saves</button>
-      <button id="resetBtn" class="chip" type="button">New city</button>
     </section>
 
-    <div id="citiesPop" class="pop cities-pop" role="dialog" aria-label="Saved cities" data-open="false">
+    <div id="morePop" class="pop more-pop" role="dialog" aria-label="Workspace options" data-open="false">
       <div class="pop-head">
-        <h2>City saves</h2>
-        <div class="pop-io">
-          <button id="exportBtn" class="chip small" type="button">Export JSON</button>
-          <button id="importBtn" class="chip small" type="button">Import JSON</button>
-          <button id="pngBtn" class="chip small" type="button">Save PNG</button>
-          <input id="importFile" type="file" accept=".json,application/json" hidden />
-        </div>
+        <h2>Workspace options</h2>
       </div>
-      <div id="slotList" class="slot-list"></div>
+      <div class="more-grid">
+        <button id="soundBtn" class="chip small" type="button" aria-pressed="false">Sound off</button>
+        <button id="pngBtn" class="chip small" type="button">Export PNG</button>
+        <button id="exportBtn" class="chip small" type="button">Export JSON</button>
+        <button id="importBtn" class="chip small" type="button">Import JSON</button>
+        <button id="resetBtn" class="chip small" type="button">Reset layout</button>
+        <input id="importFile" type="file" accept=".json,application/json" hidden />
+      </div>
     </div>
 
-    <aside id="inspectCard" class="pop inspect-card" role="dialog" aria-label="Building repository and bots" data-open="false">
+    <aside id="inspectCard" class="pop inspect-card" role="dialog" aria-label="Repository workspace" data-open="false">
       <div class="inspect-head">
-        <div>
-          <h2 id="inspTitle">Building</h2>
+        <div class="inspect-title-wrap">
+          <h2 id="inspTitle">Repository</h2>
           <p id="inspSub" class="insp-sub"></p>
         </div>
-        <button id="inspClose" class="chip small" type="button" aria-label="Close inspector">Close</button>
+        <button id="inspClose" class="chip icon tiny" type="button" aria-label="Close repository panel">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
 
-      <div class="repo-box">
-        <div class="repo-row">
-          <label for="inspRepo" class="stat-label">GitHub repo</label>
+      <p id="inspDesc" class="insp-body"></p>
+
+      <div class="insp-actions-primary">
+        <a id="inspWeb" class="chip small primary link-btn" href="#" target="_blank" rel="noopener noreferrer">Open live site</a>
+        <a id="inspEditor" class="chip small link-btn" href="#" target="_blank" rel="noopener noreferrer">Open github.dev</a>
+        <a id="inspGit" class="chip small link-btn" href="#" target="_blank" rel="noopener noreferrer">GitHub repo</a>
+        <button id="inspCopy" class="chip small" type="button">Copy clone</button>
+      </div>
+
+      <div id="inspMetrics" class="metrics-strip"></div>
+
+      <div class="tabs-bar" role="tablist" aria-label="Repository details">
+        <button class="tab-btn" type="button" role="tab" data-tab="overview" aria-selected="true">Overview</button>
+        <button class="tab-btn" type="button" role="tab" data-tab="commits" aria-selected="false">Commits</button>
+        <button class="tab-btn" type="button" role="tab" data-tab="files" aria-selected="false">Files</button>
+      </div>
+
+      <div id="tabOverview" class="tab-panel" role="tabpanel">
+        <div class="bots-box">
+          <div class="bots-head">
+            <span class="stat-label">Active bots</span>
+            <span id="botsLive" class="bots-live">Live</span>
+          </div>
+          <div id="inspBots" class="bots-list"></div>
+        </div>
+
+        <div class="clone-box">
+          <span class="stat-label">Quick clone</span>
+          <code id="inspCloneCode" class="clone-code"></code>
+        </div>
+
+        <div class="repo-reassign">
+          <label for="inspRepo" class="stat-label">Pinned repository</label>
           <select id="inspRepo" class="repo-select"></select>
         </div>
-        <p id="inspDesc" class="insp-body"></p>
-        <div class="insp-links">
-          <a id="inspWeb" class="chip small primary link-btn" href="#" target="_blank" rel="noopener noreferrer">Open live site</a>
-          <a id="inspGit" class="chip small link-btn" href="#" target="_blank" rel="noopener noreferrer">GitHub repo</a>
-        </div>
       </div>
 
-      <div class="bots-box">
-        <div class="bots-head">
-          <span class="stat-label">Bots working</span>
-          <span id="botsLive" class="bots-live">Live</span>
-        </div>
-        <div id="inspBots" class="bots-list"></div>
+      <div id="tabCommits" class="tab-panel" role="tabpanel" hidden>
+        <div id="inspCommits" class="detail-list"></div>
       </div>
 
-      <div class="insp-actions">
-        <button id="inspUpgrade" class="chip small primary" type="button">Upgrade</button>
-        <button id="inspDemolish" class="chip small danger" type="button">Demolish</button>
+      <div id="tabFiles" class="tab-panel" role="tabpanel" hidden>
+        <div id="inspFiles" class="detail-list"></div>
       </div>
     </aside>
 
     <div id="tip" class="tip" role="status" hidden></div>
-    <p class="hint" id="hint">Click any building to see bots working on its GitHub repo and open its live site. Drag land to build.</p>
+    <p class="hint" id="hint">Click any labeled building to inspect its commits, files, bots, and live web links.</p>
   </main>
-  <script src="city.js?v=12"></script>
+  <script src="city.js?v=13"></script>
 </body>
 </html>

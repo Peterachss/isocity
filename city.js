@@ -1,68 +1,63 @@
 (() => {
   const N = 26;
   const TW = 64, TH = 32;
-  const SAVE_KEY = 'isocity-v6';
-  const SLOT_PREFIX = 'isocity-slot-';
+  const SAVE_KEY = 'isocity-workspace-v2';
   const GITHUB_OWNER = 'Peterachss';
 
   const REPOS = [
-    { name: 'isocity', lang: 'JavaScript', desc: 'Interactive isometric city builder in the browser.', web: 'https://isocity-mu.vercel.app', git: 'https://github.com/Peterachss/isocity' },
+    { name: 'isocity', lang: 'JavaScript', desc: 'Interactive isometric GitHub City workspace and live repo explorer.', web: 'https://isocity-mu.vercel.app', git: 'https://github.com/Peterachss/isocity' },
     { name: '3d-shirt-and-hoodie', lang: 'Python', desc: 'Interactive 3D Blender crewneck T-shirt and pullover hoodie studio.', web: 'https://peterachss.github.io/3d-shirt-and-hoodie/', git: 'https://github.com/Peterachss/3d-shirt-and-hoodie' },
     { name: 'finance-tracker-template', lang: 'TypeScript', desc: 'Spreadsheet-first personal finance tracker built with Next.js and Supabase.', web: 'https://finance-tracker-template.vercel.app', git: 'https://github.com/Peterachss/finance-tracker-template' },
     { name: 'finance-tracker', lang: 'JavaScript', desc: 'Personal finance tracker with a spreadsheet-first workflow.', web: 'https://finance-tracker-phi-ashen.vercel.app', git: 'https://github.com/Peterachss/finance-tracker', isPrivate: true },
     { name: 'maths-ia-explorer', lang: 'TypeScript', desc: 'Interactive explorer for an IB Maths AA SL IA on income and life expectancy.', web: 'https://peterachss.github.io/maths-ia-explorer/', git: 'https://github.com/Peterachss/maths-ia-explorer' },
     { name: 'greenkeep', lang: 'HTML', desc: 'Greenkeep notes web app.', web: 'https://peterachss.github.io/greenkeep/', git: 'https://github.com/Peterachss/greenkeep' },
     { name: 'cham-hq', lang: 'JavaScript', desc: 'CHAM headquarters project hub.', web: 'https://peterachss.github.io/cham-hq/', git: 'https://github.com/Peterachss/cham-hq' },
-    { name: 'cham-bracelet-plan', lang: 'HTML', desc: 'Fundraiser plan for friendship bracelet booth and lucky draw.', web: 'https://peterachss.github.io/cham-bracelet-plan/', git: 'https://github.com/Peterachss/cham-bracelet-plan' },
     { name: 'cham-merch-designs', lang: 'HTML', desc: 'Hoodie and T-shirt design gallery.', web: 'https://peterachss.github.io/cham-merch-designs/', git: 'https://github.com/Peterachss/cham-merch-designs' },
-    { name: 'co-bo-u', lang: 'HTML', desc: 'Co Bo U web project.', web: 'https://peterachss.github.io/co-bo-u/', git: 'https://github.com/Peterachss/co-bo-u' },
+    { name: 'cham-bracelet-plan', lang: 'HTML', desc: 'Fundraiser plan for friendship bracelet booth and lucky draw.', web: 'https://peterachss.github.io/cham-bracelet-plan/', git: 'https://github.com/Peterachss/cham-bracelet-plan' },
     { name: 'claude', lang: 'HTML', desc: 'Claude web notes and experiments.', web: 'https://peterachss.github.io/claude/', git: 'https://github.com/Peterachss/claude' },
+    { name: 'co-bo-u', lang: 'HTML', desc: 'Co Bo U web project.', web: 'https://peterachss.github.io/co-bo-u/', git: 'https://github.com/Peterachss/co-bo-u' },
   ];
   const repoMap = new Map(REPOS.map((r) => [r.name, r]));
   const repoCache = new Map();
   const BOT_COLORS = ['#0f766e', '#0284c7', '#d97706'];
   const getRepo = (name) => repoMap.get(name) || REPOS[0];
 
-  const TYPES = {
-    pan:      { name: 'Pan',          cost: 0,   color: '#9aa39d' },
-    road:     { name: 'Road',         cost: 10,  color: '#3b3f44' },
-    house:    { name: 'House',        cost: 100, color: '#d9a273', pop: 4,  h: 22, inset: 0.2, grow: true },
-    apt:      { name: 'Apartment',    cost: 400, color: '#c98a8a', pop: 14, h: 72, inset: 0.12, grow: true },
-    shop:     { name: 'Shop',         cost: 250, color: '#e0c25b', jobs: 5, h: 28, inset: 0.1, grow: true },
-    office:   { name: 'Office',       cost: 600, color: '#7fa6c9', jobs: 16, h: 118, inset: 0.1, grow: true },
-    park:     { name: 'Park',         cost: 150, color: '#8cbf5c', radius: 2 },
-    plaza:    { name: 'Plaza',        cost: 300, color: '#c4b59d', radius: 3 },
-    clinic:   { name: 'Clinic',       cost: 350, color: '#d95f59', jobs: 6, h: 30, inset: 0.12, radius: 4 },
-    school:   { name: 'School',       cost: 450, color: '#5f8c7a', jobs: 8, h: 34, inset: 0.1, radius: 4 },
-    windmill: { name: 'Windmill',     cost: 500, color: '#7ea89b', jobs: 3, h: 48, inset: 0.24, radius: 5 },
-    wheel:    { name: 'Ferris Wheel', cost: 900, color: '#d67e49', jobs: 6, h: 78, inset: 0.12, radius: 4 },
-    upgrade:  { name: 'Upgrade',      cost: 0,   color: '#2e8b7a' },
-    forest:   { name: 'Forest',       cost: 5,   color: '#d9a21f' },
-    water:    { name: 'Water',        cost: 15,  color: '#3b7378' },
-    bridge:   { name: 'Bridge',       cost: 35,  color: '#8e8372' },
-    bulldoze: { name: 'Bulldoze',     cost: 0,   color: '#b4513f' },
-  };
-  const ORDER = [
-    'pan', 'road', 'house', 'apt', 'shop', 'office', 'park', 'plaza',
-    'clinic', 'school', 'windmill', 'wheel', 'upgrade', 'forest', 'water', 'bulldoze',
+  const LANDMARKS = [
+    { x: 8,  y: 4,  t: 'office', lv: 3, repo: 'isocity' },
+    { x: 13, y: 4,  t: 'office', lv: 2, repo: 'finance-tracker-template' },
+    { x: 17, y: 7,  t: 'apt',    lv: 2, repo: 'finance-tracker' },
+    { x: 6,  y: 15, t: 'wheel',  lv: 1, repo: '3d-shirt-and-hoodie' },
+    { x: 4,  y: 9,  t: 'school', lv: 1, repo: 'maths-ia-explorer' },
+    { x: 10, y: 11, t: 'clinic', lv: 1, repo: 'greenkeep' },
+    { x: 13, y: 13, t: 'plaza',  lv: 1, repo: 'cham-hq' },
+    { x: 8,  y: 13, t: 'shop',   lv: 2, repo: 'cham-merch-designs' },
+    { x: 11, y: 15, t: 'shop',   lv: 1, repo: 'cham-bracelet-plan' },
+    { x: 16, y: 15, t: 'windmill', lv: 1, repo: 'claude' },
+    { x: 19, y: 12, t: 'house',  lv: 2, repo: 'co-bo-u' },
   ];
-  const ICONS = {
-    pan:      '<path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/>',
-    road:     '<path d="M6 3l-2 18M18 3l2 18M12 5v3M12 11v3M12 17v2"/>',
-    house:    '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21v-6h6v6"/>',
-    apt:      '<rect x="5" y="3" width="14" height="18" rx="1"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2"/>',
-    shop:     '<path d="M4 9l1.5-5h13L20 9v2a2 2 0 0 1-4 0 2 2 0 0 1-4 0 2 2 0 0 1-4 0 2 2 0 0 1-4 0z"/><path d="M5 13v8h14v-8"/>',
-    office:   '<rect x="6" y="2" width="12" height="20" rx="1"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/>',
-    park:     '<circle cx="12" cy="9" r="5"/><path d="M12 14v7M8 21h8"/>',
-    plaza:    '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
-    clinic:   '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M12 8v8M8 12h8"/>',
-    school:   '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c0 2 3 3 6 3s6-1 6-3v-5"/>',
-    windmill: '<path d="M12 10v11M9 21h6"/><path d="M12 10l-5-4M12 10l6-3M12 10l-1 6"/>',
-    wheel:    '<circle cx="12" cy="10" r="7"/><path d="M12 10v0M7 20l5-10 5 10M5 10h14M12 3v14"/>',
-    upgrade:  '<path d="M12 19V5M6 11l6-6 6 6"/>',
-    forest:   '<path d="M12 3l5 7h-3l4 6H6l4-6H7z"/><path d="M12 16v5"/>',
-    water:    '<path d="M3 10c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 16c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/>',
-    bulldoze: '<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>',
+  const SCENIC_PARKS = [
+    [10, 6], [14, 11], [9, 15], [19, 15], [5, 6], [20, 8], [15, 6], [8, 9],
+  ];
+  const SPARE_LOTS = [
+    [16, 9, 'shop', 2], [5, 11, 'house', 2], [19, 6, 'clinic', 1], [10, 15, 'house', 2],
+    [14, 16, 'school', 1], [15, 4, 'apt', 1], [4, 13, 'house', 1], [20, 9, 'shop', 1],
+  ];
+
+  const TYPES = {
+    road:     { name: 'Avenue',       color: '#3b3f44' },
+    house:    { name: 'Villa',        color: '#d9a273', h: 22, inset: 0.2, grow: true },
+    apt:      { name: 'Vault Tower',  color: '#c98a8a', h: 72, inset: 0.12, grow: true },
+    shop:     { name: 'Studio',       color: '#e0c25b', h: 28, inset: 0.1, grow: true },
+    office:   { name: 'Tower',        color: '#7fa6c9', h: 118, inset: 0.1, grow: true },
+    park:     { name: 'Park',         color: '#8cbf5c' },
+    plaza:    { name: 'Civic Plaza',  color: '#c4b59d' },
+    clinic:   { name: 'Terrace Hub',  color: '#d95f59', h: 30, inset: 0.12 },
+    school:   { name: 'Research Hall', color: '#5f8c7a', h: 34, inset: 0.1 },
+    windmill: { name: 'Lab Mill',     color: '#7ea89b', h: 48, inset: 0.24 },
+    wheel:    { name: 'Wheel Studio', color: '#d67e49', h: 78, inset: 0.12 },
+    forest:   { name: 'Forest',       color: '#d9a21f' },
+    water:    { name: 'River',        color: '#3b7378' },
+    bridge:   { name: 'Bridge',       color: '#8e8372' },
   };
   const LVL_MULT = [1, 1, 1.5, 2.2];
 
@@ -70,12 +65,25 @@
   const ctx = canvas.getContext('2d', { alpha: false });
   const $ = (id) => document.getElementById(id);
 
-  let grid, levels, repos, money, tool = 'road', taxRate = 1, milestoneReached = 0;
+  let grid, levels, repos;
   let cam = { x: 0, y: 0, z: 1 };
-  let hover = null, selectedTile = null;
-  let cars = [], walkers = [], boats = [], bots = [], orphansList = [], wheelsList = [], millsList = [], beaconsList = [], housesList = [], waterCells = [];
-  let hour = 17.4, auto = false, simSpeed = 1, stats = {};
+  let camAnim = null;
+  let hover = null, hoveredLabel = null, selectedTile = null;
+  let showLabels = true;
+  let activeTab = 'overview';
+  let activeFilter = 'all';
+  let cars = [], walkers = [], boats = [], bots = [], wheelsList = [], millsList = [], beaconsList = [], housesList = [], waterCells = [];
+  let labelHits = [];
+  let hour = 17.4;
   let dpr = 1, W = 0, H = 0;
+
+  const LIGHT_MODES = [
+    { label: 'Dusk', hour: 17.4 },
+    { label: 'Day', hour: 13.0 },
+    { label: 'Night', hour: 22.4 },
+  ];
+  let lightIdx = 0;
+
   const rnd = (a, b) => a + Math.random() * (b - a);
   const inb = (x, y) => x >= 0 && y >= 0 && x < N && y < N;
   const isRoad = (t) => t === 'road' || t === 'bridge';
@@ -83,38 +91,15 @@
   const isBuilding = (t) => !!t && t !== 'road' && t !== 'bridge' && t !== 'water' && t !== 'forest';
   const makeLevels = () => Array.from({ length: N }, () => Array(N).fill(1));
   const makeRepos = () => Array.from({ length: N }, () => Array(N).fill(null));
-  function defaultRepoFor(t, x, y) {
-    if (!isBuilding(t)) return null;
-    if (t === 'office') return 'isocity';
-    if (t === 'wheel') return '3d-shirt-and-hoodie';
-    if (t === 'windmill') return 'finance-tracker-template';
-    if (t === 'school') return 'maths-ia-explorer';
-    if (t === 'clinic') return 'greenkeep';
-    if (t === 'plaza') return 'cham-hq';
-    if (t === 'apt') return (x + y) % 2 === 0 ? 'finance-tracker' : 'finance-tracker-template';
-    if (t === 'shop') return ['cham-merch-designs', '3d-shirt-and-hoodie', 'cham-bracelet-plan'][(x + y) % 3];
-    if (t === 'park') return ['greenkeep', 'cham-bracelet-plan', 'co-bo-u', 'claude'][(x + y) % 4];
-    return REPOS[(x * 5 + y * 9) % REPOS.length].name;
-  }
-
-  const clinicCov = new Uint8Array(N * N);
-  const schoolCov = new Uint8Array(N * N);
-  const parkCov = new Uint8Array(N * N);
 
   let rctx = ctx, rcam = cam;
   let worldDirty = true;
   const dirtyCols = new Set();
 
-  // ---------- motion & particles ----------
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const easeOut = (p) => 1 - Math.pow(1 - p, 4);
-  const anims = new Map();
-  const animate = (x, y, out, type) => {
-    if (reduceMotion) return;
-    anims.set(x * 100 + y, { start: performance.now(), dur: out ? 180 : 280, out, type });
-  };
 
-  const leaves = Array.from({ length: 14 }, (_, i) => ({
+  const leaves = Array.from({ length: 12 }, (_, i) => ({
     x: ((i * 197) % 1000) / 1000,
     y: ((i * 353) % 1000) / 1000,
     vx: rnd(0.008, 0.018),
@@ -137,14 +122,9 @@
   }));
 
   const smokes = [];
-  const popups = [];
-  function addPopup(x, y, z, text, color = '#f4f1ea') {
-    if (reduceMotion) return;
-    popups.push({ x, y, z, text, color, start: performance.now(), dur: 1100 });
-  }
 
   // ---------- sound ----------
-  let soundOn = true, audioCtx = null, lastSfx = 0;
+  let soundOn = false, audioCtx = null, lastSfx = 0;
   function sfx(kind) {
     if (!soundOn) return;
     const now = performance.now();
@@ -157,90 +137,79 @@
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
       osc.connect(gain); gain.connect(audioCtx.destination);
-      if (kind === 'build' || kind === 'upgrade' || kind === 'milestone') {
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(kind === 'milestone' ? 520 : kind === 'upgrade' ? 420 : 300, t);
-        osc.frequency.exponentialRampToValueAtTime(kind === 'milestone' ? 780 : kind === 'upgrade' ? 620 : 440, t + 0.08);
-        gain.gain.setValueAtTime(0.048, t);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.095);
-        osc.start(t); osc.stop(t + 0.1);
-      } else if (kind === 'bulldoze') {
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(140, t);
-        osc.frequency.exponentialRampToValueAtTime(55, t + 0.07);
-        gain.gain.setValueAtTime(0.04, t);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.075);
-        osc.start(t); osc.stop(t + 0.08);
-      } else if (kind === 'undo') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(380, t);
-        osc.frequency.exponentialRampToValueAtTime(260, t + 0.055);
-        gain.gain.setValueAtTime(0.045, t);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
-        osc.start(t); osc.stop(t + 0.065);
-      } else {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(210, t);
-        osc.frequency.exponentialRampToValueAtTime(140, t + 0.04);
-        gain.gain.setValueAtTime(0.04, t);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.045);
-        osc.start(t); osc.stop(t + 0.05);
-      }
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(kind === 'select' ? 320 : 210, t);
+      osc.frequency.exponentialRampToValueAtTime(kind === 'select' ? 440 : 140, t + 0.045);
+      gain.gain.setValueAtTime(0.035, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+      osc.start(t); osc.stop(t + 0.055);
     } catch (e) { /* audio blocked */ }
   }
 
-  // ---------- state ----------
+  // ---------- state & persistence ----------
   function starter() {
     grid = Array.from({ length: N }, () => Array(N).fill('forest'));
     levels = makeLevels();
     repos = makeRepos();
-    money = 5000;
-    hour = 17.4;
-    taxRate = 1;
-    milestoneReached = 0;
     selectedTile = null;
-    const set = (x, y, t, lv = 1) => {
-      if (inb(x, y)) { grid[x][y] = t; levels[x][y] = lv; repos[x][y] = defaultRepoFor(t, x, y); }
+
+    const set = (x, y, t, lv = 1, repoName = null) => {
+      if (!inb(x, y)) return;
+      grid[x][y] = t;
+      levels[x][y] = lv;
+      repos[x][y] = repoName;
     };
 
+    // Scenic river crossing the south district
     let ry = 19;
     for (let rx = 0; rx < N; rx++) {
       set(rx, ry, 'water');
       set(rx, ry + 1, 'water');
-      if (rx % 5 === 3 && ry > 12) { ry--; set(rx, ry, 'water'); }
+      if (rx % 6 === 3 && ry > 17) { ry--; set(rx, ry, 'water'); }
     }
 
-    let y = 4;
-    for (let x = 3; x < 23; x++) { set(x, y, 'road'); if (x % 5 === 0) { y += x % 10 === 0 ? 1 : -1; set(x, y, 'road'); } }
-    for (let j = 4; j < 21; j++) set(11, j, grid[11][j] === 'water' ? 'bridge' : 'road');
-    for (let i = 11; i <= 17; i++) set(i, 14, grid[i][14] === 'water' ? 'bridge' : 'road');
-    for (let j = 9; j <= 19; j++) set(17, j, grid[17][j] === 'water' ? 'bridge' : 'road');
+    // Structured avenues & bridges
+    for (let x = 4; x <= 21; x++) { set(x, 5, 'road'); set(x, 10, 'road'); set(x, 14, 'road'); }
+    for (let y = 4; y <= 17; y++) set(7, y, 'road');
+    for (let y = 4; y <= 22; y++) set(12, y, grid[12][y] === 'water' ? 'bridge' : 'road');
+    for (let y = 4; y <= 22; y++) set(18, y, grid[18][y] === 'water' ? 'bridge' : 'road');
 
-    const lots = [];
-    for (let x = 0; x < N; x++) for (let j = 0; j < N; j++) {
-      if (grid[x][j] !== 'forest') continue;
-      const near = [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy]) => inb(x+dx,j+dy) && isRoad(grid[x+dx][j+dy]));
-      if (near) lots.push([x, j]);
+    // Scenic campus parks
+    for (const [px0, py0] of SCENIC_PARKS) set(px0, py0, 'park', 1, null);
+
+    // Dedicated GitHub repository landmarks
+    for (const lm of LANDMARKS) set(lm.x, lm.y, lm.t, lm.lv, lm.repo);
+
+    // Assign any extra synced repos to spare lots
+    assignUnpinnedRepos();
+  }
+
+  function findRepoTile(repoName) {
+    for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
+      if (repos[x][y] === repoName) return [x, y];
     }
-    let k = 0;
-    for (const [x, j] of lots) {
-      k++;
-      if (k % 4 === 0) continue;
-      const r = (x * 7 + j * 13) % 13;
-      if (k === 8) set(x, j, 'clinic');
-      else if (k === 14) set(x, j, 'plaza');
-      else if (k === 18) set(x, j, 'school');
-      else if (k === 22) set(x, j, 'office', 2);
-      else if (k === 26) set(x, j, 'wheel');
-      else set(x, j, r < 8 ? 'house' : r < 10 ? 'shop' : r < 12 ? 'park' : 'apt', r < 4 ? 2 : 1);
+    return null;
+  }
+
+  function assignUnpinnedRepos() {
+    for (const repo of REPOS) {
+      if (findRepoTile(repo.name)) continue;
+      for (const [sx, sy, st, slv] of SPARE_LOTS) {
+        if (!repos[sx][sy] && (grid[sx][sy] === 'forest' || grid[sx][sy] === 'park')) {
+          grid[sx][sy] = st;
+          levels[sx][sy] = slv;
+          repos[sx][sy] = repo.name;
+          worldDirty = true;
+          break;
+        }
+      }
     }
-    set(7, 3, 'windmill');
   }
 
   let saveTimer = 0;
   function saveNow() {
     clearTimeout(saveTimer); saveTimer = 0;
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ grid, levels, repos, money, hour, taxRate, milestoneReached })); } catch (e) { /* storage unavailable */ }
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ grid, levels, repos, hour, showLabels })); } catch (e) { /* storage unavailable */ }
   }
   function scheduleSave() {
     if (saveTimer) return;
@@ -249,6 +218,12 @@
   addEventListener('visibilitychange', () => { if (document.hidden && saveTimer) saveNow(); });
   addEventListener('pagehide', () => { if (saveTimer) saveNow(); });
 
+  function syncLightUI() {
+    const m = LIGHT_MODES[lightIdx] || LIGHT_MODES[0];
+    $('lightBtn').textContent = m.label;
+    $('lightBtn').setAttribute('aria-label', `Lighting mode: ${m.label}. Click to cycle.`);
+  }
+
   function applySaveData(d) {
     if (!d || !Array.isArray(d.grid) || d.grid.length !== N || !Array.isArray(d.grid[0]) || d.grid[0].length !== N) return false;
     grid = d.grid.map((row) => row.map((t) => (t && TYPES[t]) ? t : null));
@@ -256,16 +231,16 @@
       ? d.levels.map((row) => row.map((v) => Math.max(1, Math.min(3, Number(v) || 1))))
       : makeLevels();
     repos = (Array.isArray(d.repos) && d.repos.length === N)
-      ? d.repos.map((row, x) => Array.isArray(row)
-        ? row.map((r, y) => isBuilding(grid[x][y]) ? (r && repoMap.has(r) ? r : defaultRepoFor(grid[x][y], x, y)) : null)
-        : grid[x].map((t, y) => defaultRepoFor(t, x, y)))
-      : grid.map((row, x) => row.map((t, y) => defaultRepoFor(t, x, y)));
-    money = Number.isFinite(d.money) ? d.money : 5000;
+      ? d.repos.map((row) => Array.isArray(row) ? row.map((r) => (r && typeof r === 'string') ? r : null) : Array(N).fill(null))
+      : makeRepos();
     hour = Number.isFinite(d.hour) ? d.hour : 17.4;
-    taxRate = Number.isFinite(d.taxRate) ? d.taxRate : 1;
-    milestoneReached = Number.isFinite(d.milestoneReached) ? d.milestoneReached : 0;
+    lightIdx = LIGHT_MODES.findIndex((m) => Math.abs(m.hour - hour) < 1);
+    if (lightIdx < 0) lightIdx = 0;
+    showLabels = d.showLabels !== false;
+    $('labelsBtn').setAttribute('aria-pressed', String(showLabels));
+    syncLightUI();
     selectedTile = null;
-    syncTaxUI();
+    assignUnpinnedRepos();
     return true;
   }
 
@@ -274,36 +249,10 @@
     catch (e) { return false; }
   }
 
-  // ---------- simulation ----------
+  // ---------- world feature scan & agents ----------
   const NB = [[1,0],[-1,0],[0,1],[0,-1]];
-  const connected = (x, y) => NB.some(([dx,dy]) => inb(x+dx,y+dy) && isRoad(grid[x+dx][y+dy]));
-  const nearWater = (x, y) => NB.some(([dx,dy]) => inb(x+dx,y+dy) && isWater(grid[x+dx][y+dy]));
-
-  function stampMask(mask, cx, cy, r) {
-    for (let dx = -r; dx <= r; dx++) {
-      const x = cx + dx;
-      if (x < 0 || x >= N) continue;
-      for (let dy = -r; dy <= r; dy++) {
-        if (Math.abs(dx) + Math.abs(dy) > r + 1) continue;
-        const y = cy + dy;
-        if (y < 0 || y >= N) continue;
-        mask[x * N + y] = 1;
-      }
-    }
-  }
-
-  function cityTier(pop) {
-    if (pop >= 1000) return 'Metropolis';
-    if (pop >= 500) return 'City';
-    if (pop >= 250) return 'Town';
-    if (pop >= 100) return 'Village';
-    return 'Hamlet';
-  }
 
   function recompute() {
-    clinicCov.fill(0);
-    schoolCov.fill(0);
-    parkCov.fill(0);
     wheelsList = [];
     millsList = [];
     beaconsList = [];
@@ -312,159 +261,16 @@
 
     for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
       const t = grid[x][y];
-      if (t === 'clinic' && connected(x, y)) stampMask(clinicCov, x, y, TYPES.clinic.radius);
-      else if (t === 'school' && connected(x, y)) stampMask(schoolCov, x, y, TYPES.school.radius);
-      else if (t === 'park' || t === 'plaza' || t === 'wheel') stampMask(parkCov, x, y, TYPES[t].radius);
-      if (t === 'water') waterCells.push([x, y]);
-    }
-
-    let pop = 0, jobs = 0, parks = 0, plazas = 0, wheels = 0, mills = 0, clinics = 0, schools = 0, roads = 0, orphans = 0, blds = 0, trees = 0, waterfront = 0;
-    let coveredPop = 0, schooledPop = 0, parkedPop = 0;
-    orphansList = [];
-
-    for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
-      const t = grid[x][y];
-      if (!t || t === 'water') continue;
-      if (t === 'forest') { trees++; continue; }
-      if (isRoad(t)) { roads++; continue; }
-      if (t === 'park') { parks++; if (nearWater(x, y)) waterfront++; continue; }
-      if (t === 'plaza') { plazas++; if (nearWater(x, y)) waterfront++; continue; }
-      if (t === 'windmill') { mills++; millsList.push([x, y]); continue; }
-      blds++;
-      if (!connected(x, y)) { orphans++; orphansList.push([x, y, bldHeight(t, levels[x][y] || 1)]); continue; }
       const lv = levels[x][y] || 1;
-      if (t === 'wheel') { wheelsList.push([x, y]); wheels++; }
-      if (t === 'clinic') clinics++;
-      if (t === 'school') schools++;
-      if (t === 'office') beaconsList.push([x, y, bldHeight(t, lv) + (lv >= 3 ? 20 : 12)]);
-      if (t === 'house') housesList.push([x, y, bldHeight(t, lv) + 12]);
-      const mult = LVL_MULT[lv] || 1;
-      const p = Math.round((TYPES[t].pop || 0) * mult);
-      const j = Math.round((TYPES[t].jobs || 0) * mult);
-      pop += p;
-      jobs += j;
-      if (nearWater(x, y)) waterfront++;
-      if (p > 0) {
-        const idx = x * N + y;
-        if (clinicCov[idx]) coveredPop += p;
-        if (schoolCov[idx]) schooledPop += p;
-        if (parkCov[idx]) parkedPop += p;
-      }
+      if (t === 'water') waterCells.push([x, y]);
+      else if (t === 'windmill') millsList.push([x, y]);
+      else if (t === 'wheel') wheelsList.push([x, y]);
+      else if (t === 'office') beaconsList.push([x, y, bldHeight(t, lv) + (lv >= 3 ? 20 : 12)]);
+      else if (t === 'house') housesList.push([x, y, bldHeight(t, lv) + 12]);
     }
-
-    const employed = Math.min(pop, jobs);
-    const taxIncome = Math.round((employed * 3 + Math.min(pop, jobs * 2) * 0.5) * taxRate);
-    const bonusIncome = waterfront * 2 + plazas * 4 + wheels * 14 + mills * 18;
-    const roadCost = Math.round(roads * 0.4);
-    const civicCost = Math.round(parks * 2 + plazas * 2 + clinics * 4 + schools * 5 + wheels * 4 + mills * 3 + blds * 0.5);
-    const income = taxIncome + bonusIncome;
-    const upkeep = roadCost + civicCost;
-
-    let happy = 48 + Math.min(parks * 5 + plazas * 6 + wheels * 8 + mills * 3, 28) + Math.min(trees * 0.1, 12) + Math.min(waterfront * 2, 10) - orphans * 6;
-    if (taxRate < 0.8) happy += 7;
-    else if (taxRate > 1.2) happy -= 8;
-    if (pop > 0) {
-      happy += (employed / pop - 0.6) * 28;
-      happy += (coveredPop / pop) * 8 + (schooledPop / pop) * 8;
-    }
-    if (jobs > pop * 1.5) happy -= 8;
-    happy = Math.max(0, Math.min(100, Math.round(happy)));
-
-    const pct = (n) => pop > 0 ? Math.min(100, Math.round((n / pop) * 100)) : 0;
-    stats = {
-      tier: cityTier(pop),
-      pop, jobs, roads, parks, orphans, waterfront,
-      taxIncome, bonusIncome, roadCost, civicCost,
-      net: Math.round(income - upkeep), happy,
-      healthPct: pct(coveredPop),
-      schoolPct: pct(schooledPop),
-      leisurePct: pct(parkedPop),
-      empPct: pct(employed),
-    };
-
-    const MILESTONES = [[100, 'Village', 300], [250, 'Town', 600], [500, 'City', 1200], [1000, 'Metropolis', 2500]];
-    for (const [target, title, bonus] of MILESTONES) {
-      if (pop >= target && milestoneReached < target) {
-        milestoneReached = target;
-        money += bonus;
-        sfx('milestone');
-        flash(`${title} reached! +$${fmt(bonus)} bonus`);
-      }
-    }
-
-    render_stats();
-    if ($('budgetPop').dataset.open === 'true') renderBudget();
-    if (selectedTile) renderInspect();
     syncAgents();
   }
 
-  function tryGrow() {
-    const minHappy = taxRate < 0.8 ? 58 : taxRate > 1.2 ? 72 : 65;
-    if (stats.happy < minHappy || stats.pop === 0) return;
-    const candidates = [];
-    for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
-      const t = grid[x][y];
-      const d = t && TYPES[t];
-      if (!d || !d.grow || !connected(x, y)) continue;
-      const lv = levels[x][y] || 1;
-      if (lv >= 3) continue;
-      const idx = x * N + y;
-      const score = (parkCov[idx] ? 1 : 0) + (nearWater(x, y) ? 1 : 0) + (schoolCov[idx] ? 1 : 0) + (clinicCov[idx] ? 1 : 0);
-      if (lv === 1 && score >= 1) candidates.push([x, y, 2]);
-      else if (lv === 2 && stats.happy >= 76 && score >= 2) candidates.push([x, y, 3]);
-    }
-    if (!candidates.length) return;
-    const [gx, gy, nlv] = candidates[Math.floor(Math.random() * candidates.length)];
-    levels[gx][gy] = nlv;
-    animate(gx, gy, false);
-    markCol(gx, gy);
-    addPopup(gx + 0.5, gy + 0.5, bldHeight(grid[gx][gy], nlv) + 12, `Level ${nlv}!`, '#ffd98a');
-    sfx('upgrade');
-    recompute();
-    scheduleSave();
-  }
-
-  const fmt = (n) => Math.round(n).toLocaleString('en-US');
-  let toolBtns = [];
-  function render_stats() {
-    $('sTier').textContent = stats.tier;
-    $('sMoney').textContent = '$' + fmt(money);
-    $('sPop').textContent = fmt(stats.pop);
-    $('sJobs').textContent = fmt(stats.jobs);
-    $('sHappy').textContent = stats.happy + '%';
-    $('sNet').textContent = (stats.net >= 0 ? '+' : '') + fmt(stats.net);
-    for (const b of toolBtns) {
-      const op = TYPES[b.dataset.tool].cost > money ? '0.45' : '1';
-      if (b.style.opacity !== op) b.style.opacity = op;
-    }
-  }
-
-  function renderBudget() {
-    const meters = [
-      ['Employment', stats.empPct],
-      ['Health coverage', stats.healthPct],
-      ['Education', stats.schoolPct],
-      ['Parks & plazas', stats.leisurePct],
-    ];
-    $('meters').innerHTML = meters.map(([lbl, pct]) => `
-      <div class="meter">
-        <div class="meter-top"><span>${lbl}</span><span class="tnum">${pct}%</span></div>
-        <div class="meter-track"><div class="meter-fill" style="width:${pct}%"></div></div>
-      </div>`).join('');
-    $('ledger').innerHTML = `
-      <div class="ledger-row"><span>Taxes (${Math.round(taxRate * 10)}%)</span><span>+$${fmt(stats.taxIncome)}</span></div>
-      <div class="ledger-row"><span>Waterfront, landmarks & wind</span><span>+$${fmt(stats.bonusIncome)}</span></div>
-      <div class="ledger-row"><span>Roads & bridges upkeep</span><span>-$${fmt(stats.roadCost)}</span></div>
-      <div class="ledger-row"><span>Services & buildings upkeep</span><span>-$${fmt(stats.civicCost)}</span></div>`;
-  }
-
-  function syncTaxUI() {
-    document.querySelectorAll('.tax-btn').forEach((b) => {
-      b.setAttribute('aria-pressed', String(Math.abs(Number(b.dataset.tax) - taxRate) < 0.05));
-    });
-  }
-
-  // ---------- agents ----------
   function roadTiles() {
     const r = [];
     for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) if (isRoad(grid[x][y])) r.push([x, y]);
@@ -484,50 +290,48 @@
     const r = roadTiles();
     if (!r.length) { cars.length = 0; walkers.length = 0; bots.length = 0; }
     else {
-      const wantCars = Math.min(48, Math.floor(r.length / 3));
+      const wantCars = Math.min(24, Math.floor(r.length / 4));
       while (cars.length < wantCars) {
         const [x, y] = r[Math.floor(Math.random() * r.length)];
-        cars.push({ fx: x, fy: y, tx: x, ty: y, t: 1, px: x, py: y, speed: rnd(0.9, 1.7),
+        cars.push({ fx: x, fy: y, tx: x, ty: y, t: 1, px: x, py: y, speed: rnd(0.85, 1.5),
           color: ['#c0463a', '#2f5d8a', '#e6e2d6', '#d89a2b', '#3d3f45', '#4f8f6a'][Math.floor(Math.random() * 6)] });
       }
       if (cars.length > wantCars) cars.length = wantCars;
 
-      const wantWalkers = Math.min(24, Math.floor(stats.pop / 8));
+      const wantWalkers = Math.min(14, Math.floor(r.length / 6));
       while (walkers.length < wantWalkers) {
         const [x, y] = r[Math.floor(Math.random() * r.length)];
-        walkers.push({ fx: x, fy: y, tx: x, ty: y, t: 1, px: x, py: y, speed: rnd(0.28, 0.48),
+        walkers.push({ fx: x, fy: y, tx: x, ty: y, t: 1, px: x, py: y, speed: rnd(0.28, 0.45),
           color: ['#e6ded0', '#c95d43', '#3b6978', '#d4a23a', '#5b7a52'][Math.floor(Math.random() * 5)] });
       }
       if (walkers.length > wantWalkers) walkers.length = wantWalkers;
 
-      let bldCount = 0;
-      for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) if (isBuilding(grid[x][y])) bldCount++;
-      const wantBots = Math.min(18, Math.max(bldCount ? 6 : 0, Math.floor(bldCount / 3)));
+      const wantBots = 14;
       while (bots.length < wantBots) {
         const [x, y] = r[Math.floor(Math.random() * r.length)];
         bots.push({ fx: x, fy: y, tx: x, ty: y, t: 1, px: x, py: y, speed: rnd(0.45, 0.78),
-          phase: Math.random() * 6.28,
-          color: BOT_COLORS[bots.length % BOT_COLORS.length] });
+          phase: Math.random() * 6.28, color: BOT_COLORS[bots.length % BOT_COLORS.length] });
       }
       if (bots.length > wantBots) bots.length = wantBots;
     }
 
     const w = waterTiles();
-    const wantBoats = Math.min(5, Math.floor(w.length / 12));
+    const wantBoats = Math.min(4, Math.floor(w.length / 12));
     while (boats.length < wantBoats) {
       const [x, y] = w[Math.floor(Math.random() * w.length)];
-      boats.push({ fx: x, fy: y, tx: x, ty: y, t: 1, px: x, py: y, speed: rnd(0.35, 0.55),
+      boats.push({ fx: x, fy: y, tx: x, ty: y, t: 1, px: x, py: y, speed: rnd(0.32, 0.5),
         color: ['#b35a38', '#d8cbb5', '#3d6e70', '#c48f36'][Math.floor(Math.random() * 4)] });
     }
     if (boats.length > wantBoats) boats.length = wantBoats;
   }
+
   function stepList(list, dt, passable = isRoad) {
     for (const c of list) {
       c.t += dt * c.speed;
       if (c.t >= 1) {
-        const opts = NB.map(([dx,dy]) => [c.tx+dx, c.ty+dy]).filter(([x,y]) => inb(x,y) && passable(grid[x][y]));
+        const opts = NB.map(([dx, dy]) => [c.tx + dx, c.ty + dy]).filter(([x, y]) => inb(x, y) && passable(grid[x][y]));
         if (!opts.length) { c.t = 1; continue; }
-        const fwd = opts.filter(([x,y]) => !(x === c.fx && y === c.fy));
+        const fwd = opts.filter(([x, y]) => !(x === c.fx && y === c.fy));
         const pool = fwd.length ? fwd : opts;
         const [nx, ny] = pool[Math.floor(Math.random() * pool.length)];
         c.fx = c.tx; c.fy = c.ty; c.tx = nx; c.ty = ny; c.t = 0;
@@ -537,7 +341,7 @@
     }
   }
 
-  // ---------- projection ----------
+  // ---------- projection & picking ----------
   const px = (x, y) => (x - y) * (TW / 2) * rcam.z + rcam.x;
   const py = (x, y, z = 0) => (x + y) * (TH / 2) * rcam.z + rcam.y - z * rcam.z;
   function pick(mx, my) {
@@ -545,6 +349,23 @@
     const v = (my - cam.y) / cam.z / (TH / 2);
     const x = Math.floor((u + v) / 2), y = Math.floor((v - u) / 2);
     return inb(x, y) ? [x, y] : null;
+  }
+  function hitLabel(mx, my) {
+    if (!showLabels) return null;
+    for (let i = labelHits.length - 1; i >= 0; i--) {
+      const h = labelHits[i];
+      if (mx >= h.rx && mx <= h.rx + h.rw && my >= h.ry && my <= h.ry + h.rh) return h;
+    }
+    return null;
+  }
+  function flyToTile(x, y) {
+    const tz = Math.max(cam.z, W >= 760 ? 1.08 : 0.92);
+    const screenOffsetX = W >= 760 ? -150 : 0;
+    const screenCenterY = W >= 760 ? H * 0.54 : H * 0.34;
+    const tx = W / 2 + screenOffsetX - ((x + 0.5) - (y + 0.5)) * (TW / 2) * tz;
+    const ty = screenCenterY - ((x + 0.5) + (y + 0.5)) * (TH / 2) * tz + 28 * tz;
+    if (reduceMotion) { cam.x = tx; cam.y = ty; cam.z = tz; camAnim = null; return; }
+    camAnim = { sx: cam.x, sy: cam.y, sz: cam.z, tx, ty, tz, start: performance.now(), dur: 380 };
   }
 
   // ---------- color / light ----------
@@ -566,7 +387,7 @@
     const tint = [0.55, 0.62, 0.9];
     const w = [1 + 0.2 * wq, 1 + 0.05 * wq, 1 - 0.28 * wq];
     const f = (v, i) => Math.round(Math.min(255, v * w[i] * k * (light + n * 0.38 * tint[i] / 0.55 * 0.75)));
-    out = `rgb(${f(r,0)},${f(g,1)},${f(b,2)})`;
+    out = `rgb(${f(r, 0)},${f(g, 1)},${f(b, 2)})`;
     if (shadeCache.size > 4000) shadeCache.clear();
     shadeCache.set(key, out);
     return out;
@@ -585,34 +406,19 @@
     rctx.fill();
   }
   function quadZ(x0, y0, x1, y1, z, fill) {
-    poly4(px(x0,y0), py(x0,y0,z), px(x1,y0), py(x1,y0,z), px(x1,y1), py(x1,y1,z), px(x0,y1), py(x0,y1,z), fill);
+    poly4(px(x0, y0), py(x0, y0, z), px(x1, y0), py(x1, y0, z), px(x1, y1), py(x1, y1, z), px(x0, y1), py(x0, y1, z), fill);
   }
-
   function castShadow(x0, y0, x1, y1, h) {
     const sx = Math.min(0.65, h * 0.0065), sy = Math.min(0.32, h * 0.003);
-    poly4(
-      px(x1, y0), py(x1, y0, 0),
-      px(x1 + sx, y0 + sy), py(x1 + sx, y0 + sy, 0),
-      px(x1 + sx, y1 + sy), py(x1 + sx, y1 + sy, 0),
-      px(x0 + sx, y1 + sy), py(x0 + sx, y1 + sy, 0),
-      'rgba(10, 18, 12, 0.22)'
-    );
-    poly4(
-      px(x0, y1), py(x0, y1, 0),
-      px(x1, y1), py(x1, y1, 0),
-      px(x1 + sx, y1 + sy), py(x1 + sx, y1 + sy, 0),
-      px(x0 + sx, y1 + sy), py(x0 + sx, y1 + sy, 0),
-      'rgba(10, 18, 12, 0.22)'
-    );
+    poly4(px(x1, y0), py(x1, y0, 0), px(x1 + sx, y0 + sy), py(x1 + sx, y0 + sy, 0), px(x1 + sx, y1 + sy), py(x1 + sx, y1 + sy, 0), px(x0 + sx, y1 + sy), py(x0 + sx, y1 + sy, 0), 'rgba(10, 18, 12, 0.22)');
+    poly4(px(x0, y1), py(x0, y1, 0), px(x1, y1), py(x1, y1, 0), px(x1 + sx, y1 + sy), py(x1 + sx, y1 + sy, 0), px(x0 + sx, y1 + sy), py(x0 + sx, y1 + sy, 0), 'rgba(10, 18, 12, 0.22)');
   }
-
   function box(x0, y0, x1, y1, z0, z1, color, L, opts = {}) {
-    poly4(px(x0,y1), py(x0,y1,z0), px(x1,y1), py(x1,y1,z0), px(x1,y1), py(x1,y1,z1), px(x0,y1), py(x0,y1,z1), shade(color, 0.82, L));
-    poly4(px(x1,y0), py(x1,y0,z0), px(x1,y1), py(x1,y1,z0), px(x1,y1), py(x1,y1,z1), px(x1,y0), py(x1,y0,z1), shade(color, 0.64, L));
+    poly4(px(x0, y1), py(x0, y1, z0), px(x1, y1), py(x1, y1, z0), px(x1, y1), py(x1, y1, z1), px(x0, y1), py(x0, y1, z1), shade(color, 0.82, L));
+    poly4(px(x1, y0), py(x1, y0, z0), px(x1, y1), py(x1, y1, z0), px(x1, y1), py(x1, y1, z1), px(x1, y0), py(x1, y0, z1), shade(color, 0.64, L));
     quadZ(x0, y0, x1, y1, z1, shade(opts.roof || color, 1.05, L));
     if (opts.windows) windows(x0, y0, x1, y1, z0, z1, L, opts.windows, opts.glass);
   }
-
   function windows(x0, y0, x1, y1, z0, z1, L, seed, glass = false) {
     const rows = Math.max(1, Math.floor((z1 - z0) / 14));
     const cols = Math.max(1, Math.round((x1 - x0) * 3));
@@ -626,13 +432,12 @@
         const lit = night > 0.35 && ((seed * 31 + r * 17 + c * 13) % 7) < 4;
         const a = (c + (glass ? 0.14 : 0.25)) / cols, b = (c + (glass ? 0.86 : 0.75)) / cols;
         const lx0 = x0 + dx * a, lx1 = x0 + dx * b;
-        poly4(px(lx0,y1), py(lx0,y1,zz0), px(lx1,y1), py(lx1,y1,zz0), px(lx1,y1), py(lx1,y1,zz1), px(lx0,y1), py(lx0,y1,zz1), lit ? '#ffd98a' : darkL);
+        poly4(px(lx0, y1), py(lx0, y1, zz0), px(lx1, y1), py(lx1, y1, zz0), px(lx1, y1), py(lx1, y1, zz1), px(lx0, y1), py(lx0, y1, zz1), lit ? '#ffd98a' : darkL);
         const ry0 = y0 + dy * a, ry1 = y0 + dy * b;
-        poly4(px(x1,ry0), py(x1,ry0,zz0), px(x1,ry1), py(x1,ry1,zz0), px(x1,ry1), py(x1,ry1,zz1), px(x1,ry0), py(x1,ry0,zz1), lit ? '#f0b862' : darkR);
+        poly4(px(x1, ry0), py(x1, ry0, zz0), px(x1, ry1), py(x1, ry1, zz0), px(x1, ry1), py(x1, ry1, zz1), px(x1, ry0), py(x1, ry0, zz1), lit ? '#f0b862' : darkR);
       }
     }
   }
-
   function bldHeight(t, lv) {
     const d = TYPES[t];
     if (!d || !d.h) return 0;
@@ -684,9 +489,9 @@
         if (((seed * 31 + r * 17 + c * 13) % 7) >= 4) continue;
         const a = (c + (glass ? 0.14 : 0.25)) / cols, b = (c + (glass ? 0.86 : 0.75)) / cols;
         const lx0 = x0 + dx * a, lx1 = x0 + dx * b;
-        poly4(px(lx0,y1), py(lx0,y1,zz0), px(lx1,y1), py(lx1,y1,zz0), px(lx1,y1), py(lx1,y1,zz1), px(lx0,y1), py(lx0,y1,zz1), '#ffd98a');
+        poly4(px(lx0, y1), py(lx0, y1, zz0), px(lx1, y1), py(lx1, y1, zz0), px(lx1, y1), py(lx1, y1, zz1), px(lx0, y1), py(lx0, y1, zz1), '#ffd98a');
         const ry0 = y0 + dy * a, ry1 = y0 + dy * b;
-        poly4(px(x1,ry0), py(x1,ry0,zz0), px(x1,ry1), py(x1,ry1,zz0), px(x1,ry1), py(x1,ry1,zz1), px(x1,ry0), py(x1,ry0,zz1), '#f0b862');
+        poly4(px(x1, ry0), py(x1, ry0, zz0), px(x1, ry1), py(x1, ry1, zz0), px(x1, ry1), py(x1, ry1, zz1), px(x1, ry0), py(x1, ry0, zz1), '#f0b862');
       }
     }
   }
@@ -695,15 +500,10 @@
     quadZ(x, y, x + 1, y + 1, -5, shade((x + y) % 2 ? '#295b60' : '#26565b', 1, L));
     if ((x * 3 + y * 5) % 4 === 0) {
       poly4(px(x + 0.2, y + 0.35), py(x + 0.2, y + 0.35, -5), px(x + 0.75, y + 0.35), py(x + 0.75, y + 0.35, -5),
-        px(x + 0.85, y + 0.47), py(x + 0.85, y + 0.47, -5), px(x + 0.3, y + 0.47), py(x + 0.3, y + 0.47, -5),
-        shade('#3c7b80', 1, L));
+        px(x + 0.85, y + 0.47), py(x + 0.85, y + 0.47, -5), px(x + 0.3, y + 0.47), py(x + 0.3, y + 0.47, -5), shade('#3c7b80', 1, L));
     }
-    if (inb(x - 1, y) && !isWater(grid[x - 1][y])) {
-      poly4(px(x, y), py(x, y, 0), px(x, y + 1), py(x, y + 1, 0), px(x, y + 1), py(x, y + 1, -5), px(x, y), py(x, y, -5), shade('#5b4c39', 1, L));
-    }
-    if (inb(x, y - 1) && !isWater(grid[x][y - 1])) {
-      poly4(px(x, y), py(x, y, 0), px(x + 1, y), py(x + 1, y, 0), px(x + 1, y), py(x + 1, y, -5), px(x, y), py(x, y, -5), shade('#6b5a44', 1, L));
-    }
+    if (inb(x - 1, y) && !isWater(grid[x - 1][y])) poly4(px(x, y), py(x, y, 0), px(x, y + 1), py(x, y + 1, 0), px(x, y + 1), py(x, y + 1, -5), px(x, y), py(x, y, -5), shade('#5b4c39', 1, L));
+    if (inb(x, y - 1) && !isWater(grid[x][y - 1])) poly4(px(x, y), py(x, y, 0), px(x + 1, y), py(x + 1, y, 0), px(x + 1, y), py(x + 1, y, -5), px(x, y), py(x, y, -5), shade('#6b5a44', 1, L));
   }
 
   function drawRoad(x, y, L, bridge = false, skipWater = false) {
@@ -785,11 +585,11 @@
     quadZ(x, y, x + 1, y + 1, 0, shade(base, 1, L));
   }
 
-  function drawWheelBase(x, y, L, hs = 1) {
+  function drawWheelBase(x, y, L) {
     quadZ(x + 0.08, y + 0.08, x + 0.92, y + 0.92, 0.5, shade('#c8baa3', 1, L));
     rctx.strokeStyle = shade('#d9d4c9', 1, L);
     rctx.lineWidth = Math.max(1.5, 2.5 * rcam.z);
-    const cx = px(x + 0.5, y + 0.5), cy = py(x + 0.5, y + 0.5, 42 * hs);
+    const cx = px(x + 0.5, y + 0.5), cy = py(x + 0.5, y + 0.5, 42);
     rctx.beginPath();
     rctx.moveTo(px(x + 0.22, y + 0.25), py(x + 0.22, y + 0.25, 1)); rctx.lineTo(cx, cy);
     rctx.moveTo(px(x + 0.78, y + 0.75), py(x + 0.78, y + 0.75, 1)); rctx.lineTo(cx, cy);
@@ -799,7 +599,7 @@
   function drawWheelSpin(x, y, now, L) {
     const cx = px(x + 0.5, y + 0.5), cy = py(x + 0.5, y + 0.5, 42);
     const rx = 20 * rcam.z, ry = 26 * rcam.z;
-    const ang = (now * 0.00055 * (simSpeed || 0)) || 0.4;
+    const ang = reduceMotion ? 0.4 : now * 0.00055;
     const cols = ['#d95f59', '#e0c25b', '#5f8c7a', '#7fa6c9'];
     rctx.strokeStyle = shade('#f2ece0', 1, L);
     rctx.lineWidth = Math.max(1, 1.5 * rcam.z);
@@ -817,7 +617,7 @@
 
   function drawMillSpin(x, y, now, L) {
     const hx = px(x + 0.5, y + 0.5), hy = py(x + 0.5, y + 0.5, 48);
-    const ang = (now * 0.002 * (simSpeed || 0)) || 0.3;
+    const ang = reduceMotion ? 0.3 : now * 0.002;
     const r = 17 * rcam.z;
     rctx.strokeStyle = shade('#f4f1ea', 1, L);
     rctx.lineWidth = Math.max(1.5, 2.2 * rcam.z);
@@ -829,50 +629,48 @@
     rctx.beginPath(); rctx.arc(hx, hy, 2.6 * rcam.z, 0, 7); rctx.fill();
   }
 
-  function drawTile(x, y, t, L, hs = 1, skipGround = false) {
+  function drawTile(x, y, t, L, skipGround = false) {
     if (!skipGround && t !== 'road' && t !== 'bridge') drawGround(x, y, t, L);
     if (!t || t === 'water') return;
     if (t === 'forest') {
       const sd = x * 17 + y * 31;
       for (let i = 0; i < 5; i++) {
         const [a, b] = FOREST_SPOTS[i];
-        const sc = (0.8 + ((Math.imul(sd + i * 331, 2246822519) >>> 24) % 4) * 0.1) * hs;
+        const sc = 0.8 + ((Math.imul(sd + i * 331, 2246822519) >>> 24) % 4) * 0.1;
         const cs = Math.imul(sd + i * 977, 2654435761) >>> 20;
         tree(x + a, y + b, sc, L, cs);
       }
       return;
     }
     if (t === 'road' || t === 'bridge') {
-      if (hs < 1) rctx.globalAlpha = hs;
       drawRoad(x, y, L, t === 'bridge', skipGround);
-      if (hs < 1) rctx.globalAlpha = 1;
       return;
     }
     if (t === 'park') {
       quadZ(x + 0.12, y + 0.44, x + 0.88, y + 0.56, 0.2, shade('#cfc3aa', 1, L));
-      box(x + 0.44, y + 0.36, x + 0.58, y + 0.42, 0.2, 2.5 * hs, '#7a5436', L);
+      box(x + 0.44, y + 0.36, x + 0.58, y + 0.42, 0.2, 2.5, '#7a5436', L);
       const sd = x * 7 + y * 3;
-      tree(x + 0.26, y + 0.26, hs, L, 0);
-      tree(x + 0.74, y + 0.65, 0.85 * hs, L, 1);
-      if (sd % 2) tree(x + 0.3, y + 0.78, 0.7 * hs, L, 0);
+      tree(x + 0.26, y + 0.26, 1, L, 0);
+      tree(x + 0.74, y + 0.65, 0.85, L, 1);
+      if (sd % 2) tree(x + 0.3, y + 0.78, 0.7, L, 0);
       return;
     }
     if (t === 'plaza') {
-      if (!skipGround) castShadow(x + 0.1, y + 0.1, x + 0.9, y + 0.9, 10 * hs);
+      if (!skipGround) castShadow(x + 0.1, y + 0.1, x + 0.9, y + 0.9, 10);
       quadZ(x + 0.06, y + 0.06, x + 0.94, y + 0.94, 0.5, shade('#c8baa3', 1, L));
-      box(x + 0.25, y + 0.25, x + 0.75, y + 0.75, 0.5, 4 * hs, '#a79a86', L, { roof: '#3c7b80' });
-      box(x + 0.45, y + 0.45, x + 0.55, y + 0.55, 4 * hs, 11 * hs, '#dcd3c2', L, { roof: '#ffd98a' });
+      box(x + 0.25, y + 0.25, x + 0.75, y + 0.75, 0.5, 4, '#a79a86', L, { roof: '#3c7b80' });
+      box(x + 0.45, y + 0.45, x + 0.55, y + 0.55, 4, 11, '#dcd3c2', L, { roof: '#ffd98a' });
       return;
     }
     if (t === 'wheel') {
-      if (!skipGround) castShadow(x + 0.12, y + 0.12, x + 0.88, y + 0.88, 52 * hs);
-      drawWheelBase(x, y, L, hs);
+      if (!skipGround) castShadow(x + 0.12, y + 0.12, x + 0.88, y + 0.88, 52);
+      drawWheelBase(x, y, L);
       return;
     }
     if (t === 'windmill') {
-      if (!skipGround) castShadow(x + 0.38, y + 0.38, x + 0.62, y + 0.62, 46 * hs);
+      if (!skipGround) castShadow(x + 0.38, y + 0.38, x + 0.62, y + 0.62, 46);
       quadZ(x + 0.24, y + 0.24, x + 0.76, y + 0.76, 1, shade('#b6ab96', 1, L));
-      box(x + 0.41, y + 0.41, x + 0.59, y + 0.59, 1, 48 * hs, '#ebe6da', L, { roof: '#7ea89b' });
+      box(x + 0.41, y + 0.41, x + 0.59, y + 0.59, 1, 48, '#ebe6da', L, { roof: '#7ea89b' });
       return;
     }
 
@@ -891,38 +689,33 @@
       : t === 'clinic' ? '#e5dfd3'
       : t === 'school' ? '#4a6b68'
       : '#4b6c8a';
-    const H = Math.max(1, bldHeight(t, lv) * hs);
-    if (!skipGround && hs > 0.5) castShadow(x + i, y + i, x + 1 - i, y + 1 - i, H);
-    box(x + i, y + i, x + 1 - i, y + 1 - i, 0, H, wall, L, { roof, windows: hs > 0.6 ? seed : 0, glass: t === 'office' });
+    const H = Math.max(1, bldHeight(t, lv));
+    if (!skipGround) castShadow(x + i, y + i, x + 1 - i, y + 1 - i, H);
+    box(x + i, y + i, x + 1 - i, y + 1 - i, 0, H, wall, L, { roof, windows: seed, glass: t === 'office' });
 
-    if (t === 'shop' && hs > 0.6) {
-      poly4(
-        px(x + i, y + 1 - i + 0.04), py(x + i, y + 1 - i + 0.04, 16),
-        px(x + 1 - i, y + 1 - i + 0.04), py(x + 1 - i, y + 1 - i + 0.04, 16),
-        px(x + 1 - i, y + 1 - i + 0.13), py(x + 1 - i, y + 1 - i + 0.13, 11),
-        px(x + i, y + 1 - i + 0.13), py(x + i, y + 1 - i + 0.13, 11),
-        shade('#c0463a', 1, L)
-      );
+    if (t === 'shop') {
+      poly4(px(x + i, y + 1 - i + 0.04), py(x + i, y + 1 - i + 0.04, 16), px(x + 1 - i, y + 1 - i + 0.04), py(x + 1 - i, y + 1 - i + 0.04, 16),
+        px(x + 1 - i, y + 1 - i + 0.13), py(x + 1 - i, y + 1 - i + 0.13, 11), px(x + i, y + 1 - i + 0.13), py(x + i, y + 1 - i + 0.13, 11), shade('#c0463a', 1, L));
     }
     if (t === 'house') {
-      const r0x = px(x + i, y + 0.5), r0y = py(x + i, y + 0.5, H + 10 * hs);
-      const r1x = px(x + 1 - i, y + 0.5), r1y = py(x + 1 - i, y + 0.5, H + 10 * hs);
+      const r0x = px(x + i, y + 0.5), r0y = py(x + i, y + 0.5, H + 10);
+      const r1x = px(x + 1 - i, y + 0.5), r1y = py(x + 1 - i, y + 0.5, H + 10);
       poly4(px(x + i, y + i), py(x + i, y + i, H), px(x + 1 - i, y + i), py(x + 1 - i, y + i, H), r1x, r1y, r0x, r0y, shade(red, 1.0, L));
       poly4(px(x + i, y + 1 - i), py(x + i, y + 1 - i, H), px(x + 1 - i, y + 1 - i), py(x + 1 - i, y + 1 - i, H), r1x, r1y, r0x, r0y, shade(red, 0.78, L));
-      if (hs > 0.7) box(x + 0.64, y + 0.34, x + 0.73, y + 0.43, H + 3 * hs, H + 13 * hs, '#8a4a3a', L, { roof: '#5a3a30' });
+      box(x + 0.64, y + 0.34, x + 0.73, y + 0.43, H + 3, H + 13, '#8a4a3a', L, { roof: '#5a3a30' });
     }
-    if (t === 'clinic' && hs > 0.7) {
+    if (t === 'clinic') {
       quadZ(x + 0.34, y + 0.44, x + 0.66, y + 0.56, H + 0.5, shade('#c8443d', 1, L));
       quadZ(x + 0.44, y + 0.34, x + 0.56, y + 0.66, H + 0.5, shade('#c8443d', 1, L));
     }
-    if (t === 'school' && hs > 0.7) {
-      box(x + 0.36, y + 0.36, x + 0.64, y + 0.64, H, H + 9 * hs, '#e9e3d5', L, { roof: '#3d5856' });
+    if (t === 'school') {
+      box(x + 0.36, y + 0.36, x + 0.64, y + 0.64, H, H + 9, '#e9e3d5', L, { roof: '#3d5856' });
     }
-    if ((t === 'apt' || t === 'office') && lv >= 2 && hs > 0.7) {
-      const th = lv >= 3 ? 12 * hs : 7 * hs;
+    if ((t === 'apt' || t === 'office') && lv >= 2) {
+      const th = lv >= 3 ? 12 : 7;
       box(x + 0.24, y + 0.24, x + 0.76, y + 0.76, H, H + th, wall, L, { roof });
     }
-    if (t === 'office' && hs > 0.8) {
+    if (t === 'office') {
       const sx = px(x + 0.5, y + 0.5), sy0 = py(x + 0.5, y + 0.5, H + (lv >= 3 ? 12 : 7)), sy1 = py(x + 0.5, y + 0.5, H + (lv >= 3 ? 22 : 14));
       rctx.strokeStyle = shade('#9cb3c9', 1, L);
       rctx.lineWidth = Math.max(1, 1.4 * rcam.z);
@@ -1038,57 +831,15 @@
     for (let s = 0; s <= 2 * N - 2; s++) {
       for (let x = Math.max(0, s - N + 1); x <= Math.min(N - 1, s); x++) {
         const y = s - x;
-        const key = x * 100 + y;
         rctx = wctx;
-        if (anims.has(key)) drawGround(x, y, grid[x][y], 1);
-        else {
-          drawTile(x, y, grid[x][y], 1, 1, false);
-          rctx = nctx;
-          drawTileNight(x, y, grid[x][y]);
-        }
+        drawTile(x, y, grid[x][y], 1, false);
+        rctx = nctx;
+        drawTileNight(x, y, grid[x][y]);
       }
     }
     warm = savedW;
     worldDirty = false;
     dirtyCols.clear();
-  }
-
-  function patchColumn(u) {
-    const savedW = warm; warm = 0;
-    rcam = { x: OX, y: OY, z: 1 };
-    const clipX = Math.max(0, OX + u * (TW / 2) - 52);
-    const clipW = Math.min(WW - clipX, 104);
-
-    rctx = wctx;
-    wctx.save();
-    wctx.setTransform(WS, 0, 0, WS, 0, 0);
-    wctx.beginPath(); wctx.rect(clipX, 0, clipW, WH); wctx.clip();
-    wctx.clearRect(clipX, 0, clipW, WH);
-    drawSlab(1);
-
-    rctx = nctx;
-    nctx.save();
-    nctx.setTransform(1, 0, 0, 1, 0, 0);
-    nctx.beginPath(); nctx.rect(clipX, 0, clipW, WH); nctx.clip();
-    nctx.clearRect(clipX, 0, clipW, WH);
-
-    for (let s = 0; s <= 2 * N - 2; s++) {
-      for (let x = Math.max(0, s - N + 1); x <= Math.min(N - 1, s); x++) {
-        const y = s - x;
-        if (Math.abs((x - y) - u) > 2) continue;
-        const key = x * 100 + y;
-        rctx = wctx;
-        if (anims.has(key)) drawGround(x, y, grid[x][y], 1);
-        else {
-          drawTile(x, y, grid[x][y], 1, 1, false);
-          rctx = nctx;
-          drawTileNight(x, y, grid[x][y]);
-        }
-      }
-    }
-    wctx.restore();
-    nctx.restore();
-    warm = savedW;
   }
 
   const vigCanvas = document.createElement('canvas');
@@ -1119,8 +870,102 @@
         if (!t || isRoad(t) || t === 'water') continue;
         if ((dx > 1 || dy > 1) && t !== 'office' && t !== 'apt') continue;
         seen[idx] = 1;
-        ov.push({ k: 0, s: tx + ty, x: tx, y: ty, t, hs: 1 });
+        ov.push({ k: 0, s: tx + ty, x: tx, y: ty, t });
       }
+    }
+  }
+
+  function buildingTopZ(x, y, t) {
+    const lv = levels[x][y] || 1;
+    let z = bldHeight(t, lv);
+    if (t === 'office') z += lv >= 3 ? 22 : 14;
+    else if (t === 'apt') z += lv >= 2 ? 10 : 4;
+    else if (t === 'house' || t === 'school') z += 12;
+    else if (t === 'wheel') z = 64;
+    else if (t === 'windmill') z = 58;
+    else if (t === 'plaza') z = 14;
+    else z += 6;
+    return z;
+  }
+
+  function drawMapLabels() {
+    labelHits.length = 0;
+    if (!showLabels) return;
+
+    const items = [];
+    for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
+      const rp = repos[x][y];
+      const t = grid[x][y];
+      if (!rp || !isBuilding(t)) continue;
+      const isSel = selectedTile && selectedTile[0] === x && selectedTile[1] === y;
+      const isHov = (hover && hover[0] === x && hover[1] === y) || hoveredLabel === rp;
+      items.push({ x, y, t, repo: getRepo(rp), prio: isSel ? 2 : isHov ? 1 : 0, depth: x + y });
+    }
+    items.sort((a, b) => b.prio - a.prio || b.depth - a.depth);
+
+    ctx.font = '600 11.5px system-ui, -apple-system, "Segoe UI", sans-serif';
+    ctx.textBaseline = 'middle';
+    const placed = [];
+
+    const overlaps = (rx, ry, rw, rh) => placed.some((p) => !(rx + rw + 4 < p.rx || p.rx + p.rw + 4 < rx || ry + rh + 4 < p.ry || p.ry + p.rh + 4 < ry));
+
+    for (const it of items) {
+      const z = buildingTopZ(it.x, it.y, it.t) + 8;
+      const ax = px(it.x + 0.5, it.y + 0.5);
+      const ay = py(it.x + 0.5, it.y + 0.5, z);
+      if (ax < -90 || ax > W + 90 || ay < -40 || ay > H + 40) continue;
+
+      const label = it.repo.name;
+      const tw = ctx.measureText(label).width;
+      const rw = Math.round(tw + 24);
+      const rh = 22;
+      let rx = Math.round(ax - rw / 2);
+      let ry = Math.round(ay - rh - 6);
+
+      if (rx < 8) rx = 8;
+      if (rx + rw > W - 8) rx = W - rw - 8;
+      if (ry < 10) ry = 10;
+
+      if (it.prio === 0 && overlaps(rx, ry, rw, rh)) {
+        const altRy = ry - 24;
+        if (altRy > 68 && !overlaps(rx, altRy, rw, rh)) ry = altRy;
+        else {
+          // Compact clickable pin dot when zoomed tightly out
+          ctx.fillStyle = it.repo.isPrivate ? '#d9a21f' : '#0f766e';
+          ctx.beginPath(); ctx.arc(ax, ay - 6, 5.5, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = '#f4f1ea'; ctx.lineWidth = 1.6; ctx.stroke();
+          labelHits.push({ x: it.x, y: it.y, rx: ax - 9, ry: ay - 15, rw: 18, rh: 18, repoName: it.repo.name });
+          continue;
+        }
+      }
+
+      placed.push({ rx, ry, rw, rh });
+      labelHits.push({ x: it.x, y: it.y, rx, ry, rw, rh, repoName: it.repo.name });
+
+      const active = it.prio > 0;
+      ctx.fillStyle = 'rgba(12, 20, 16, 0.22)';
+      ctx.beginPath(); ctx.roundRect(rx, ry + 2, rw, rh, 99); ctx.fill();
+
+      ctx.fillStyle = active ? '#0f766e' : 'rgba(244, 241, 234, 0.96)';
+      ctx.beginPath(); ctx.roundRect(rx, ry, rw, rh, 99); ctx.fill();
+
+      ctx.strokeStyle = active ? '#0a5c55' : 'rgba(29, 35, 32, 0.16)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Pointer stem
+      ctx.strokeStyle = active ? '#0f766e' : 'rgba(244, 241, 234, 0.9)';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(ax, ry + rh); ctx.lineTo(ax, ay + 2); ctx.stroke();
+
+      // Status dot
+      ctx.fillStyle = active ? '#5ef2d6' : it.repo.isPrivate ? '#d9a21f' : '#0f766e';
+      ctx.beginPath(); ctx.arc(rx + 10, ry + rh / 2, 3.3, 0, Math.PI * 2); ctx.fill();
+
+      // Label text
+      ctx.fillStyle = active ? '#f4fbf9' : '#1d2320';
+      ctx.textAlign = 'left';
+      ctx.fillText(label, rx + 17, ry + rh / 2 + 0.5);
     }
   }
 
@@ -1129,13 +974,6 @@
     warm = Math.max(0, 1 - Math.abs(hour - 17.6) / 2.2, 1 - Math.abs(hour - 6.4) / 1.6);
 
     if (worldDirty) buildWorld();
-    else if (dirtyCols.size) {
-      if (dirtyCols.size > 18) buildWorld();
-      else {
-        for (const u of dirtyCols) patchColumn(u);
-        dirtyCols.clear();
-      }
-    }
 
     rctx = ctx;
     rcam = cam;
@@ -1172,29 +1010,13 @@
     seen.fill(0);
     ov.length = 0;
 
-    if (anims.size) {
-      for (const [key, an] of anims) {
-        const x = (key / 100) | 0, y = key % 100;
-        const p = Math.min(1, (now - an.start) / an.dur);
-        if (p >= 1) {
-          anims.delete(key);
-          dirtyCols.add(x - y);
-        } else {
-          const hs = an.out ? 1 - easeOut(p) : easeOut(p);
-          const t = an.out ? an.type : grid[x][y];
-          seen[x * N + y] = 1;
-          ov.push({ k: 0, s: x + y, x, y, t, hs });
-        }
-      }
-    }
-
     for (let i = 0; i < wheelsList.length; i++) {
       const [wx, wy] = wheelsList[i];
-      if (!anims.has(wx * 100 + wy)) ov.push({ k: 4, s: wx + wy + 0.1, x: wx, y: wy });
+      ov.push({ k: 4, s: wx + wy + 0.1, x: wx, y: wy });
     }
     for (let i = 0; i < millsList.length; i++) {
       const [mx, my] = millsList[i];
-      if (!anims.has(mx * 100 + my)) ov.push({ k: 5, s: mx + my + 0.1, x: mx, y: my });
+      ov.push({ k: 5, s: mx + my + 0.1, x: mx, y: my });
     }
 
     for (let i = 0; i < cars.length; i++) {
@@ -1225,9 +1047,9 @@
       const [sx, sy] = selectedTile;
       const st = grid[sx]?.[sy];
       if (isBuilding(st)) {
-        if (!seen[sx * N + sy] && !anims.has(sx * 100 + sy)) {
+        if (!seen[sx * N + sy]) {
           seen[sx * N + sy] = 1;
-          ov.push({ k: 0, s: sx + sy, x: sx, y: sy, t: st, hs: 1 });
+          ov.push({ k: 0, s: sx + sy, x: sx, y: sy, t: st });
         }
         for (let i = 0; i < 3; i++) {
           const ang = (reduceMotion ? 0.6 : now * 0.0022) + i * 2.0944;
@@ -1247,7 +1069,7 @@
       const rx = Math.round(b.px), ry = Math.round(b.py);
       if (inb(rx, ry) && grid[rx][ry] === 'bridge' && !seen[rx * N + ry]) {
         seen[rx * N + ry] = 1;
-        ov.push({ k: 0, s: rx + ry + 1.1, x: rx, y: ry, t: 'bridge', hs: 1 });
+        ov.push({ k: 0, s: rx + ry + 1.1, x: rx, y: ry, t: 'bridge' });
       }
       addOccluders(Math.floor(b.px), Math.floor(b.py));
     }
@@ -1264,7 +1086,7 @@
         else if (it.k === 5) drawMillSpin(it.x, it.y, now, 1);
         else if (it.k === 6) drawBot(it.b, now, false);
         else if (it.k === 7) drawBot(it.b, now, true);
-        else drawTile(it.x, it.y, it.t, 1, it.hs, it.t !== 'bridge');
+        else drawTile(it.x, it.y, it.t, 1, it.t !== 'bridge');
       }
       warm = savedW;
     }
@@ -1300,7 +1122,7 @@
     }
 
     if (!reduceMotion && housesList.length && (hour < 9 || hour > 16.5)) {
-      if (smokes.length < 10 && Math.random() < 0.08 * (simSpeed || 0.2)) {
+      if (smokes.length < 6 && Math.random() < 0.05) {
         const [hx, hy, hz] = housesList[Math.floor(Math.random() * housesList.length)];
         smokes.push({ x: hx + 0.68, y: hy + 0.38, z: hz, life: 0 });
       }
@@ -1337,75 +1159,25 @@
       }
     }
 
-    if (orphansList.length) {
-      const bob = Math.sin(now / 260) * 3;
-      const rad = 9 * cam.z;
-      ctx.font = `700 ${Math.round(12 * cam.z)}px system-ui`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      for (let i = 0; i < orphansList.length; i++) {
-        const [ox0, oy0, oh] = orphansList[i];
-        if (anims.has(ox0 * 100 + oy0)) continue;
-        const bx = px(ox0 + 0.5, oy0 + 0.5), by = py(ox0 + 0.5, oy0 + 0.5, oh + 22 + bob);
-        ctx.fillStyle = '#b4513f';
-        ctx.beginPath(); ctx.arc(bx, by, rad, 0, 7); ctx.fill();
-        ctx.fillStyle = '#fff';
-        ctx.fillText('!', bx, by + 1);
-      }
-    }
-
-    if (popups.length) {
-      ctx.font = `700 ${Math.round(13 * cam.z)}px system-ui`;
-      ctx.textAlign = 'center';
-      for (let i = popups.length - 1; i >= 0; i--) {
-        const pp = popups[i];
-        const p = (now - pp.start) / pp.dur;
-        if (p >= 1) { popups.splice(i, 1); continue; }
-        ctx.globalAlpha = 1 - p;
-        ctx.fillStyle = pp.color;
-        ctx.fillText(pp.text, px(pp.x, pp.y), py(pp.x, pp.y, pp.z + p * 26));
-      }
-      ctx.globalAlpha = 1;
-    }
-
-    const focusTile = hover || selectedTile;
-    if (focusTile) {
-      const [x, y] = focusTile;
-      const ht = grid[x][y];
-      const covType = TYPES[tool].radius ? tool : (ht && TYPES[ht].radius ? ht : null);
-      if (covType) {
-        const r = TYPES[covType].radius;
-        const ccol = TYPES[covType].color + '38';
-        for (let dx = -r; dx <= r; dx++) {
-          const tx = x + dx; if (tx < 0 || tx >= N) continue;
-          for (let dy = -r; dy <= r; dy++) {
-            if (Math.abs(dx) + Math.abs(dy) > r + 1) continue;
-            const ty = y + dy; if (ty < 0 || ty >= N) continue;
-            quadZ(tx, ty, tx + 1, ty + 1, 0, ccol);
-          }
-        }
-      }
-    }
-
-    if (hover && tool !== 'pan') {
+    if (hover && repos[hover[0]]?.[hover[1]]) {
       const [x, y] = hover;
-      const bad = !canApply(x, y);
-      const col = tool === 'bulldoze' ? '#b4513f' : bad ? '#b4513f' : '#0f766e';
-      quadZ(x, y, x + 1, y + 1, 0, col + '88');
-      ctx.strokeStyle = col; ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(15, 118, 110, 0.8)';
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(px(x,y), py(x,y)); ctx.lineTo(px(x+1,y), py(x+1,y));
-      ctx.lineTo(px(x+1,y+1), py(x+1,y+1)); ctx.lineTo(px(x,y+1), py(x,y+1));
+      ctx.moveTo(px(x, y), py(x, y)); ctx.lineTo(px(x + 1, y), py(x + 1, y));
+      ctx.lineTo(px(x + 1, y + 1), py(x + 1, y + 1)); ctx.lineTo(px(x, y + 1), py(x, y + 1));
       ctx.closePath(); ctx.stroke();
     }
+
     if (selectedTile) {
       const [x, y] = selectedTile;
       const pulse = reduceMotion ? 0.5 : 0.5 + 0.5 * Math.sin(now * 0.006);
       const pad = 0.06 + pulse * 0.06;
-      quadZ(x, y, x + 1, y + 1, 0, 'rgba(15, 118, 110, 0.16)');
+      quadZ(x, y, x + 1, y + 1, 0, 'rgba(15, 118, 110, 0.18)');
       ctx.strokeStyle = '#0f766e'; ctx.lineWidth = 2.2;
       ctx.beginPath();
-      ctx.moveTo(px(x,y), py(x,y)); ctx.lineTo(px(x+1,y), py(x+1,y));
-      ctx.lineTo(px(x+1,y+1), py(x+1,y+1)); ctx.lineTo(px(x,y+1), py(x,y+1));
+      ctx.moveTo(px(x, y), py(x, y)); ctx.lineTo(px(x + 1, y), py(x + 1, y));
+      ctx.lineTo(px(x + 1, y + 1), py(x + 1, y + 1)); ctx.lineTo(px(x, y + 1), py(x, y + 1));
       ctx.closePath(); ctx.stroke();
       ctx.strokeStyle = `rgba(94, 242, 214, ${(0.35 + pulse * 0.45).toFixed(2)})`;
       ctx.lineWidth = 1.5;
@@ -1422,137 +1194,11 @@
       ctx.drawImage(vigCanvas, 0, 0, W, H);
       ctx.globalAlpha = 1;
     }
+
+    drawMapLabels();
   }
 
-  // ---------- actions & rotation ----------
-  function upgradeCost(t) { return Math.round(TYPES[t].cost * 0.6); }
-  function nextTile(cur, t) {
-    if (t === 'bulldoze') return cur === 'bridge' ? 'water' : null;
-    if (t === 'upgrade') return (cur && TYPES[cur]?.grow) ? cur : null;
-    if (t === 'road' && cur === 'water') return 'bridge';
-    if (t === 'water') return (!cur || cur === 'forest') ? 'water' : null;
-    if (t === 'forest') return !cur ? 'forest' : null;
-    return (!cur || cur === 'forest') ? t : null;
-  }
-  function tileCost(cur, t) {
-    if (t === 'upgrade') return cur && TYPES[cur]?.grow ? upgradeCost(cur) : 0;
-    if (t === 'road' && cur === 'water') return TYPES.bridge.cost;
-    return TYPES[t].cost;
-  }
-  function canApply(x, y) {
-    const cur = grid[x][y];
-    if (tool === 'pan') return false;
-    if (tool === 'bulldoze') return !!cur;
-    if (tool === 'upgrade') return !!(cur && TYPES[cur]?.grow && (levels[x][y] || 1) < 3 && upgradeCost(cur) <= money);
-    const nxt = nextTile(cur, tool);
-    return !!nxt && tileCost(cur, tool) <= money;
-  }
-
-  const history = [], redoStack = [];
-  let strokeId = 0;
-  function syncUndoUI() {
-    $('undoBtn').disabled = !history.length;
-    $('redoBtn').disabled = !redoStack.length;
-  }
-  function markCol(x, y) {
-    dirtyCols.add(x - y);
-    dirtyCols.add(x - y + 1);
-    dirtyCols.add(x - y - 1);
-  }
-  function apply(x, y, forceTool = tool) {
-    const cur = grid[x][y];
-    const prevRepo = repos[x][y] || null;
-    if (forceTool === 'pan') return;
-    if (forceTool === 'bulldoze') {
-      if (!cur) return;
-      const nxt = nextTile(cur, 'bulldoze');
-      const prevLv = levels[x][y] || 1;
-      const nextRepo = defaultRepoFor(nxt, x, y);
-      history.push({ x, y, prev: cur, next: nxt, prevLv, nextLv: 1, prevRepo, nextRepo, cost: 0, stroke: strokeId });
-      redoStack.length = 0;
-      grid[x][y] = nxt;
-      levels[x][y] = 1;
-      repos[x][y] = nextRepo;
-      animate(x, y, true, cur);
-      sfx('bulldoze');
-    } else if (forceTool === 'upgrade') {
-      if (!cur || !TYPES[cur]?.grow) return;
-      const prevLv = levels[x][y] || 1;
-      if (prevLv >= 3) return flash('Already max level');
-      const cost = upgradeCost(cur);
-      if (cost > money) return flash('Not enough funds');
-      const nextLv = prevLv + 1;
-      history.push({ x, y, prev: cur, next: cur, prevLv, nextLv, prevRepo, nextRepo: prevRepo, cost, stroke: strokeId });
-      redoStack.length = 0;
-      levels[x][y] = nextLv;
-      money -= cost;
-      animate(x, y, false);
-      addPopup(x + 0.5, y + 0.5, bldHeight(cur, nextLv) + 12, `Level ${nextLv}!`, '#ffd98a');
-      sfx('upgrade');
-    } else {
-      const nxt = nextTile(cur, forceTool);
-      if (!nxt) return;
-      const cost = tileCost(cur, forceTool);
-      if (cost > money) return flash('Not enough funds');
-      const prevLv = levels[x][y] || 1;
-      const nextRepo = defaultRepoFor(nxt, x, y);
-      history.push({ x, y, prev: cur, next: nxt, prevLv, nextLv: 1, prevRepo, nextRepo, cost, stroke: strokeId });
-      redoStack.length = 0;
-      grid[x][y] = nxt; money -= cost;
-      levels[x][y] = 1;
-      repos[x][y] = nextRepo;
-      animate(x, y, false);
-      sfx(nxt === 'road' || nxt === 'bridge' || nxt === 'water' || nxt === 'forest' ? 'tap' : 'build');
-    }
-    if (history.length > 400) history.shift();
-    markCol(x, y);
-    syncUndoUI();
-    recompute(); scheduleSave();
-  }
-
-  function undo() {
-    if (!history.length) return flash('Nothing to undo');
-    const sid = history[history.length - 1].stroke;
-    while (history.length && history[history.length - 1].stroke === sid) {
-      const h = history.pop();
-      const cur = grid[h.x][h.y];
-      grid[h.x][h.y] = h.prev;
-      levels[h.x][h.y] = h.prevLv || 1;
-      repos[h.x][h.y] = h.prevRepo !== undefined ? h.prevRepo : defaultRepoFor(h.prev, h.x, h.y);
-      if (h.prev) animate(h.x, h.y, false);
-      else animate(h.x, h.y, true, cur);
-      money += h.cost;
-      redoStack.push(h);
-      markCol(h.x, h.y);
-    }
-    sfx('undo');
-    syncUndoUI();
-    recompute(); scheduleSave();
-  }
-
-  function redo() {
-    if (!redoStack.length) return flash('Nothing to redo');
-    const sid = redoStack[redoStack.length - 1].stroke;
-    let totalCost = 0;
-    for (let i = redoStack.length - 1; i >= 0 && redoStack[i].stroke === sid; i--) totalCost += redoStack[i].cost;
-    if (totalCost > money) return flash('Not enough funds');
-    while (redoStack.length && redoStack[redoStack.length - 1].stroke === sid) {
-      const h = redoStack.pop();
-      const cur = grid[h.x][h.y];
-      grid[h.x][h.y] = h.next;
-      levels[h.x][h.y] = h.nextLv || 1;
-      repos[h.x][h.y] = h.nextRepo !== undefined ? h.nextRepo : defaultRepoFor(h.next, h.x, h.y);
-      if (h.next) animate(h.x, h.y, false);
-      else animate(h.x, h.y, true, cur);
-      money -= h.cost;
-      history.push(h);
-      markCol(h.x, h.y);
-    }
-    sfx('build');
-    syncUndoUI();
-    recompute(); scheduleSave();
-  }
-
+  // ---------- rotate ----------
   function rotateCity(cw = true) {
     const ng = Array.from({ length: N }, () => Array(N).fill(null));
     const nl = makeLevels();
@@ -1575,56 +1221,16 @@
         c.py = c.fy + (c.ty - c.fy) * c.t;
       }
     }
-    for (const st of [history, redoStack]) {
-      for (const h of st) { const nx = rx(h.x, h.y), ny = ry(h.x, h.y); h.x = nx; h.y = ny; }
-    }
     if (selectedTile) selectedTile = [rx(selectedTile[0], selectedTile[1]), ry(selectedTile[0], selectedTile[1])];
-    anims.clear(); smokes.length = 0;
+    smokes.length = 0;
     worldDirty = true;
     recompute(); scheduleSave();
     sfx('tap');
   }
 
-  let flashTimer = 0;
-  function flash(msg) {
-    const tip = $('tip'); tip.textContent = msg; tip.hidden = false;
-    tip.style.transform = `translate3d(${Math.round(W / 2 - 90)}px, 84px, 0)`;
-    lastTipKey = '';
-    clearTimeout(flashTimer);
-    flashTimer = setTimeout(() => { flashTimer = 0; tip.hidden = true; }, 1600);
-  }
-
-  function describe(x, y) {
-    const t = grid[x][y];
-    if (!t) return null;
-    if (t === 'road') return 'Road';
-    if (t === 'bridge') return 'Bridge. Connects roads across water.';
-    if (t === 'water') return 'Water. Build roads across it for bridges, or place homes beside it for a waterfront bonus.';
-    if (t === 'park') return 'Park. Raises happiness.' + (nearWater(x, y) ? ' Waterfront bonus.' : '');
-    if (t === 'plaza') return 'Town Plaza. Boosts nearby happiness and income.' + (nearWater(x, y) ? ' Waterfront bonus.' : '');
-    if (t === 'forest') return 'Forest. Clear it with Bulldoze, or build over it.';
-    const d = TYPES[t];
-    const lv = levels[x][y] || 1;
-    const mult = LVL_MULT[lv] || 1;
-    if (t === 'windmill') return `Windmill, ${d.jobs} jobs. Generates clean energy income (+$18/tick) and raises happiness.`;
-    if (!connected(x, y)) return `${d.name}. No road access, so it does not count.`;
-    if (t === 'clinic') return `Clinic, ${d.jobs} jobs. Boosts nearby health and happiness.`;
-    if (t === 'school') return `School, ${d.jobs} jobs. Helps nearby buildings grow.`;
-    if (t === 'wheel') return `Ferris Wheel, ${d.jobs} jobs. Landmark boosting nearby happiness and income.`;
-    const val = d.pop ? `${Math.round(d.pop * mult)} residents` : `${Math.round(d.jobs * mult)} jobs`;
-    const tags = [];
-    if (d.grow) tags.push(`Level ${lv}`);
-    if (nearWater(x, y)) tags.push('Waterfront');
-    const idx = x * N + y;
-    if (d.pop && clinicCov[idx]) tags.push('Clinic');
-    if (d.pop && schoolCov[idx]) tags.push('School');
-    const rp = isBuilding(t) && repos[x][y] ? ` [${repos[x][y]}]` : '';
-    return `${d.name}${tags.length ? ' (' + tags.join(', ') + ')' : ''}, ${val}.${rp}` + (tool === 'upgrade' && lv < 3 ? ` Click to upgrade ($${upgradeCost(t)}).` : '');
-  }
-
-  // ---------- GitHub repo bots & live status ----------
+  // ---------- GitHub API ----------
   function timeAgo(iso) {
-    if (!iso) return 'recently';
+    if (!iso) return 'active';
     const sec = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 1000));
     if (sec < 60) return 'just now';
     if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
@@ -1638,14 +1244,14 @@
     return [
       { name: 'CommitBot', state: 'ok', task: `${stateNote || 'Tracking main branch'} on ${GITHUB_OWNER}/${repo.name}` },
       { name: 'DeployBot', state: 'ok', task: `Serving ${host} live build` },
-      { name: 'ReviewBot', state: 'busy', task: `Scanning ${lang} modules and UI telemetry` },
+      { name: 'ReviewBot', state: 'busy', task: `Scanning ${lang} modules and workspace checks` },
     ];
   }
 
   function buildLiveBots(repo, commits, runs) {
     const c0 = Array.isArray(commits) && commits[0];
     const sha = c0?.sha ? c0.sha.slice(0, 7) : 'main';
-    const msg = c0?.commit?.message ? c0.commit.message.split('\n')[0].slice(0, 48) : 'Latest production commit';
+    const msg = c0?.commit?.message ? c0.commit.message.split('\n')[0].slice(0, 48) : 'Latest commit';
     const when = c0?.commit?.author?.date ? timeAgo(c0.commit.author.date) : 'active';
     const host = repo.web ? repo.web.replace(/^https?:\/\//, '').replace(/\/$/, '') : 'GitHub';
     const run0 = Array.isArray(runs) && runs[0];
@@ -1678,20 +1284,31 @@
     }
   }
 
-  async function fetchUserRepos() {
-    const list = await fetchJsonTimed(`https://api.github.com/users/${GITHUB_OWNER}/repos?per_page=30&sort=updated`);
+  function updateRepoCountUI() {
+    $('repoCount').textContent = `${REPOS.length} repos`;
+  }
+
+  async function fetchUserRepos(force = false) {
+    const list = await fetchJsonTimed(`https://api.github.com/users/${GITHUB_OWNER}/repos?per_page=40&sort=updated`);
     if (!Array.isArray(list)) return;
-    let changed = false;
+    let added = false;
     for (const r of list) {
       if (!r || !r.name) continue;
       const existing = repoMap.get(r.name);
       const webUrl = r.homepage && r.homepage.startsWith('http')
         ? r.homepage
         : (r.has_pages ? `https://${GITHUB_OWNER.toLowerCase()}.github.io/${r.name}/` : existing?.web || '');
+      const meta = {
+        stars: r.stargazers_count ?? 0,
+        issues: r.open_issues_count ?? 0,
+        branch: r.default_branch || 'main',
+        pushedAt: r.pushed_at || r.updated_at,
+      };
       if (existing) {
         if (r.description) existing.desc = r.description;
         if (r.language) existing.lang = r.language;
         if (webUrl) existing.web = webUrl;
+        existing.meta = meta;
       } else {
         const entry = {
           name: r.name,
@@ -1699,54 +1316,108 @@
           desc: r.description || `${r.name} repository by ${GITHUB_OWNER}.`,
           web: webUrl,
           git: r.html_url || `https://github.com/${GITHUB_OWNER}/${r.name}`,
+          meta,
         };
         REPOS.push(entry);
         repoMap.set(entry.name, entry);
-        changed = true;
+        added = true;
       }
     }
-    if (changed && selectedTile) renderInspect(false);
+    updateRepoCountUI();
+    if (added) {
+      assignUnpinnedRepos();
+      if (worldDirty) buildWorld();
+    }
+    if (force) repoCache.clear();
+    if (!$('searchResults').hidden) renderSearchResults();
+    if (selectedTile) renderInspect(force);
   }
 
-  async function fetchRepoActivity(repoName) {
+  async function fetchRepoActivity(repoName, force = false) {
     const repo = getRepo(repoName);
     const prev = repoCache.get(repo.name);
     const now = Date.now();
-    if (prev && (prev.loading || now - prev.at < 120000)) return prev;
+    if (!force && prev && (prev.loading || now - prev.at < 120000)) return prev;
 
-    const entry = { at: now, loading: true, live: false, bots: buildFallbackBots(repo, 'Syncing repo status') };
+    const entry = {
+      at: now,
+      loading: true,
+      live: false,
+      bots: buildFallbackBots(repo, 'Syncing repo status'),
+      commits: [],
+      files: [],
+    };
     repoCache.set(repo.name, entry);
 
     if (repo.isPrivate) {
       entry.loading = false;
       entry.bots = buildFallbackBots(repo, 'Private repo mirror synced');
-      if (selectedTile && repos[selectedTile[0]][selectedTile[1]] === repo.name) renderBotsUI(repo.name);
+      if (selectedTile && repos[selectedTile[0]][selectedTile[1]] === repo.name) renderRepoDetailsUI(repo.name);
       return entry;
     }
 
-    const [commits, runs] = await Promise.all([
-      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.name}/commits?per_page=3`),
+    const [repoInfo, commits, runs, files] = await Promise.all([
+      repo.meta ? Promise.resolve(null) : fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.name}`),
+      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.name}/commits?per_page=6`),
       fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.name}/actions/runs?per_page=2`),
+      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.name}/contents`),
     ]);
+
+    if (repoInfo) {
+      repo.meta = {
+        stars: repoInfo.stargazers_count ?? 0,
+        issues: repoInfo.open_issues_count ?? 0,
+        branch: repoInfo.default_branch || 'main',
+        pushedAt: repoInfo.pushed_at || repoInfo.updated_at,
+      };
+      if (repoInfo.description) repo.desc = repoInfo.description;
+    }
+
     entry.at = Date.now();
     entry.loading = false;
     if (Array.isArray(commits) && commits.length) {
       entry.live = true;
+      entry.commits = commits;
       entry.bots = buildLiveBots(repo, commits, runs?.workflow_runs);
     } else {
       entry.live = false;
       entry.bots = buildFallbackBots(repo, 'Cached branch snapshot');
     }
-    if (selectedTile && repos[selectedTile[0]][selectedTile[1]] === repo.name) renderBotsUI(repo.name);
+    if (Array.isArray(files)) {
+      entry.files = [...files].sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'dir' ? -1 : 1));
+    }
+    if (selectedTile && repos[selectedTile[0]][selectedTile[1]] === repo.name) renderRepoDetailsUI(repo.name);
     return entry;
   }
 
-  function renderBotsUI(repoName) {
+  // ---------- inspector workspace panel ----------
+  function renderRepoDetailsUI(repoName) {
     const repo = getRepo(repoName);
     const cached = repoCache.get(repo.name);
+    const meta = repo.meta || {};
+    const branch = meta.branch || 'main';
+
+    // Metrics strip
+    const metricsEl = $('inspMetrics');
+    metricsEl.innerHTML = '';
+    const cells = [
+      ['Lang', repo.lang || 'Web'],
+      ['Access', repo.isPrivate ? 'Private' : 'Public'],
+      ['Stars', meta.stars !== undefined ? String(meta.stars) : (repo.isPrivate ? '-' : '0')],
+      ['Updated', meta.pushedAt ? timeAgo(meta.pushedAt) : (cached?.commits?.[0]?.commit?.author?.date ? timeAgo(cached.commits[0].commit.author.date) : 'Active')],
+    ];
+    for (const [lbl, val] of cells) {
+      const cell = document.createElement('div');
+      cell.className = 'metric-cell';
+      const lEl = document.createElement('span'); lEl.className = 'stat-label'; lEl.textContent = lbl;
+      const vEl = document.createElement('span'); vEl.className = 'metric-val'; vEl.textContent = val;
+      cell.append(lEl, vEl);
+      metricsEl.appendChild(cell);
+    }
+
+    // Bots list
     const botsData = cached?.bots || buildFallbackBots(repo);
-    const liveEl = $('botsLive');
-    liveEl.textContent = cached?.loading ? 'Syncing' : cached?.live ? 'Live GitHub' : repo.isPrivate ? 'Private app' : 'Active';
+    $('botsLive').textContent = cached?.loading ? 'Syncing' : cached?.live ? 'Live GitHub' : repo.isPrivate ? 'Private app' : 'Active';
     const listEl = $('inspBots');
     listEl.innerHTML = '';
     for (const bot of botsData) {
@@ -1755,81 +1426,123 @@
       const dot = document.createElement('span');
       dot.className = 'bot-dot' + (bot.state === 'busy' ? ' busy' : bot.state === 'err' ? ' err' : '');
       const body = document.createElement('div');
-      const nameEl = document.createElement('div');
-      nameEl.className = 'bot-name';
-      nameEl.textContent = bot.name;
-      const taskEl = document.createElement('div');
-      taskEl.className = 'bot-task';
-      taskEl.textContent = bot.task;
+      const nameEl = document.createElement('div'); nameEl.className = 'bot-name'; nameEl.textContent = bot.name;
+      const taskEl = document.createElement('div'); taskEl.className = 'bot-task'; taskEl.textContent = bot.task;
       body.append(nameEl, taskEl);
       item.append(dot, body);
       listEl.appendChild(item);
     }
+
+    // Commits tab
+    const commitsEl = $('inspCommits');
+    commitsEl.innerHTML = '';
+    if (cached?.loading) {
+      const p = document.createElement('p'); p.className = 'insp-body'; p.textContent = 'Loading commits from GitHub...';
+      commitsEl.appendChild(p);
+    } else if (cached?.commits?.length) {
+      for (const c of cached.commits) {
+        const a = document.createElement('a');
+        a.className = 'detail-row';
+        a.href = c.html_url || `${repo.git}/commits/${branch}`;
+        a.target = '_blank'; a.rel = 'noopener noreferrer';
+        const top = document.createElement('div'); top.className = 'detail-top';
+        const sha = document.createElement('code'); sha.className = 'sha'; sha.textContent = (c.sha || '').slice(0, 7);
+        const dtEl = document.createElement('span'); dtEl.className = 'detail-meta'; dtEl.textContent = timeAgo(c.commit?.author?.date);
+        top.append(sha, dtEl);
+        const msg = document.createElement('div'); msg.className = 'detail-sub';
+        msg.textContent = (c.commit?.message || '').split('\n')[0];
+        a.append(top, msg);
+        commitsEl.appendChild(a);
+      }
+    } else {
+      const p = document.createElement('p'); p.className = 'insp-body';
+      p.textContent = repo.isPrivate ? 'Commit history is private on GitHub. Open GitHub or github.dev with your account to view commits.' : 'No public commits loaded right now.';
+      commitsEl.appendChild(p);
+    }
+
+    // Files tab
+    const filesEl = $('inspFiles');
+    filesEl.innerHTML = '';
+    if (cached?.loading) {
+      const p = document.createElement('p'); p.className = 'insp-body'; p.textContent = 'Loading repository files...';
+      filesEl.appendChild(p);
+    } else if (cached?.files?.length) {
+      for (const f of cached.files.slice(0, 24)) {
+        const a = document.createElement('a');
+        a.className = 'detail-row';
+        const isDir = f.type === 'dir';
+        a.href = isDir ? `${repo.git}/tree/${branch}/${f.path}` : `https://github.dev/${GITHUB_OWNER}/${repo.name}/blob/${branch}/${f.path}`;
+        a.target = '_blank'; a.rel = 'noopener noreferrer';
+        const top = document.createElement('div'); top.className = 'detail-top';
+        const name = document.createElement('span'); name.className = 'detail-title'; name.textContent = isDir ? `${f.name}/` : f.name;
+        const kind = document.createElement('span'); kind.className = 'detail-meta'; kind.textContent = isDir ? 'Folder' : 'Edit';
+        top.append(name, kind);
+        a.appendChild(top);
+        filesEl.appendChild(a);
+      }
+    } else {
+      const p = document.createElement('p'); p.className = 'insp-body';
+      p.textContent = repo.isPrivate ? 'File tree requires GitHub sign-in. Click Open github.dev above to browse and edit files.' : 'Open github.dev or GitHub repo above to browse files.';
+      filesEl.appendChild(p);
+    }
   }
 
-  // ---------- tile inspector & popovers ----------
-  function renderInspect(triggerFetch = true) {
+  function setTab(name) {
+    activeTab = name;
+    document.querySelectorAll('.tab-btn').forEach((b) => {
+      b.setAttribute('aria-selected', String(b.dataset.tab === name));
+    });
+    $('tabOverview').hidden = name !== 'overview';
+    $('tabCommits').hidden = name !== 'commits';
+    $('tabFiles').hidden = name !== 'files';
+  }
+  document.querySelectorAll('.tab-btn').forEach((b) => {
+    b.onclick = () => { setTab(b.dataset.tab); sfx('tap'); };
+  });
+
+  function renderInspect(forceFetch = false) {
     const card = $('inspectCard');
     if (!selectedTile) { card.dataset.open = 'false'; return; }
     const [x, y] = selectedTile;
     const t = grid[x][y];
-    if (!t) { selectedTile = null; card.dataset.open = 'false'; return; }
+    const rp = repos[x][y];
+    if (!t || !rp) { selectedTile = null; card.dataset.open = 'false'; return; }
+    const repo = getRepo(rp);
     const d = TYPES[t];
-    const lv = levels[x][y] || 1;
-    const isBld = isBuilding(t);
-    $('inspTitle').textContent = d.grow ? `${d.name} (Level ${lv}/3)` : d.name;
-    $('inspSub').textContent = describe(x, y) || '';
 
-    const repoBox = card.querySelector('.repo-box');
-    const botsBox = card.querySelector('.bots-box');
-    if (isBld) {
-      repoBox.style.display = '';
-      botsBox.style.display = '';
-      const assigned = repos[x][y] || defaultRepoFor(t, x, y);
-      repos[x][y] = assigned;
-      const repo = getRepo(assigned);
-      const sel = $('inspRepo');
-      if (sel.options.length !== REPOS.length) {
-        sel.innerHTML = '';
-        for (const r of REPOS) {
-          const opt = document.createElement('option');
-          opt.value = r.name;
-          opt.textContent = `${r.name} (${r.lang})`;
-          sel.appendChild(opt);
-        }
-      }
-      sel.value = repo.name;
-      $('inspDesc').textContent = repo.desc;
-      const webLink = $('inspWeb');
-      if (repo.web) {
-        webLink.href = repo.web;
-        webLink.style.display = '';
-        webLink.textContent = 'Open live web';
-      } else {
-        webLink.style.display = 'none';
-      }
-      const gitLink = $('inspGit');
-      gitLink.href = repo.git;
-      gitLink.textContent = 'GitHub repo';
-      if (triggerFetch) fetchRepoActivity(repo.name);
-      renderBotsUI(repo.name);
-    } else {
-      repoBox.style.display = 'none';
-      botsBox.style.display = 'none';
-    }
+    $('inspTitle').textContent = repo.name;
+    $('inspSub').textContent = `${d.name} landmark · Tile (${x}, ${y})`;
+    $('inspDesc').textContent = repo.desc;
 
-    const up = $('inspUpgrade');
-    if (d.grow && lv < 3) {
-      const uc = upgradeCost(t);
-      up.hidden = false;
-      up.textContent = `Upgrade ($${uc})`;
-      up.disabled = uc > money;
+    const webLink = $('inspWeb');
+    if (repo.web) {
+      webLink.href = repo.web;
+      webLink.hidden = false;
     } else {
-      up.hidden = true;
+      webLink.hidden = true;
     }
-    $('inspDemolish').textContent = t === 'bridge' ? 'Remove bridge' : 'Demolish';
+    $('inspEditor').href = `https://github.dev/${GITHUB_OWNER}/${repo.name}`;
+    $('inspGit').href = repo.git;
+    $('inspCloneCode').textContent = `git clone ${repo.git}.git`;
+
+    const sel = $('inspRepo');
+    if (sel.options.length !== REPOS.length) {
+      sel.innerHTML = '';
+      for (const r of REPOS) {
+        const opt = document.createElement('option');
+        opt.value = r.name;
+        opt.textContent = `${r.name} (${r.lang})`;
+        sel.appendChild(opt);
+      }
+    }
+    sel.value = repo.name;
+
+    setTab(activeTab);
+    fetchRepoActivity(repo.name, forceFetch);
+    renderRepoDetailsUI(repo.name);
     card.dataset.open = 'true';
   }
+
   $('inspRepo').onchange = (e) => {
     if (!selectedTile) return;
     const [x, y] = selectedTile;
@@ -1839,135 +1552,217 @@
     renderInspect();
   };
   $('inspClose').onclick = () => { selectedTile = null; renderInspect(); };
-  $('inspUpgrade').onclick = () => {
+  $('inspCopy').onclick = async () => {
     if (!selectedTile) return;
-    strokeId++;
-    apply(selectedTile[0], selectedTile[1], 'upgrade');
-    renderInspect();
-  };
-  $('inspDemolish').onclick = () => {
-    if (!selectedTile) return;
-    strokeId++;
-    apply(selectedTile[0], selectedTile[1], 'bulldoze');
-    if (!grid[selectedTile[0]][selectedTile[1]]) selectedTile = null;
-    renderInspect();
+    const rp = repos[selectedTile[0]][selectedTile[1]];
+    if (!rp) return;
+    const cmd = `git clone ${getRepo(rp).git}.git`;
+    try { await navigator.clipboard.writeText(cmd); } catch (e) {}
+    const b = $('inspCopy');
+    b.textContent = 'Copied';
+    setTimeout(() => { b.textContent = 'Copy clone'; }, 1400);
   };
 
-  function setPop(id, btnId, open) {
-    const pop = $(id), btn = $(btnId);
-    if (open) {
-      if (id === 'citiesPop') { renderSlots(); setPop('budgetPop', 'budgetBtn', false); }
-      if (id === 'budgetPop') { renderBudget(); setPop('citiesPop', 'citiesBtn', false); }
-    }
-    pop.dataset.open = String(open);
-    btn.setAttribute('aria-expanded', String(open));
+  // ---------- Google Maps search & filter ----------
+  function matchesFilter(repo, q) {
+    if (activeFilter === 'web' && !repo.web) return false;
+    if (activeFilter === 'js' && repo.lang !== 'JavaScript' && repo.lang !== 'TypeScript') return false;
+    if (activeFilter === 'other' && (repo.lang === 'JavaScript' || repo.lang === 'TypeScript')) return false;
+    if (!q) return true;
+    const hay = `${repo.name} ${repo.lang} ${repo.desc}`.toLowerCase();
+    return hay.includes(q);
   }
-  $('budgetBtn').onclick = (e) => { e.stopPropagation(); setPop('budgetPop', 'budgetBtn', $('budgetPop').dataset.open !== 'true'); };
-  $('citiesBtn').onclick = (e) => { e.stopPropagation(); setPop('citiesPop', 'citiesBtn', $('citiesPop').dataset.open !== 'true'); };
 
-  document.querySelectorAll('.tax-btn').forEach((b) => {
-    b.onclick = () => {
-      taxRate = Number(b.dataset.tax);
-      syncTaxUI();
-      recompute();
-      scheduleSave();
+  function focusRepoByName(repoName) {
+    let tile = findRepoTile(repoName);
+    if (!tile) {
+      assignUnpinnedRepos();
+      if (worldDirty) buildWorld();
+      tile = findRepoTile(repoName);
+    }
+    if (!tile) return;
+    selectedTile = tile;
+    flyToTile(tile[0], tile[1]);
+    renderInspect();
+    $('searchResults').hidden = true;
+    $('hint').dataset.hidden = 'true';
+    sfx('select');
+  }
+
+  function renderSearchResults() {
+    const q = ($('repoSearch').value || '').trim().toLowerCase();
+    $('clearSearch').hidden = !q;
+    const boxEl = $('searchResults');
+    boxEl.innerHTML = '';
+    const matches = REPOS.filter((r) => matchesFilter(r, q));
+    if (!matches.length) {
+      const empty = document.createElement('div');
+      empty.className = 'detail-row';
+      const sub = document.createElement('div'); sub.className = 'detail-sub'; sub.textContent = 'No matching repositories found.';
+      empty.appendChild(sub);
+      boxEl.appendChild(empty);
+      return;
+    }
+    const selName = selectedTile ? repos[selectedTile[0]][selectedTile[1]] : null;
+    for (const r of matches) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'search-item';
+      btn.setAttribute('role', 'option');
+      btn.setAttribute('aria-selected', String(r.name === selName));
+      const dot = document.createElement('span');
+      dot.className = 'search-dot' + (r.isPrivate ? ' priv' : '');
+      const main = document.createElement('div'); main.className = 'search-main';
+      const title = document.createElement('div'); title.className = 'search-title'; title.textContent = r.name;
+      const sub = document.createElement('div'); sub.className = 'search-sub'; sub.textContent = `${r.lang} · ${r.desc}`;
+      main.append(title, sub);
+      const tag = document.createElement('span'); tag.className = 'search-tag'; tag.textContent = r.web ? 'Live' : 'GitHub';
+      btn.append(dot, main, tag);
+      btn.onclick = () => focusRepoByName(r.name);
+      boxEl.appendChild(btn);
+    }
+  }
+
+  $('repoSearch').addEventListener('focus', () => {
+    renderSearchResults();
+    $('searchResults').hidden = false;
+  });
+  $('repoSearch').addEventListener('input', () => {
+    renderSearchResults();
+    $('searchResults').hidden = false;
+  });
+  $('repoSearch').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const q = ($('repoSearch').value || '').trim().toLowerCase();
+      const first = REPOS.find((r) => matchesFilter(r, q));
+      if (first) focusRepoByName(first.name);
+    }
+  });
+  $('clearSearch').onclick = () => {
+    $('repoSearch').value = '';
+    renderSearchResults();
+    $('repoSearch').focus();
+  };
+  document.querySelectorAll('.filter-chip').forEach((btn) => {
+    btn.onclick = () => {
+      activeFilter = btn.dataset.filter;
+      document.querySelectorAll('.filter-chip').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+      renderSearchResults();
+      $('searchResults').hidden = false;
       sfx('tap');
     };
   });
-
-  function renderSlots() {
-    const list = $('slotList');
-    list.innerHTML = '';
-    for (let i = 1; i <= 3; i++) {
-      let saved = null;
-      try { saved = JSON.parse(localStorage.getItem(SLOT_PREFIX + i)); } catch (e) {}
-      const row = document.createElement('div');
-      row.className = 'slot';
-      const meta = document.createElement('div');
-      meta.className = 'slot-meta';
-      const sub = saved ? `${fmt(saved.pop || 0)} residents, $${fmt(saved.money || 0)}` : 'Empty slot';
-      meta.innerHTML = `<span class="slot-title">Slot ${i}</span><span class="slot-sub">${sub}</span>`;
-      const saveBtn = document.createElement('button');
-      saveBtn.className = 'chip small'; saveBtn.type = 'button'; saveBtn.textContent = 'Save';
-      saveBtn.onclick = () => {
-        try {
-          localStorage.setItem(SLOT_PREFIX + i, JSON.stringify({ grid, levels, repos, money, hour, taxRate, milestoneReached, pop: stats.pop }));
-          sfx('build');
-          renderSlots();
-        } catch (e) { flash('Storage full'); }
-      };
-      const loadBtn = document.createElement('button');
-      loadBtn.className = 'chip small'; loadBtn.type = 'button'; loadBtn.textContent = 'Load';
-      loadBtn.disabled = !saved;
-      loadBtn.onclick = () => {
-        if (!saved || !applySaveData(saved)) return;
-        history.length = 0; redoStack.length = 0; syncUndoUI();
-        worldDirty = true; recompute(); saveNow(); center();
-        sfx('undo');
-        setPop('citiesPop', 'citiesBtn', false);
-      };
-      row.append(meta, saveBtn, loadBtn);
-      list.appendChild(row);
-    }
-  }
-
-  addEventListener('pointerdown', (e) => {
-    const cp = $('citiesPop'), bp = $('budgetPop');
-    if (cp.dataset.open === 'true' && !cp.contains(e.target) && e.target !== $('citiesBtn')) setPop('citiesPop', 'citiesBtn', false);
-    if (bp.dataset.open === 'true' && !bp.contains(e.target) && e.target !== $('budgetBtn')) setPop('budgetPop', 'budgetBtn', false);
-  });
-
-  $('exportBtn').onclick = () => {
-    const blob = new Blob([JSON.stringify({ grid, levels, repos, money, hour, taxRate, milestoneReached }, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'isocity-save.json';
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  $('syncBtn').onclick = async () => {
+    const b = $('syncBtn');
+    b.disabled = true;
+    await fetchUserRepos(true);
+    b.disabled = false;
+    sfx('select');
   };
-  $('importBtn').onclick = () => $('importFile').click();
+
+  // ---------- map controls & options ----------
+  $('labelsBtn').onclick = () => {
+    showLabels = !showLabels;
+    $('labelsBtn').setAttribute('aria-pressed', String(showLabels));
+    scheduleSave();
+    sfx('tap');
+  };
+  $('lightBtn').onclick = () => {
+    lightIdx = (lightIdx + 1) % LIGHT_MODES.length;
+    hour = LIGHT_MODES[lightIdx].hour;
+    syncLightUI();
+    scheduleSave();
+    sfx('tap');
+  };
+  $('centerBtn').onclick = () => { center(true); sfx('tap'); };
+  $('rotBtn').onclick = () => rotateCity(true);
+  $('zoomIn').onclick = () => zoomAt(1.2);
+  $('zoomOut').onclick = () => zoomAt(1 / 1.2);
+
+  function setMoreOpen(open) {
+    $('morePop').dataset.open = String(open);
+    $('moreBtn').setAttribute('aria-expanded', String(open));
+  }
+  $('moreBtn').onclick = (e) => { e.stopPropagation(); setMoreOpen($('morePop').dataset.open !== 'true'); };
+
+  $('soundBtn').onclick = () => {
+    soundOn = !soundOn;
+    const b = $('soundBtn');
+    b.setAttribute('aria-pressed', String(soundOn));
+    b.textContent = soundOn ? 'Sound on' : 'Sound off';
+    if (soundOn) sfx('tap');
+  };
+
   $('pngBtn').onclick = () => {
     const prevHover = hover, prevSel = selectedTile;
     hover = null; selectedTile = null;
     draw(performance.now(), 0);
     const a = document.createElement('a');
     a.href = canvas.toDataURL('image/png');
-    a.download = 'isocity-snapshot.png';
+    a.download = 'github-city.png';
     a.click();
     hover = prevHover; selectedTile = prevSel;
-    sfx('build');
+    setMoreOpen(false);
   };
+
+  $('exportBtn').onclick = () => {
+    const blob = new Blob([JSON.stringify({ grid, levels, repos, hour, showLabels }, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'github-city-layout.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    setMoreOpen(false);
+  };
+
+  $('importBtn').onclick = () => $('importFile').click();
   $('importFile').onchange = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
     try {
-      const data = JSON.parse(await file.text());
-      if (!applySaveData(data)) return flash('Invalid city file');
-      history.length = 0; redoStack.length = 0; syncUndoUI();
-      worldDirty = true; recompute(); saveNow(); center();
-      sfx('build');
-      setPop('citiesPop', 'citiesBtn', false);
-    } catch (err) { flash('Could not read file'); }
+      const d = JSON.parse(await file.text());
+      if (!applySaveData(d)) return;
+      worldDirty = true; recompute(); renderInspect(); saveNow(); center(false);
+      setMoreOpen(false);
+    } catch (err) { /* ignore invalid JSON */ }
   };
 
-  // ---------- input ----------
-  let drag = null, lastTile = null, lastTipKey = '';
+  $('resetBtn').onclick = () => {
+    starter();
+    worldDirty = true;
+    recompute();
+    renderInspect();
+    saveNow();
+    center(true);
+    setMoreOpen(false);
+    sfx('tap');
+  };
+
+  // Close search dropdown / more pop on outside click
+  addEventListener('pointerdown', (e) => {
+    const dock = document.querySelector('.search-dock');
+    if (!$('searchResults').hidden && !dock.contains(e.target)) $('searchResults').hidden = true;
+    const mp = $('morePop');
+    if (mp.dataset.open === 'true' && !mp.contains(e.target) && e.target !== $('moreBtn')) setMoreOpen(false);
+  });
+
+  // ---------- canvas pan, zoom, label & building click ----------
+  let drag = null;
   const ptrs = new Map();
   const dist = () => { const [a, b] = [...ptrs.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
   canvas.addEventListener('pointerdown', (e) => {
     canvas.setPointerCapture(e.pointerId);
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     $('hint').dataset.hidden = 'true';
+    camAnim = null;
     if (ptrs.size === 2) { drag = { pinch: true, d: dist() }; return; }
-    const panning = e.button === 2 || e.button === 1 || e.shiftKey || tool === 'pan';
-    if (panning) { drag = { pan: true, moved: false, sx: e.clientX, sy: e.clientY, cx: cam.x, cy: cam.y }; canvas.style.cursor = 'grabbing'; return; }
-    const t = pick(e.clientX, e.clientY);
-    const canStart = !!(t && (tool === 'bulldoze' || tool === 'upgrade' || nextTile(grid[t[0]][t[1]], tool)));
-    drag = { pan: false, moved: false, sx: e.clientX, sy: e.clientY, applied: canStart };
-    if (canStart) { strokeId++; apply(t[0], t[1]); lastTile = t.join(); }
+    drag = { moved: false, sx: e.clientX, sy: e.clientY, cx: cam.x, cy: cam.y };
+    canvas.style.cursor = 'grabbing';
   });
+
   canvas.addEventListener('pointermove', (e) => {
     if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (drag?.pinch && ptrs.size === 2) {
@@ -1978,134 +1773,72 @@
     if (drag) {
       const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
       if (Math.hypot(dx, dy) > 4) drag.moved = true;
-      if (drag.pan) { cam.x = drag.cx + dx; cam.y = drag.cy + dy; }
+      cam.x = drag.cx + dx; cam.y = drag.cy + dy;
     }
-    const t = pick(e.clientX, e.clientY);
+
+    const lbl = hitLabel(e.clientX, e.clientY);
+    hoveredLabel = lbl ? lbl.repoName : null;
+    const t = lbl ? [lbl.x, lbl.y] : pick(e.clientX, e.clientY);
     hover = t;
-    if (drag && !drag.pan && t && t.join() !== lastTile) {
-      if (!drag.applied) { strokeId++; drag.applied = true; }
-      apply(t[0], t[1]);
-      lastTile = t.join();
-    }
-    if (!flashTimer) {
-      const tip = $('tip');
-      const txt = t && !drag ? describe(t[0], t[1]) : null;
-      if (txt) {
-        const tk = t[0] + ',' + t[1] + ':' + txt;
-        if (tk !== lastTipKey) { lastTipKey = tk; tip.textContent = txt; }
-        if (tip.hidden) tip.hidden = false;
-        tip.style.transform = `translate3d(${Math.min(W - 250, e.clientX + 16)}px, ${e.clientY + 16}px, 0)`;
-      } else if (!tip.hidden) {
-        tip.hidden = true;
-        lastTipKey = '';
-      }
+    if (!drag) canvas.style.cursor = (lbl || (t && repos[t[0]]?.[t[1]])) ? 'pointer' : 'grab';
+
+    const tip = $('tip');
+    if (t && !drag && repos[t[0]]?.[t[1]]) {
+      const repo = getRepo(repos[t[0]][t[1]]);
+      const txt = `${repo.name} (${repo.lang}) · Click to open`;
+      if (tip.textContent !== txt) tip.textContent = txt;
+      if (tip.hidden) tip.hidden = false;
+      tip.style.transform = `translate3d(${Math.min(W - 250, e.clientX + 16)}px, ${e.clientY + 16}px, 0)`;
+    } else if (!tip.hidden) {
+      tip.hidden = true;
     }
   });
+
   const end = (e) => {
     ptrs.delete(e.pointerId);
     if (ptrs.size) return;
-    if (drag?.pan && !drag.moved && tool === 'pan') {
-      const t = pick(e.clientX, e.clientY);
-      selectedTile = t && grid[t[0]][t[1]] ? t : null;
-      renderInspect();
-    } else if (drag && !drag.pan && !drag.moved && !drag.applied) {
-      const t = pick(e.clientX, e.clientY);
-      selectedTile = t && isBuilding(grid[t[0]][t[1]]) ? t : null;
-      renderInspect();
+    if (drag && !drag.moved && !drag.pinch) {
+      const lbl = hitLabel(e.clientX, e.clientY);
+      const t = lbl ? [lbl.x, lbl.y] : pick(e.clientX, e.clientY);
+      if (t && repos[t[0]]?.[t[1]]) {
+        selectedTile = t;
+        renderInspect();
+        sfx('select');
+      } else {
+        selectedTile = null;
+        renderInspect();
+      }
     }
-    drag = null; lastTile = null;
-    canvas.style.cursor = tool === 'pan' ? 'grab' : 'crosshair';
+    drag = null;
+    canvas.style.cursor = hoveredLabel ? 'pointer' : 'grab';
   };
   canvas.addEventListener('pointerup', end);
   canvas.addEventListener('pointercancel', end);
-  canvas.addEventListener('pointerleave', () => { hover = null; if (!flashTimer) { $('tip').hidden = true; lastTipKey = ''; } });
+  canvas.addEventListener('pointerleave', () => { hover = null; hoveredLabel = null; $('tip').hidden = true; });
 
   function zoomAt(f, mx = W / 2, my = H / 2) {
-    const nz = Math.max(0.5, Math.min(2.4, cam.z * f));
+    camAnim = null;
+    const nz = Math.max(0.55, Math.min(2.4, cam.z * f));
     const k = nz / cam.z;
     cam.x = mx - (mx - cam.x) * k; cam.y = my - (my - cam.y) * k; cam.z = nz;
   }
   canvas.addEventListener('wheel', (e) => { e.preventDefault(); zoomAt(e.deltaY < 0 ? 1.1 : 1 / 1.1, e.clientX, e.clientY); }, { passive: false });
-  $('zoomIn').onclick = () => zoomAt(1.2);
-  $('zoomOut').onclick = () => zoomAt(1 / 1.2);
-  $('rotBtn').onclick = () => rotateCity(true);
-
-  function setTool(t) {
-    tool = t;
-    if (t === 'bulldoze' && selectedTile) { selectedTile = null; renderInspect(); }
-    for (const b of toolBtns) b.setAttribute('aria-pressed', String(b.dataset.tool === t));
-    canvas.style.cursor = t === 'pan' ? 'grab' : 'crosshair';
-  }
-  const toolsEl = $('tools');
-  ORDER.forEach((id, i) => {
-    const d = TYPES[id];
-    const b = document.createElement('button');
-    b.className = 'tool'; b.type = 'button'; b.dataset.tool = id;
-    b.setAttribute('aria-pressed', 'false');
-    const key = i < 9 ? String(i + 1) : id === 'upgrade' ? 'U' : id === 'bulldoze' ? 'B' : '';
-    b.setAttribute('aria-label', `${d.name}${d.cost ? ', costs ' + d.cost : ''}${key ? ', shortcut ' + key : ''}`);
-    b.innerHTML = `<svg class="ticon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[id]}</svg><span class="name"><span class="tdot" style="background:${d.color}"></span>${d.name}</span><span class="cost">${d.cost ? '$' + d.cost : 'Tool'}</span>`;
-    b.onclick = () => setTool(id);
-    toolsEl.appendChild(b);
-    toolBtns.push(b);
-  });
-
-  const SPEEDS = [1, 2, 0];
-  function setSpeed(s) {
-    simSpeed = s;
-    const b = $('speedBtn');
-    b.textContent = s === 0 ? 'Paused' : s + 'x';
-    b.setAttribute('aria-pressed', String(s !== 1));
-    b.setAttribute('aria-label', `Simulation speed: ${s === 0 ? 'Paused' : s + 'x'}`);
-  }
-  $('speedBtn').onclick = () => {
-    const idx = (SPEEDS.indexOf(simSpeed) + 1) % SPEEDS.length;
-    setSpeed(SPEEDS[idx]);
-    sfx('tap');
-  };
 
   addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      setPop('citiesPop', 'citiesBtn', false);
-      setPop('budgetPop', 'budgetBtn', false);
+      $('searchResults').hidden = true;
+      setMoreOpen(false);
       if (selectedTile) { selectedTile = null; renderInspect(); }
+      return;
     }
     if (e.target.matches('input, select')) return;
-    if (e.code === 'Space') { e.preventDefault(); setSpeed(simSpeed === 0 ? 1 : 0); return; }
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); return e.shiftKey ? redo() : undo(); }
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); return redo(); }
+    if (e.key === '/') { e.preventDefault(); $('repoSearch').focus(); return; }
     const k = e.key.toLowerCase();
-    if (k === 'b' || k === '0') return setTool('bulldoze');
-    if (k === 'p') return setTool('pan');
-    if (k === 'u') return setTool('upgrade');
     if (k === 'r' || k === 'e') return rotateCity(true);
     if (k === 'q') return rotateCity(false);
-    const n = Number(e.key);
-    if (n >= 1 && n <= 9 && ORDER[n - 1]) setTool(ORDER[n - 1]);
     if (e.key === '+' || e.key === '=') zoomAt(1.2);
     if (e.key === '-') zoomAt(1 / 1.2);
   });
-
-  $('clock').addEventListener('input', (e) => { hour = Number(e.target.value); auto = false; $('autoBtn').setAttribute('aria-pressed', 'false'); });
-  $('autoBtn').onclick = () => { auto = !auto; $('autoBtn').setAttribute('aria-pressed', String(auto)); };
-  $('soundBtn').onclick = () => {
-    soundOn = !soundOn;
-    $('soundBtn').setAttribute('aria-pressed', String(soundOn));
-    if (soundOn) sfx('tap');
-  };
-  let resetArmed = 0;
-  $('resetBtn').onclick = () => {
-    const b = $('resetBtn');
-    if (!resetArmed) {
-      b.textContent = 'Replace city?';
-      resetArmed = setTimeout(() => { resetArmed = 0; b.textContent = 'New city'; }, 2500);
-      return;
-    }
-    clearTimeout(resetArmed); resetArmed = 0; b.textContent = 'New city';
-    history.length = 0; redoStack.length = 0; syncUndoUI(); starter(); worldDirty = true; recompute(); renderInspect(); saveNow(); center();
-  };
-  $('undoBtn').onclick = undo;
-  $('redoBtn').onclick = redo;
 
   // ---------- loop ----------
   function resize() {
@@ -2113,49 +1846,39 @@
     W = innerWidth; H = innerHeight;
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
   }
-  function center() {
-    cam.z = Math.max(0.55, Math.min(1.1, W / (N * TW) * 1.15, H / (N * TH + 120) * 1.15));
-    cam.x = W / 2; cam.y = H / 2 - (N * TH / 2) * cam.z;
+  function center(animateMove = false) {
+    const tz = Math.max(0.55, Math.min(1.06, W / (N * TW) * 1.12, H / (N * TH + 150) * 1.12));
+    const tx = W / 2, ty = H / 2 - (N * TH / 2) * tz + 26;
+    if (!animateMove || reduceMotion) { cam.x = tx; cam.y = ty; cam.z = tz; camAnim = null; return; }
+    camAnim = { sx: cam.x, sy: cam.y, sz: cam.z, tx, ty, tz, start: performance.now(), dur: 320 };
   }
   addEventListener('resize', resize);
 
-  let last = performance.now(), acc = 0, growTick = 0, lastLabel = '';
+  let last = performance.now();
   function frame(now) {
-    const rawDt = Math.min(0.1, (now - last) / 1000); last = now;
-    const dt = rawDt * simSpeed;
-    if (auto && simSpeed > 0) hour = (hour + dt * 0.35) % 24;
-    const hh = Math.floor(hour), mm = Math.floor((hour % 1) * 60);
-    const label = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
-    if (label !== lastLabel) {
-      lastLabel = label;
-      $('clockText').textContent = label;
-      if (document.activeElement !== $('clock')) $('clock').value = hour;
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    if (camAnim) {
+      const p = Math.min(1, (now - camAnim.start) / camAnim.dur);
+      const e = easeOut(p);
+      cam.x = camAnim.sx + (camAnim.tx - camAnim.sx) * e;
+      cam.y = camAnim.sy + (camAnim.ty - camAnim.sy) * e;
+      cam.z = camAnim.sz + (camAnim.tz - camAnim.sz) * e;
+      if (p >= 1) camAnim = null;
     }
-    if (simSpeed > 0) {
-      stepList(cars, dt, isRoad);
-      stepList(walkers, dt, isRoad);
-      stepList(bots, dt, isRoad);
-      stepList(boats, dt, isWater);
-      acc += dt;
-      if (acc >= 3) {
-        acc = 0;
-        money += stats.net;
-        render_stats();
-        if ($('budgetPop').dataset.open === 'true') renderBudget();
-        scheduleSave();
-        growTick++;
-        if (growTick % 2 === 0) tryGrow();
-      }
-    }
+    stepList(cars, dt, isRoad);
+    stepList(walkers, dt, isRoad);
+    stepList(bots, dt, isRoad);
+    stepList(boats, dt, isWater);
     draw(now, dt);
     requestAnimationFrame(frame);
   }
 
   resize();
   if (!load()) starter();
-  center();
+  center(false);
   recompute();
-  setTool('road');
-  fetchUserRepos();
+  updateRepoCountUI();
+  syncLightUI();
+  fetchUserRepos(false);
   requestAnimationFrame(frame);
 })();
