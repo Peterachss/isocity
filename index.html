@@ -15,7 +15,7 @@
     <canvas id="stage" aria-label="Interactive workspace city map. Drag to pan, scroll to zoom, click any building or label to open it."></canvas>
 
     <section class="search-dock" aria-label="Workspace edition and search">
-      <div class="edition-tabs three" role="tablist" aria-label="City district">
+      <div class="edition-tabs three" hidden role="tablist" aria-label="City district">
         <button class="edition-btn" type="button" role="tab" data-edition="github" aria-selected="true">GitHub</button>
         <button class="edition-btn" type="button" role="tab" data-edition="google" aria-selected="false">Google &amp; Study</button>
         <button class="edition-btn" type="button" role="tab" data-edition="all" aria-selected="false">Full City</button>
@@ -33,7 +33,7 @@
         </button>
       </div>
 
-      <div id="filterRow" class="filter-row" role="group" aria-label="Filter items"></div>
+      <div id="filterRow" class="filter-row" hidden role="group" aria-label="Filter items"></div>
       <div id="searchResults" class="search-results" role="listbox" aria-label="Matching items" hidden></div>
     </section>
 

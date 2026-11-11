@@ -521,3 +521,5 @@ html, body { height: 100%; overflow: hidden; background: #162b1f; }
 
 .insp-acct { align-items: center; margin: 8px 0; }
 .insp-acct .acct-title { margin: 0 4px 0 0; }
+
+.edition-tabs[hidden], .filter-row[hidden] { display: none !important; }

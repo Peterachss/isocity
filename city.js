@@ -184,7 +184,7 @@
   const ctx = canvas.getContext('2d', { alpha: false });
   const $ = (id) => document.getElementById(id);
 
-  let edition = 'github'; // 'github' | 'google' | 'all'
+  let edition = 'all'; // 'github' | 'google' | 'all'
   let themeId = 'autumn';
   let showAgents = true;
   let showLabels = true;
@@ -403,7 +403,7 @@
       ? d.pins.map((row) => Array.isArray(row) ? row.map((v) => (v && typeof v === 'string') ? v : null) : Array(N).fill(null))
       : makePins();
 
-    edition = (d.edition === 'google' || d.edition === 'all') ? d.edition : 'github';
+    edition = 'all'; // single Full City view
     themeId = THEMES[d.themeId] ? d.themeId : 'autumn';
     showAgents = d.showAgents !== false;
     showLabels = d.showLabels !== false;
