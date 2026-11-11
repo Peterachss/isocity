@@ -1,63 +1,182 @@
 (() => {
-  const N = 26;
+  const N = 32;
   const TW = 64, TH = 32;
-  const SAVE_KEY = 'isocity-workspace-v2';
+  const SAVE_KEY = 'isocity-workspace-v4';
   const GITHUB_OWNER = 'Peterachss';
 
-  const REPOS = [
-    { name: 'isocity', lang: 'JavaScript', desc: 'Interactive isometric GitHub City workspace and live repo explorer.', web: 'https://isocity-mu.vercel.app', git: 'https://github.com/Peterachss/isocity' },
-    { name: '3d-shirt-and-hoodie', lang: 'Python', desc: 'Interactive 3D Blender crewneck T-shirt and pullover hoodie studio.', web: 'https://peterachss.github.io/3d-shirt-and-hoodie/', git: 'https://github.com/Peterachss/3d-shirt-and-hoodie' },
-    { name: 'finance-tracker-template', lang: 'TypeScript', desc: 'Spreadsheet-first personal finance tracker built with Next.js and Supabase.', web: 'https://finance-tracker-template.vercel.app', git: 'https://github.com/Peterachss/finance-tracker-template' },
-    { name: 'finance-tracker', lang: 'JavaScript', desc: 'Personal finance tracker with a spreadsheet-first workflow.', web: 'https://finance-tracker-phi-ashen.vercel.app', git: 'https://github.com/Peterachss/finance-tracker', isPrivate: true },
-    { name: 'maths-ia-explorer', lang: 'TypeScript', desc: 'Interactive explorer for an IB Maths AA SL IA on income and life expectancy.', web: 'https://peterachss.github.io/maths-ia-explorer/', git: 'https://github.com/Peterachss/maths-ia-explorer' },
-    { name: 'greenkeep', lang: 'HTML', desc: 'Greenkeep notes web app.', web: 'https://peterachss.github.io/greenkeep/', git: 'https://github.com/Peterachss/greenkeep' },
-    { name: 'cham-hq', lang: 'JavaScript', desc: 'CHAM headquarters project hub.', web: 'https://peterachss.github.io/cham-hq/', git: 'https://github.com/Peterachss/cham-hq' },
-    { name: 'cham-merch-designs', lang: 'HTML', desc: 'Hoodie and T-shirt design gallery.', web: 'https://peterachss.github.io/cham-merch-designs/', git: 'https://github.com/Peterachss/cham-merch-designs' },
-    { name: 'cham-bracelet-plan', lang: 'HTML', desc: 'Fundraiser plan for friendship bracelet booth and lucky draw.', web: 'https://peterachss.github.io/cham-bracelet-plan/', git: 'https://github.com/Peterachss/cham-bracelet-plan' },
-    { name: 'claude', lang: 'HTML', desc: 'Claude web notes and experiments.', web: 'https://peterachss.github.io/claude/', git: 'https://github.com/Peterachss/claude' },
-    { name: 'co-bo-u', lang: 'HTML', desc: 'Co Bo U web project.', web: 'https://peterachss.github.io/co-bo-u/', git: 'https://github.com/Peterachss/co-bo-u' },
+  const DEFAULT_REPOS = [
+    { id: 'isocity', kind: 'github', name: 'isocity', lang: 'JavaScript', desc: 'Interactive isometric city workspace and live repository explorer.', web: 'https://isocity-mu.vercel.app', git: 'https://github.com/Peterachss/isocity' },
+    { id: '3d-shirt-and-hoodie', kind: 'github', name: '3d-shirt-and-hoodie', lang: 'Python', desc: 'Interactive 3D Blender crewneck T-shirt and pullover hoodie studio.', web: 'https://peterachss.github.io/3d-shirt-and-hoodie/', git: 'https://github.com/Peterachss/3d-shirt-and-hoodie' },
+    { id: 'finance-tracker-template', kind: 'github', name: 'finance-tracker-template', lang: 'TypeScript', desc: 'Spreadsheet-first personal finance tracker built with Next.js and Supabase.', web: 'https://finance-tracker-template.vercel.app', git: 'https://github.com/Peterachss/finance-tracker-template' },
+    { id: 'finance-tracker', kind: 'github', name: 'finance-tracker', lang: 'JavaScript', desc: 'Personal finance tracker with a spreadsheet-first workflow.', web: 'https://finance-tracker-phi-ashen.vercel.app', git: 'https://github.com/Peterachss/finance-tracker', isPrivate: true },
+    { id: 'maths-ia-explorer', kind: 'github', name: 'maths-ia-explorer', lang: 'TypeScript', desc: 'Interactive explorer for an IB Maths AA SL IA on income and life expectancy.', web: 'https://peterachss.github.io/maths-ia-explorer/', git: 'https://github.com/Peterachss/maths-ia-explorer' },
+    { id: 'greenkeep', kind: 'github', name: 'greenkeep', lang: 'HTML', desc: 'Greenkeep notes web app.', web: 'https://peterachss.github.io/greenkeep/', git: 'https://github.com/Peterachss/greenkeep' },
+    { id: 'cham-hq', kind: 'github', name: 'cham-hq', lang: 'JavaScript', desc: 'CHAM headquarters project hub.', web: 'https://peterachss.github.io/cham-hq/', git: 'https://github.com/Peterachss/cham-hq' },
+    { id: 'cham-merch-designs', kind: 'github', name: 'cham-merch-designs', lang: 'HTML', desc: 'Hoodie and T-shirt design gallery.', web: 'https://peterachss.github.io/cham-merch-designs/', git: 'https://github.com/Peterachss/cham-merch-designs' },
+    { id: 'cham-bracelet-plan', kind: 'github', name: 'cham-bracelet-plan', lang: 'HTML', desc: 'Fundraiser plan for friendship bracelet booth and lucky draw.', web: 'https://peterachss.github.io/cham-bracelet-plan/', git: 'https://github.com/Peterachss/cham-bracelet-plan' },
+    { id: 'claude', kind: 'github', name: 'claude', lang: 'HTML', desc: 'Claude web notes and experiments.', web: 'https://peterachss.github.io/claude/', git: 'https://github.com/Peterachss/claude' },
+    { id: 'co-bo-u', kind: 'github', name: 'co-bo-u', lang: 'HTML', desc: 'Co Bo U web project.', web: 'https://peterachss.github.io/co-bo-u/', git: 'https://github.com/Peterachss/co-bo-u' },
   ];
-  const repoMap = new Map(REPOS.map((r) => [r.name, r]));
-  const repoCache = new Map();
-  const BOT_COLORS = ['#0f766e', '#0284c7', '#d97706'];
-  const getRepo = (name) => repoMap.get(name) || REPOS[0];
 
-  const LANDMARKS = [
-    { x: 8,  y: 4,  t: 'office', lv: 3, repo: 'isocity' },
-    { x: 13, y: 4,  t: 'office', lv: 2, repo: 'finance-tracker-template' },
-    { x: 17, y: 7,  t: 'apt',    lv: 2, repo: 'finance-tracker' },
-    { x: 6,  y: 15, t: 'wheel',  lv: 1, repo: '3d-shirt-and-hoodie' },
-    { x: 4,  y: 9,  t: 'school', lv: 1, repo: 'maths-ia-explorer' },
-    { x: 10, y: 11, t: 'clinic', lv: 1, repo: 'greenkeep' },
-    { x: 13, y: 13, t: 'plaza',  lv: 1, repo: 'cham-hq' },
-    { x: 8,  y: 13, t: 'shop',   lv: 2, repo: 'cham-merch-designs' },
-    { x: 11, y: 15, t: 'shop',   lv: 1, repo: 'cham-bracelet-plan' },
-    { x: 16, y: 15, t: 'windmill', lv: 1, repo: 'claude' },
-    { x: 19, y: 12, t: 'house',  lv: 2, repo: 'co-bo-u' },
+  const DEFAULT_GOOGLE_APPS = [
+    {
+      id: 'gmail', kind: 'google', name: 'Gmail', cat: 'Google',
+      desc: 'Email inbox, threads, and compose workspace.',
+      web: 'https://mail.google.com/mail/u/0/#inbox',
+      alt: 'https://mail.google.com/mail/u/0/#inbox?compose=new', altLabel: 'Compose',
+      shortcuts: [
+        { label: 'Inbox', url: 'https://mail.google.com/mail/u/0/#inbox', sub: 'Primary mail feed' },
+        { label: 'Compose message', url: 'https://mail.google.com/mail/u/0/#inbox?compose=new', sub: 'Write a new email' },
+        { label: 'Starred', url: 'https://mail.google.com/mail/u/0/#starred', sub: 'Flagged conversations' },
+        { label: 'Sent', url: 'https://mail.google.com/mail/u/0/#sent', sub: 'Sent archive' },
+      ],
+    },
+    {
+      id: 'google-chat', kind: 'google', name: 'Google Chat', cat: 'Google',
+      desc: 'Direct messages, group chats, and shared team spaces.',
+      web: 'https://chat.google.com/',
+      alt: 'https://mail.google.com/chat/u/0/#chat/spaces', altLabel: 'Spaces',
+      shortcuts: [
+        { label: 'Chat Home', url: 'https://chat.google.com/', sub: 'Unread threads and DMs' },
+        { label: 'Team Spaces', url: 'https://mail.google.com/chat/u/0/#chat/spaces', sub: 'Shared channels' },
+      ],
+    },
+    {
+      id: 'seqta', kind: 'google', name: 'SEQTA', cat: 'Study',
+      desc: 'Timetable, courses, assessments, and notices. Click Edit to save your school SEQTA link.',
+      web: 'https://learn.seqta.com.au/',
+      alt: 'https://seqta.com.au/', altLabel: 'Portal info',
+      shortcuts: [
+        { label: 'SEQTA Learn', url: 'https://learn.seqta.com.au/', sub: 'Courses and assessments (customizable via Edit)' },
+      ],
+    },
+    {
+      id: 'google-slides', kind: 'google', name: 'Google Slides', cat: 'Google',
+      desc: 'Presentations, class decks, and collaborative slide editing.',
+      web: 'https://docs.google.com/presentation/u/0/',
+      alt: 'https://docs.google.com/presentation/create', altLabel: 'New deck',
+      shortcuts: [
+        { label: 'All presentations', url: 'https://docs.google.com/presentation/u/0/', sub: 'Recent slide decks' },
+        { label: 'Create blank deck', url: 'https://docs.google.com/presentation/create', sub: 'Start a fresh deck' },
+        { label: 'Google Drive', url: 'https://drive.google.com/', sub: 'Folders and shared decks' },
+      ],
+    },
+    {
+      id: 'google-docs', kind: 'google', name: 'Google Docs', cat: 'Google',
+      desc: 'Essays, coursework drafts, and collaborative notes.',
+      web: 'https://docs.google.com/document/u/0/',
+      alt: 'https://docs.google.com/document/create', altLabel: 'New doc',
+      shortcuts: [
+        { label: 'All documents', url: 'https://docs.google.com/document/u/0/', sub: 'Browse existing docs' },
+        { label: 'Create blank document', url: 'https://docs.google.com/document/create', sub: 'Open an empty document' },
+        { label: 'Google Drive', url: 'https://drive.google.com/', sub: 'Open Drive folders' },
+      ],
+    },
+    {
+      id: 'mybib', kind: 'google', name: 'MyBib', cat: 'Study',
+      desc: 'Citation generator, bibliography folders, and formatted references.',
+      web: 'https://www.mybib.com/app',
+      alt: 'https://www.mybib.com/', altLabel: 'Cite tool',
+      shortcuts: [
+        { label: 'MyBib Projects', url: 'https://www.mybib.com/app', sub: 'Saved bibliographies and exports' },
+        { label: 'Quick Citation Generator', url: 'https://www.mybib.com/', sub: 'Cite a URL, book, or journal' },
+      ],
+    },
+    {
+      id: 'google-calendar', kind: 'google', name: 'Google Calendar', cat: 'Google',
+      desc: 'Schedule, classes, deadlines, and quick event planning.',
+      web: 'https://calendar.google.com/calendar/u/0/r',
+      alt: 'https://calendar.google.com/calendar/render?action=TEMPLATE', altLabel: 'New event',
+      shortcuts: [
+        { label: 'Calendar View', url: 'https://calendar.google.com/calendar/u/0/r', sub: 'Week and month grid' },
+        { label: 'Create new event', url: 'https://calendar.google.com/calendar/render?action=TEMPLATE', sub: 'Add a class or reminder' },
+        { label: 'Agenda list', url: 'https://calendar.google.com/calendar/u/0/r/agenda', sub: 'Upcoming schedule' },
+      ],
+    },
   ];
+
+  // North District (y = 3..15): GitHub City
+  const GITHUB_LANDMARKS = [
+    { id: 'isocity',                  x: 8,  y: 4,  t: 'office',   lv: 3 },
+    { id: 'finance-tracker-template', x: 15, y: 4,  t: 'office',   lv: 2 },
+    { id: 'finance-tracker',          x: 21, y: 7,  t: 'apt',      lv: 2 },
+    { id: '3d-shirt-and-hoodie',      x: 5,  y: 13, t: 'wheel',    lv: 1 },
+    { id: 'maths-ia-explorer',        x: 4,  y: 8,  t: 'school',   lv: 1 },
+    { id: 'greenkeep',                x: 10, y: 11, t: 'clinic',   lv: 1 },
+    { id: 'cham-hq',                  x: 14, y: 13, t: 'plaza',    lv: 1 },
+    { id: 'cham-merch-designs',       x: 8,  y: 12, t: 'shop',     lv: 2 },
+    { id: 'cham-bracelet-plan',       x: 11, y: 15, t: 'shop',     lv: 1 },
+    { id: 'claude',                   x: 17, y: 15, t: 'windmill', lv: 1 },
+    { id: 'co-bo-u',                  x: 23, y: 12, t: 'house',    lv: 2 },
+  ];
+
+  // South Side of the Bridges (y = 20..29): Google & Study District
+  const GOOGLE_LANDMARKS = [
+    { id: 'gmail',           x: 10, y: 22, t: 'office', lv: 3 },
+    { id: 'google-chat',     x: 16, y: 22, t: 'apt',    lv: 2 },
+    { id: 'seqta',           x: 7,  y: 24, t: 'school', lv: 1 },
+    { id: 'google-docs',     x: 14, y: 24, t: 'clinic', lv: 1 },
+    { id: 'google-slides',   x: 21, y: 24, t: 'wheel',  lv: 1 },
+    { id: 'mybib',           x: 11, y: 27, t: 'shop',   lv: 2 },
+    { id: 'google-calendar', x: 17, y: 27, t: 'plaza',  lv: 1 },
+  ];
+
   const SCENIC_PARKS = [
-    [10, 6], [14, 11], [9, 15], [19, 15], [5, 6], [20, 8], [15, 6], [8, 9],
+    // North district
+    [10, 6], [17, 11], [9, 15], [20, 15], [5, 6], [24, 9], [15, 6],
+    // South bank waterfront & avenues across the bridge
+    [9, 20], [14, 20], [22, 20], [13, 27], [23, 27], [6, 22], [20, 27],
   ];
-  const SPARE_LOTS = [
-    [16, 9, 'shop', 2], [5, 11, 'house', 2], [19, 6, 'clinic', 1], [10, 15, 'house', 2],
-    [14, 16, 'school', 1], [15, 4, 'apt', 1], [4, 13, 'house', 1], [20, 9, 'shop', 1],
+
+  const SPARE_NORTH = [
+    [21, 11, 'shop', 2], [16, 9, 'apt', 2], [5, 11, 'house', 2],
+    [24, 6, 'clinic', 1], [9, 7, 'house', 2], [20, 4, 'shop', 1],
+    [26, 11, 'house', 2], [23, 15, 'school', 1],
   ];
+  const SPARE_SOUTH = [
+    [23, 22, 'shop', 2], [24, 24, 'house', 2], [15, 29, 'house', 2],
+    [7, 27, 'clinic', 1], [21, 27, 'windmill', 1], [9, 29, 'apt', 1],
+    [26, 24, 'office', 1], [6, 26, 'house', 1],
+  ];
+
+  const THEMES = {
+    autumn: {
+      skyNight: '#07110c', skyDay: '#1f3b2a', forestA: '#2a4a28', forestB: '#274524',
+      grassA: '#7da663', grassB: '#74a05a', park: '#86b65f', waterA: '#295b60', waterB: '#26565b',
+      crowns: [['#2c5a2b', '#3f7a35'], ['#3a6b2e', '#5a8f3c'], ['#c98a14', '#e8b832'], ['#d9a21f', '#f0c64a'], ['#b8601a', '#e08a2c'], ['#8a9a2a', '#b7b93a']],
+    },
+    alpine: {
+      skyNight: '#061014', skyDay: '#183238', forestA: '#1d3c2e', forestB: '#1a3629',
+      grassA: '#648f6e', grassB: '#5c8566', park: '#76a47f', waterA: '#225468', waterB: '#1f4d60',
+      crowns: [['#1e4a35', '#2f6b4e'], ['#25583f', '#387b59'], ['#2e664b', '#478b68'], ['#1a3d2e', '#2b5944'], ['#417556', '#5e9674'], ['#346348', '#4d8262']],
+    },
+    slate: {
+      skyNight: '#0b0f12', skyDay: '#1e272b', forestA: '#24312b', forestB: '#212c27',
+      grassA: '#6c8070', grassB: '#657869', park: '#7c937f', waterA: '#2f5360', waterB: '#2b4d59',
+      crowns: [['#374f43', '#4f6d5e'], ['#4c6256', '#678072'], ['#9e894c', '#bda562'], ['#435a4f', '#5d776a'], ['#677867', '#849684'], ['#2d4137', '#425b4f']],
+    },
+    sakura: {
+      skyNight: '#0a1210', skyDay: '#223828', forestA: '#2a4629', forestB: '#274126',
+      grassA: '#7fa869', grassB: '#77a061', park: '#8fbd76', waterA: '#2d666e', waterB: '#295e66',
+      crowns: [['#d98498', '#f5bcc9'], ['#e29aab', '#f8cad5'], ['#3c6e38', '#59914d'], ['#cf798e', '#eea8b8'], ['#588443', '#77a65c'], ['#7a9c56', '#9cc074']],
+    },
+  };
 
   const TYPES = {
-    road:     { name: 'Avenue',       color: '#3b3f44' },
-    house:    { name: 'Villa',        color: '#d9a273', h: 22, inset: 0.2, grow: true },
-    apt:      { name: 'Vault Tower',  color: '#c98a8a', h: 72, inset: 0.12, grow: true },
-    shop:     { name: 'Studio',       color: '#e0c25b', h: 28, inset: 0.1, grow: true },
-    office:   { name: 'Tower',        color: '#7fa6c9', h: 118, inset: 0.1, grow: true },
-    park:     { name: 'Park',         color: '#8cbf5c' },
-    plaza:    { name: 'Civic Plaza',  color: '#c4b59d' },
-    clinic:   { name: 'Terrace Hub',  color: '#d95f59', h: 30, inset: 0.12 },
+    road:     { name: 'Avenue',        color: '#3b3f44' },
+    house:    { name: 'Villa',         color: '#d9a273', h: 22, inset: 0.2, grow: true },
+    apt:      { name: 'Vault Tower',   color: '#c98a8a', h: 72, inset: 0.12, grow: true },
+    shop:     { name: 'Studio',        color: '#e0c25b', h: 28, inset: 0.1, grow: true },
+    office:   { name: 'Tower',         color: '#7fa6c9', h: 118, inset: 0.1, grow: true },
+    park:     { name: 'Park',          color: '#8cbf5c' },
+    plaza:    { name: 'Civic Plaza',   color: '#c4b59d' },
+    clinic:   { name: 'Terrace Hub',   color: '#d95f59', h: 30, inset: 0.12 },
     school:   { name: 'Research Hall', color: '#5f8c7a', h: 34, inset: 0.1 },
-    windmill: { name: 'Lab Mill',     color: '#7ea89b', h: 48, inset: 0.24 },
-    wheel:    { name: 'Wheel Studio', color: '#d67e49', h: 78, inset: 0.12 },
-    forest:   { name: 'Forest',       color: '#d9a21f' },
-    water:    { name: 'River',        color: '#3b7378' },
-    bridge:   { name: 'Bridge',       color: '#8e8372' },
+    windmill: { name: 'Lab Mill',      color: '#7ea89b', h: 48, inset: 0.24 },
+    wheel:    { name: 'Wheel Studio',  color: '#d67e49', h: 78, inset: 0.12 },
+    forest:   { name: 'Forest',        color: '#d9a21f' },
+    water:    { name: 'River',         color: '#3b7378' },
+    bridge:   { name: 'Bridge',        color: '#8e8372' },
   };
   const LVL_MULT = [1, 1, 1.5, 2.2];
 
@@ -65,11 +184,24 @@
   const ctx = canvas.getContext('2d', { alpha: false });
   const $ = (id) => document.getElementById(id);
 
-  let grid, levels, repos;
+  let edition = 'github'; // 'github' | 'google' | 'all'
+  let themeId = 'autumn';
+  let showAgents = true;
+  let showLabels = true;
+
+  const REPOS = DEFAULT_REPOS.map((r) => ({ ...r }));
+  const GOOGLE_APPS = DEFAULT_GOOGLE_APPS.map((a) => ({ ...a, shortcuts: a.shortcuts.map((s) => ({ ...s })) }));
+  const repoMap = new Map(REPOS.map((r) => [r.id, r]));
+  const googleMap = new Map(GOOGLE_APPS.map((a) => [a.id, a]));
+  const customItems = [];
+  const overrides = {};
+  const bookmarks = {};
+  const repoCache = new Map();
+
+  let grid, levels, pins;
   let cam = { x: 0, y: 0, z: 1 };
   let camAnim = null;
   let hover = null, hoveredLabel = null, selectedTile = null;
-  let showLabels = true;
   let activeTab = 'overview';
   let activeFilter = 'all';
   let cars = [], walkers = [], boats = [], bots = [], wheelsList = [], millsList = [], beaconsList = [], housesList = [], waterCells = [];
@@ -84,43 +216,45 @@
   ];
   let lightIdx = 0;
 
+  const BOT_COLORS = ['#0f766e', '#0284c7', '#d97706'];
   const rnd = (a, b) => a + Math.random() * (b - a);
   const inb = (x, y) => x >= 0 && y >= 0 && x < N && y < N;
   const isRoad = (t) => t === 'road' || t === 'bridge';
   const isWater = (t) => t === 'water' || t === 'bridge';
   const isBuilding = (t) => !!t && t !== 'road' && t !== 'bridge' && t !== 'water' && t !== 'forest';
   const makeLevels = () => Array.from({ length: N }, () => Array(N).fill(1));
-  const makeRepos = () => Array.from({ length: N }, () => Array(N).fill(null));
+  const makePins = () => Array.from({ length: N }, () => Array(N).fill(null));
+  const curTheme = () => THEMES[themeId] || THEMES.autumn;
+
+  function allItems() {
+    return [...REPOS, ...GOOGLE_APPS, ...customItems].map((it) => ({ ...it, ...(overrides[it.id] || {}) }));
+  }
+  function activeCatalog() {
+    const list = allItems();
+    return edition === 'all' ? list : list.filter((it) => it.kind === edition);
+  }
+  function getItem(id) {
+    const base = repoMap.get(id) || googleMap.get(id) || customItems.find((c) => c.id === id) || REPOS[0];
+    return { ...base, ...(overrides[base.id] || {}) };
+  }
 
   let rctx = ctx, rcam = cam;
   let worldDirty = true;
-  const dirtyCols = new Set();
 
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const easeOut = (p) => 1 - Math.pow(1 - p, 4);
 
-  const leaves = Array.from({ length: 12 }, (_, i) => ({
-    x: ((i * 197) % 1000) / 1000,
-    y: ((i * 353) % 1000) / 1000,
-    vx: rnd(0.008, 0.018),
-    vy: rnd(0.012, 0.025),
-    phase: rnd(0, 6.28),
+  const leaves = Array.from({ length: 14 }, (_, i) => ({
+    x: ((i * 197) % 1000) / 1000, y: ((i * 353) % 1000) / 1000,
+    vx: rnd(0.008, 0.018), vy: rnd(0.012, 0.025), phase: rnd(0, 6.28),
     col: ['#d9a21f', '#e08a2c', '#c9612f', '#e8b832'][i % 4],
   }));
-
-  const fireflies = Array.from({ length: 12 }, (_, i) => ({
-    x: ((i * 271 + 91) % 1000) / 1000,
-    y: ((i * 419 + 43) % 1000) / 1000,
-    phase: rnd(0, 6.28),
+  const fireflies = Array.from({ length: 14 }, (_, i) => ({
+    x: ((i * 271 + 91) % 1000) / 1000, y: ((i * 419 + 43) % 1000) / 1000, phase: rnd(0, 6.28),
   }));
-
-  const stars = Array.from({ length: 42 }, (_, i) => ({
-    x: ((i * 317 + 73) % 1000) / 1000,
-    y: ((i * 541 + 29) % 1000) / 1000,
-    s: (i % 3 === 0) ? 2 : 1.3,
-    phase: rnd(0, 6.28),
+  const stars = Array.from({ length: 48 }, (_, i) => ({
+    x: ((i * 317 + 73) % 1000) / 1000, y: ((i * 541 + 29) % 1000) / 1000, s: (i % 3 === 0) ? 2 : 1.3, phase: rnd(0, 6.28),
   }));
-
   const smokes = [];
 
   // ---------- sound ----------
@@ -146,62 +280,84 @@
     } catch (e) { /* audio blocked */ }
   }
 
-  // ---------- state & persistence ----------
+  // ---------- two-sided city builder & persistence ----------
   function starter() {
     grid = Array.from({ length: N }, () => Array(N).fill('forest'));
     levels = makeLevels();
-    repos = makeRepos();
+    pins = makePins();
     selectedTile = null;
 
-    const set = (x, y, t, lv = 1, repoName = null) => {
+    const set = (x, y, t, lv = 1, id = null) => {
       if (!inb(x, y)) return;
-      grid[x][y] = t;
-      levels[x][y] = lv;
-      repos[x][y] = repoName;
+      grid[x][y] = t; levels[x][y] = lv; pins[x][y] = id;
     };
 
-    // Scenic river crossing the south district
-    let ry = 19;
+    // Scenic river dividing North (GitHub) and South (Google & Study)
+    let ry = 18;
     for (let rx = 0; rx < N; rx++) {
       set(rx, ry, 'water');
       set(rx, ry + 1, 'water');
-      if (rx % 6 === 3 && ry > 17) { ry--; set(rx, ry, 'water'); }
+      if (rx % 7 === 4 && ry > 16) { ry--; set(rx, ry, 'water'); }
     }
 
-    // Structured avenues & bridges
-    for (let x = 4; x <= 21; x++) { set(x, 5, 'road'); set(x, 10, 'road'); set(x, 14, 'road'); }
-    for (let y = 4; y <= 17; y++) set(7, y, 'road');
-    for (let y = 4; y <= 22; y++) set(12, y, grid[12][y] === 'water' ? 'bridge' : 'road');
-    for (let y = 4; y <= 22; y++) set(18, y, grid[18][y] === 'water' ? 'bridge' : 'road');
+    // North avenues (GitHub district)
+    for (let x = 4; x <= 26; x++) { set(x, 5, 'road'); set(x, 10, 'road'); set(x, 14, 'road'); }
+    for (let y = 4; y <= 15; y++) set(6, y, 'road');
 
-    // Scenic campus parks
+    // South avenues (Other side of the bridges: Google & Study district)
+    for (let x = 5; x <= 26; x++) { set(x, 21, 'road'); set(x, 25, 'road'); }
+    for (let x = 7; x <= 25; x++) set(x, 28, 'road');
+    for (let y = 21; y <= 28; y++) set(8, y, 'road');
+
+    // Three North-South cross-river bridges connecting both districts
+    for (const bx of [12, 19, 25]) {
+      for (let y = 4; y <= 28; y++) set(bx, y, isWater(grid[bx][y]) ? 'bridge' : 'road');
+    }
+
+    // Parks across both banks
     for (const [px0, py0] of SCENIC_PARKS) set(px0, py0, 'park', 1, null);
 
-    // Dedicated GitHub repository landmarks
-    for (const lm of LANDMARKS) set(lm.x, lm.y, lm.t, lm.lv, lm.repo);
+    // Populate GitHub landmarks (North) and Google & Study landmarks (South)
+    for (const lm of GITHUB_LANDMARKS) set(lm.x, lm.y, lm.t, lm.lv, lm.id);
+    for (const lm of GOOGLE_LANDMARKS) set(lm.x, lm.y, lm.t, lm.lv, lm.id);
 
-    // Assign any extra synced repos to spare lots
-    assignUnpinnedRepos();
+    assignUnpinnedItems();
   }
 
-  function findRepoTile(repoName) {
+  function findItemTile(id) {
     for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
-      if (repos[x][y] === repoName) return [x, y];
+      if (pins[x][y] === id) return [x, y];
     }
     return null;
   }
 
-  function assignUnpinnedRepos() {
-    for (const repo of REPOS) {
-      if (findRepoTile(repo.name)) continue;
-      for (const [sx, sy, st, slv] of SPARE_LOTS) {
-        if (!repos[sx][sy] && (grid[sx][sy] === 'forest' || grid[sx][sy] === 'park')) {
-          grid[sx][sy] = st;
-          levels[sx][sy] = slv;
-          repos[sx][sy] = repo.name;
-          worldDirty = true;
-          break;
-        }
+  function findFreeLot(kind, preferType = null) {
+    const pool = kind === 'google' ? SPARE_SOUTH : SPARE_NORTH;
+    for (const [sx, sy, st, slv] of pool) {
+      if (!pins[sx][sy] && (grid[sx][sy] === 'forest' || grid[sx][sy] === 'park')) {
+        return { x: sx, y: sy, t: preferType || st, lv: slv };
+      }
+    }
+    const yMin = kind === 'google' ? 20 : 3;
+    const yMax = kind === 'google' ? N - 3 : 16;
+    for (let x = 3; x < N - 3; x++) for (let y = yMin; y <= yMax; y++) {
+      if (!pins[x][y] && grid[x][y] === 'forest') {
+        const nearRoad = NB.some(([dx, dy]) => inb(x + dx, y + dy) && isRoad(grid[x + dx][y + dy]));
+        if (nearRoad) return { x, y, t: preferType || 'house', lv: 1 };
+      }
+    }
+    return null;
+  }
+
+  function assignUnpinnedItems() {
+    for (const item of allItems()) {
+      if (findItemTile(item.id)) continue;
+      const lot = findFreeLot(item.kind, item.style || null);
+      if (lot) {
+        grid[lot.x][lot.y] = lot.t;
+        levels[lot.x][lot.y] = lot.lv;
+        pins[lot.x][lot.y] = item.id;
+        worldDirty = true;
       }
     }
   }
@@ -209,7 +365,12 @@
   let saveTimer = 0;
   function saveNow() {
     clearTimeout(saveTimer); saveTimer = 0;
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ grid, levels, repos, hour, showLabels })); } catch (e) { /* storage unavailable */ }
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify({
+        edition, themeId, showAgents, showLabels, hour,
+        customItems, overrides, bookmarks, grid, levels, pins,
+      }));
+    } catch (e) { /* storage unavailable */ }
   }
   function scheduleSave() {
     if (saveTimer) return;
@@ -224,23 +385,42 @@
     $('lightBtn').setAttribute('aria-label', `Lighting mode: ${m.label}. Click to cycle.`);
   }
 
+  function syncThemeUI() {
+    document.querySelectorAll('.theme-btn').forEach((b) => {
+      b.setAttribute('aria-pressed', String(b.dataset.theme === themeId));
+    });
+    document.body.style.background = curTheme().skyDay;
+  }
+
   function applySaveData(d) {
     if (!d || !Array.isArray(d.grid) || d.grid.length !== N || !Array.isArray(d.grid[0]) || d.grid[0].length !== N) return false;
     grid = d.grid.map((row) => row.map((t) => (t && TYPES[t]) ? t : null));
     levels = (Array.isArray(d.levels) && d.levels.length === N)
       ? d.levels.map((row) => row.map((v) => Math.max(1, Math.min(3, Number(v) || 1))))
       : makeLevels();
-    repos = (Array.isArray(d.repos) && d.repos.length === N)
-      ? d.repos.map((row) => Array.isArray(row) ? row.map((r) => (r && typeof r === 'string') ? r : null) : Array(N).fill(null))
-      : makeRepos();
+    pins = (Array.isArray(d.pins) && d.pins.length === N)
+      ? d.pins.map((row) => Array.isArray(row) ? row.map((v) => (v && typeof v === 'string') ? v : null) : Array(N).fill(null))
+      : makePins();
+
+    edition = (d.edition === 'google' || d.edition === 'all') ? d.edition : 'github';
+    themeId = THEMES[d.themeId] ? d.themeId : 'autumn';
+    showAgents = d.showAgents !== false;
+    showLabels = d.showLabels !== false;
     hour = Number.isFinite(d.hour) ? d.hour : 17.4;
     lightIdx = LIGHT_MODES.findIndex((m) => Math.abs(m.hour - hour) < 1);
     if (lightIdx < 0) lightIdx = 0;
-    showLabels = d.showLabels !== false;
-    $('labelsBtn').setAttribute('aria-pressed', String(showLabels));
-    syncLightUI();
+
+    if (Array.isArray(d.customItems)) customItems.splice(0, customItems.length, ...d.customItems);
+    if (d.overrides && typeof d.overrides === 'object') Object.assign(overrides, d.overrides);
+    if (d.bookmarks && typeof d.bookmarks === 'object') Object.assign(bookmarks, d.bookmarks);
+
+    assignUnpinnedItems();
     selectedTile = null;
-    assignUnpinnedRepos();
+    $('labelsBtn').setAttribute('aria-pressed', String(showLabels));
+    $('agentsBtn').setAttribute('aria-pressed', String(showAgents));
+    syncLightUI();
+    syncThemeUI();
+    rebuildCrownSprites();
     return true;
   }
 
@@ -249,7 +429,7 @@
     catch (e) { return false; }
   }
 
-  // ---------- world feature scan & agents ----------
+  // ---------- agents ----------
   const NB = [[1,0],[-1,0],[0,1],[0,-1]];
 
   function recompute() {
@@ -282,6 +462,7 @@
     return w;
   }
   function syncAgents() {
+    if (!showAgents) { cars.length = 0; walkers.length = 0; bots.length = 0; boats.length = 0; return; }
     cars = cars.filter((c) => isRoad(grid[c.tx]?.[c.ty]) && isRoad(grid[c.fx]?.[c.fy]));
     walkers = walkers.filter((w) => isRoad(grid[w.tx]?.[w.ty]) && isRoad(grid[w.fx]?.[w.fy]));
     bots = bots.filter((b) => isRoad(grid[b.tx]?.[b.ty]) && isRoad(grid[b.fx]?.[b.fy]));
@@ -290,7 +471,7 @@
     const r = roadTiles();
     if (!r.length) { cars.length = 0; walkers.length = 0; bots.length = 0; }
     else {
-      const wantCars = Math.min(24, Math.floor(r.length / 4));
+      const wantCars = Math.min(32, Math.floor(r.length / 4));
       while (cars.length < wantCars) {
         const [x, y] = r[Math.floor(Math.random() * r.length)];
         cars.push({ fx: x, fy: y, tx: x, ty: y, t: 1, px: x, py: y, speed: rnd(0.85, 1.5),
@@ -298,7 +479,7 @@
       }
       if (cars.length > wantCars) cars.length = wantCars;
 
-      const wantWalkers = Math.min(14, Math.floor(r.length / 6));
+      const wantWalkers = Math.min(18, Math.floor(r.length / 6));
       while (walkers.length < wantWalkers) {
         const [x, y] = r[Math.floor(Math.random() * r.length)];
         walkers.push({ fx: x, fy: y, tx: x, ty: y, t: 1, px: x, py: y, speed: rnd(0.28, 0.45),
@@ -306,7 +487,7 @@
       }
       if (walkers.length > wantWalkers) walkers.length = wantWalkers;
 
-      const wantBots = 14;
+      const wantBots = 18;
       while (bots.length < wantBots) {
         const [x, y] = r[Math.floor(Math.random() * r.length)];
         bots.push({ fx: x, fy: y, tx: x, ty: y, t: 1, px: x, py: y, speed: rnd(0.45, 0.78),
@@ -316,7 +497,7 @@
     }
 
     const w = waterTiles();
-    const wantBoats = Math.min(4, Math.floor(w.length / 12));
+    const wantBoats = Math.min(4, Math.floor(w.length / 14));
     while (boats.length < wantBoats) {
       const [x, y] = w[Math.floor(Math.random() * w.length)];
       boats.push({ fx: x, fy: y, tx: x, ty: y, t: 1, px: x, py: y, speed: rnd(0.32, 0.5),
@@ -358,14 +539,14 @@
     }
     return null;
   }
-  function flyToTile(x, y) {
-    const tz = Math.max(cam.z, W >= 760 ? 1.08 : 0.92);
-    const screenOffsetX = W >= 760 ? -150 : 0;
-    const screenCenterY = W >= 760 ? H * 0.54 : H * 0.34;
+  function flyToTile(x, y, targetZ = null, withDrawer = true) {
+    const tz = targetZ || Math.max(cam.z, W >= 760 ? 1.02 : 0.88);
+    const screenOffsetX = (withDrawer && W >= 760) ? -150 : 0;
+    const screenCenterY = (withDrawer && W < 760) ? H * 0.34 : H * 0.54;
     const tx = W / 2 + screenOffsetX - ((x + 0.5) - (y + 0.5)) * (TW / 2) * tz;
     const ty = screenCenterY - ((x + 0.5) + (y + 0.5)) * (TH / 2) * tz + 28 * tz;
     if (reduceMotion) { cam.x = tx; cam.y = ty; cam.z = tz; camAnim = null; return; }
-    camAnim = { sx: cam.x, sy: cam.y, sz: cam.z, tx, ty, tz, start: performance.now(), dur: 380 };
+    camAnim = { sx: cam.x, sy: cam.y, sz: cam.z, tx, ty, tz, start: performance.now(), dur: 400 };
   }
 
   // ---------- color / light ----------
@@ -497,7 +678,8 @@
   }
 
   function drawWater(x, y, L) {
-    quadZ(x, y, x + 1, y + 1, -5, shade((x + y) % 2 ? '#295b60' : '#26565b', 1, L));
+    const th = curTheme();
+    quadZ(x, y, x + 1, y + 1, -5, shade((x + y) % 2 ? th.waterA : th.waterB, 1, L));
     if ((x * 3 + y * 5) % 4 === 0) {
       poly4(px(x + 0.2, y + 0.35), py(x + 0.2, y + 0.35, -5), px(x + 0.75, y + 0.35), py(x + 0.75, y + 0.35, -5),
         px(x + 0.85, y + 0.47), py(x + 0.85, y + 0.47, -5), px(x + 0.3, y + 0.47), py(x + 0.3, y + 0.47, -5), shade('#3c7b80', 1, L));
@@ -546,25 +728,25 @@
     }
   }
 
-  const CROWNS = [
-    ['#2c5a2b', '#3f7a35'], ['#3a6b2e', '#5a8f3c'], ['#c98a14', '#e8b832'],
-    ['#d9a21f', '#f0c64a'], ['#b8601a', '#e08a2c'], ['#8a9a2a', '#b7b93a'],
-  ];
   const SPR_W = 36, SPR_H = 42, SPR_CX = 16, SPR_CY = 14, SPR_S = 2;
-  const crownSprites = CROWNS.map(([dark, light]) => {
-    const c = document.createElement('canvas');
-    c.width = SPR_W * SPR_S; c.height = SPR_H * SPR_S;
-    const sc = c.getContext('2d');
-    sc.setTransform(SPR_S, 0, 0, SPR_S, 0, 0);
-    const R = 10;
-    sc.fillStyle = '#16301a';
-    sc.beginPath(); sc.ellipse(SPR_CX + 3, SPR_CY + 14, R * 0.95, R * 0.45, 0, 0, 7); sc.fill();
-    sc.fillStyle = dark;
-    sc.beginPath(); sc.arc(SPR_CX, SPR_CY, R, 0, 7); sc.fill();
-    sc.fillStyle = light;
-    sc.beginPath(); sc.arc(SPR_CX - R * 0.25, SPR_CY - R * 0.3, R * 0.68, 0, 7); sc.fill();
-    return c;
-  });
+  let crownSprites = [];
+  function rebuildCrownSprites() {
+    crownSprites = curTheme().crowns.map(([dark, light]) => {
+      const c = document.createElement('canvas');
+      c.width = SPR_W * SPR_S; c.height = SPR_H * SPR_S;
+      const sc = c.getContext('2d');
+      sc.setTransform(SPR_S, 0, 0, SPR_S, 0, 0);
+      const R = 10;
+      sc.fillStyle = '#16301a';
+      sc.beginPath(); sc.ellipse(SPR_CX + 3, SPR_CY + 14, R * 0.95, R * 0.45, 0, 0, 7); sc.fill();
+      sc.fillStyle = dark;
+      sc.beginPath(); sc.arc(SPR_CX, SPR_CY, R, 0, 7); sc.fill();
+      sc.fillStyle = light;
+      sc.beginPath(); sc.arc(SPR_CX - R * 0.25, SPR_CY - R * 0.3, R * 0.68, 0, 7); sc.fill();
+      return c;
+    });
+  }
+  rebuildCrownSprites();
 
   function tree(x, y, s, L, seed = 0) {
     if (!seed) box(x - 0.025, y - 0.025, x + 0.025, y + 0.025, 0, 8 * s, '#4a3624', L);
@@ -580,8 +762,9 @@
 
   function drawGround(x, y, t, L) {
     if (t === 'water' || t === 'bridge') return drawWater(x, y, L);
-    const base = t === 'forest' ? ((x + y) % 2 ? '#2a4a28' : '#274524')
-      : t === 'park' ? '#86b65f' : ((x + y) % 2 ? '#7da663' : '#74a05a');
+    const th = curTheme();
+    const base = t === 'forest' ? ((x + y) % 2 ? th.forestA : th.forestB)
+      : t === 'park' ? th.park : ((x + y) % 2 ? th.grassA : th.grassB);
     quadZ(x, y, x + 1, y + 1, 0, shade(base, 1, L));
   }
 
@@ -839,7 +1022,6 @@
     }
     warm = savedW;
     worldDirty = false;
-    dirtyCols.clear();
   }
 
   const vigCanvas = document.createElement('canvas');
@@ -894,19 +1076,20 @@
 
     const items = [];
     for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
-      const rp = repos[x][y];
+      const id = pins[x][y];
       const t = grid[x][y];
-      if (!rp || !isBuilding(t)) continue;
+      if (!id || !isBuilding(t)) continue;
+      const item = getItem(id);
       const isSel = selectedTile && selectedTile[0] === x && selectedTile[1] === y;
-      const isHov = (hover && hover[0] === x && hover[1] === y) || hoveredLabel === rp;
-      items.push({ x, y, t, repo: getRepo(rp), prio: isSel ? 2 : isHov ? 1 : 0, depth: x + y });
+      const isHov = (hover && hover[0] === x && hover[1] === y) || hoveredLabel === id;
+      if (edition !== 'all' && item.kind !== edition && !isSel && !isHov) continue;
+      items.push({ x, y, t, item, prio: isSel ? 2 : isHov ? 1 : 0, depth: x + y });
     }
     items.sort((a, b) => b.prio - a.prio || b.depth - a.depth);
 
     ctx.font = '600 11.5px system-ui, -apple-system, "Segoe UI", sans-serif';
     ctx.textBaseline = 'middle';
     const placed = [];
-
     const overlaps = (rx, ry, rw, rh) => placed.some((p) => !(rx + rw + 4 < p.rx || p.rx + p.rw + 4 < rx || ry + rh + 4 < p.ry || p.ry + p.rh + 4 < ry));
 
     for (const it of items) {
@@ -915,7 +1098,7 @@
       const ay = py(it.x + 0.5, it.y + 0.5, z);
       if (ax < -90 || ax > W + 90 || ay < -40 || ay > H + 40) continue;
 
-      const label = it.repo.name;
+      const label = it.item.name;
       const tw = ctx.measureText(label).width;
       const rw = Math.round(tw + 24);
       const rh = 22;
@@ -930,19 +1113,19 @@
         const altRy = ry - 24;
         if (altRy > 68 && !overlaps(rx, altRy, rw, rh)) ry = altRy;
         else {
-          // Compact clickable pin dot when zoomed tightly out
-          ctx.fillStyle = it.repo.isPrivate ? '#d9a21f' : '#0f766e';
+          ctx.fillStyle = it.item.isPrivate ? '#d9a21f' : it.item.kind === 'google' ? '#0284c7' : '#0f766e';
           ctx.beginPath(); ctx.arc(ax, ay - 6, 5.5, 0, Math.PI * 2); ctx.fill();
           ctx.strokeStyle = '#f4f1ea'; ctx.lineWidth = 1.6; ctx.stroke();
-          labelHits.push({ x: it.x, y: it.y, rx: ax - 9, ry: ay - 15, rw: 18, rh: 18, repoName: it.repo.name });
+          labelHits.push({ x: it.x, y: it.y, rx: ax - 9, ry: ay - 15, rw: 18, rh: 18, id: it.item.id });
           continue;
         }
       }
 
       placed.push({ rx, ry, rw, rh });
-      labelHits.push({ x: it.x, y: it.y, rx, ry, rw, rh, repoName: it.repo.name });
+      labelHits.push({ x: it.x, y: it.y, rx, ry, rw, rh, id: it.item.id });
 
       const active = it.prio > 0;
+      const dotCol = active ? '#5ef2d6' : it.item.isPrivate ? '#d9a21f' : it.item.kind === 'google' ? '#0284c7' : '#0f766e';
       ctx.fillStyle = 'rgba(12, 20, 16, 0.22)';
       ctx.beginPath(); ctx.roundRect(rx, ry + 2, rw, rh, 99); ctx.fill();
 
@@ -953,16 +1136,13 @@
       ctx.lineWidth = 1;
       ctx.stroke();
 
-      // Pointer stem
       ctx.strokeStyle = active ? '#0f766e' : 'rgba(244, 241, 234, 0.9)';
       ctx.lineWidth = 1.6;
       ctx.beginPath(); ctx.moveTo(ax, ry + rh); ctx.lineTo(ax, ay + 2); ctx.stroke();
 
-      // Status dot
-      ctx.fillStyle = active ? '#5ef2d6' : it.repo.isPrivate ? '#d9a21f' : '#0f766e';
+      ctx.fillStyle = dotCol;
       ctx.beginPath(); ctx.arc(rx + 10, ry + rh / 2, 3.3, 0, Math.PI * 2); ctx.fill();
 
-      // Label text
       ctx.fillStyle = active ? '#f4fbf9' : '#1d2320';
       ctx.textAlign = 'left';
       ctx.fillText(label, rx + 17, ry + rh / 2 + 0.5);
@@ -975,10 +1155,11 @@
 
     if (worldDirty) buildWorld();
 
+    const th = curTheme();
     rctx = ctx;
     rcam = cam;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = mix('#07110c', '#1f3b2a', L);
+    ctx.fillStyle = mix(th.skyNight, th.skyDay, L);
     ctx.fillRect(0, 0, W, H);
 
     if (L < 0.45) {
@@ -1019,28 +1200,40 @@
       ov.push({ k: 5, s: mx + my + 0.1, x: mx, y: my });
     }
 
-    for (let i = 0; i < cars.length; i++) {
-      const c = cars[i];
-      const cx0 = px(c.px + 0.5, c.py + 0.5), cy0 = py(c.px + 0.5, c.py + 0.5);
-      if (cx0 < -40 || cx0 > W + 40 || cy0 < -40 || cy0 > H + 40) continue;
-      ov.push({ k: 1, s: c.px + c.py, c });
-      addOccluders(Math.floor(c.px), Math.floor(c.py));
-    }
-
-    for (let i = 0; i < walkers.length; i++) {
-      const w = walkers[i];
-      const wx0 = px(w.px + 0.5, w.py + 0.5), wy0 = py(w.px + 0.5, w.py + 0.5);
-      if (wx0 < -30 || wx0 > W + 30 || wy0 < -30 || wy0 > H + 30) continue;
-      ov.push({ k: 2, s: w.px + w.py, w });
-      addOccluders(Math.floor(w.px), Math.floor(w.py));
-    }
-
-    for (let i = 0; i < bots.length; i++) {
-      const b = bots[i];
-      const bx0 = px(b.px + 0.5, b.py + 0.5), by0 = py(b.px + 0.5, b.py + 0.5);
-      if (bx0 < -30 || bx0 > W + 30 || by0 < -30 || by0 > H + 30) continue;
-      ov.push({ k: 6, s: b.px + b.py, b });
-      addOccluders(Math.floor(b.px), Math.floor(b.py));
+    if (showAgents) {
+      for (let i = 0; i < cars.length; i++) {
+        const c = cars[i];
+        const cx0 = px(c.px + 0.5, c.py + 0.5), cy0 = py(c.px + 0.5, c.py + 0.5);
+        if (cx0 < -40 || cx0 > W + 40 || cy0 < -40 || cy0 > H + 40) continue;
+        ov.push({ k: 1, s: c.px + c.py, c });
+        addOccluders(Math.floor(c.px), Math.floor(c.py));
+      }
+      for (let i = 0; i < walkers.length; i++) {
+        const w = walkers[i];
+        const wx0 = px(w.px + 0.5, w.py + 0.5), wy0 = py(w.px + 0.5, w.py + 0.5);
+        if (wx0 < -30 || wx0 > W + 30 || wy0 < -30 || wy0 > H + 30) continue;
+        ov.push({ k: 2, s: w.px + w.py, w });
+        addOccluders(Math.floor(w.px), Math.floor(w.py));
+      }
+      for (let i = 0; i < bots.length; i++) {
+        const b = bots[i];
+        const bx0 = px(b.px + 0.5, b.py + 0.5), by0 = py(b.px + 0.5, b.py + 0.5);
+        if (bx0 < -30 || bx0 > W + 30 || by0 < -30 || by0 > H + 30) continue;
+        ov.push({ k: 6, s: b.px + b.py, b });
+        addOccluders(Math.floor(b.px), Math.floor(b.py));
+      }
+      for (let i = 0; i < boats.length; i++) {
+        const b = boats[i];
+        const bx0 = px(b.px + 0.5, b.py + 0.5), by0 = py(b.px + 0.5, b.py + 0.5);
+        if (bx0 < -40 || bx0 > W + 40 || by0 < -40 || by0 > H + 40) continue;
+        ov.push({ k: 3, s: b.px + b.py, b });
+        const rx = Math.round(b.px), ry = Math.round(b.py);
+        if (inb(rx, ry) && grid[rx][ry] === 'bridge' && !seen[rx * N + ry]) {
+          seen[rx * N + ry] = 1;
+          ov.push({ k: 0, s: rx + ry + 1.1, x: rx, y: ry, t: 'bridge' });
+        }
+        addOccluders(Math.floor(b.px), Math.floor(b.py));
+      }
     }
 
     if (selectedTile) {
@@ -1051,27 +1244,16 @@
           seen[sx * N + sy] = 1;
           ov.push({ k: 0, s: sx + sy, x: sx, y: sy, t: st });
         }
-        for (let i = 0; i < 3; i++) {
-          const ang = (reduceMotion ? 0.6 : now * 0.0022) + i * 2.0944;
-          const bx = sx + 0.5 + Math.cos(ang) * 0.58;
-          const by = sy + 0.5 + Math.sin(ang) * 0.58;
-          ov.push({ k: 7, s: bx + by, b: { px: bx, py: by, phase: i * 2.1, color: BOT_COLORS[i] } });
+        if (showAgents) {
+          for (let i = 0; i < 3; i++) {
+            const ang = (reduceMotion ? 0.6 : now * 0.0022) + i * 2.0944;
+            const bx = sx + 0.5 + Math.cos(ang) * 0.58;
+            const by = sy + 0.5 + Math.sin(ang) * 0.58;
+            ov.push({ k: 7, s: bx + by, b: { px: bx, py: by, phase: i * 2.1, color: BOT_COLORS[i] } });
+          }
         }
         addOccluders(sx, sy);
       }
-    }
-
-    for (let i = 0; i < boats.length; i++) {
-      const b = boats[i];
-      const bx0 = px(b.px + 0.5, b.py + 0.5), by0 = py(b.px + 0.5, b.py + 0.5);
-      if (bx0 < -40 || bx0 > W + 40 || by0 < -40 || by0 > H + 40) continue;
-      ov.push({ k: 3, s: b.px + b.py, b });
-      const rx = Math.round(b.px), ry = Math.round(b.py);
-      if (inb(rx, ry) && grid[rx][ry] === 'bridge' && !seen[rx * N + ry]) {
-        seen[rx * N + ry] = 1;
-        ov.push({ k: 0, s: rx + ry + 1.1, x: rx, y: ry, t: 'bridge' });
-      }
-      addOccluders(Math.floor(b.px), Math.floor(b.py));
     }
 
     if (ov.length) {
@@ -1109,7 +1291,7 @@
       ctx.drawImage(nightCanvas, cam.x - OX * cam.z, cam.y - OY * cam.z, WW * cam.z, WH * cam.z);
       ctx.globalAlpha = 1;
     }
-    if (L < 0.5 && cars.length) {
+    if (L < 0.5 && cars.length && showAgents) {
       for (let i = 0; i < ov.length; i++) if (ov[i].k === 1) drawCar(ov[i].c, L, true);
     }
 
@@ -1159,7 +1341,7 @@
       }
     }
 
-    if (hover && repos[hover[0]]?.[hover[1]]) {
+    if (hover && pins[hover[0]]?.[hover[1]]) {
       const [x, y] = hover;
       ctx.strokeStyle = 'rgba(15, 118, 110, 0.8)';
       ctx.lineWidth = 2;
@@ -1202,16 +1384,16 @@
   function rotateCity(cw = true) {
     const ng = Array.from({ length: N }, () => Array(N).fill(null));
     const nl = makeLevels();
-    const nr = makeRepos();
+    const np = makePins();
     const rx = (x, y) => cw ? N - 1 - y : y;
     const ry = (x, y) => cw ? x : N - 1 - x;
     for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
       const nx = rx(x, y), ny = ry(x, y);
       ng[nx][ny] = grid[x][y];
       nl[nx][ny] = levels[x][y];
-      nr[nx][ny] = repos[x][y];
+      np[nx][ny] = pins[x][y];
     }
-    grid = ng; levels = nl; repos = nr;
+    grid = ng; levels = nl; pins = np;
     for (const list of [cars, walkers, boats, bots]) {
       for (const c of list) {
         const fx = rx(c.fx, c.fy), fy = ry(c.fx, c.fy);
@@ -1284,8 +1466,10 @@
     }
   }
 
-  function updateRepoCountUI() {
-    $('repoCount').textContent = `${REPOS.length} repos`;
+  function updateCountUI() {
+    const list = activeCatalog();
+    $('repoCount').textContent = edition === 'github' ? `${list.length} repos`
+      : edition === 'google' ? `${list.length} apps` : `${list.length} places`;
   }
 
   async function fetchUserRepos(force = false) {
@@ -1311,56 +1495,49 @@
         existing.meta = meta;
       } else {
         const entry = {
-          name: r.name,
-          lang: r.language || 'Web',
+          id: r.name, kind: 'github', name: r.name, lang: r.language || 'Web',
           desc: r.description || `${r.name} repository by ${GITHUB_OWNER}.`,
-          web: webUrl,
-          git: r.html_url || `https://github.com/${GITHUB_OWNER}/${r.name}`,
-          meta,
+          web: webUrl, git: r.html_url || `https://github.com/${GITHUB_OWNER}/${r.name}`, meta,
         };
         REPOS.push(entry);
-        repoMap.set(entry.name, entry);
+        repoMap.set(entry.id, entry);
         added = true;
       }
     }
-    updateRepoCountUI();
     if (added) {
-      assignUnpinnedRepos();
+      assignUnpinnedItems();
       if (worldDirty) buildWorld();
     }
     if (force) repoCache.clear();
+    updateCountUI();
     if (!$('searchResults').hidden) renderSearchResults();
-    if (selectedTile) renderInspect(force);
+    if (selectedTile && getItem(pins[selectedTile[0]][selectedTile[1]]).kind === 'github') renderInspect(force);
   }
 
-  async function fetchRepoActivity(repoName, force = false) {
-    const repo = getRepo(repoName);
-    const prev = repoCache.get(repo.name);
+  async function fetchRepoActivity(repo, force = false) {
+    if (repo.isCustom || !repo.git) return null;
+    const prev = repoCache.get(repo.id);
     const now = Date.now();
     if (!force && prev && (prev.loading || now - prev.at < 120000)) return prev;
 
     const entry = {
-      at: now,
-      loading: true,
-      live: false,
-      bots: buildFallbackBots(repo, 'Syncing repo status'),
-      commits: [],
-      files: [],
+      at: now, loading: true, live: false,
+      bots: buildFallbackBots(repo, 'Syncing repo status'), commits: [], files: [],
     };
-    repoCache.set(repo.name, entry);
+    repoCache.set(repo.id, entry);
 
     if (repo.isPrivate) {
       entry.loading = false;
       entry.bots = buildFallbackBots(repo, 'Private repo mirror synced');
-      if (selectedTile && repos[selectedTile[0]][selectedTile[1]] === repo.name) renderRepoDetailsUI(repo.name);
+      if (selectedTile && pins[selectedTile[0]][selectedTile[1]] === repo.id) renderDetailsUI(repo);
       return entry;
     }
 
     const [repoInfo, commits, runs, files] = await Promise.all([
-      repo.meta ? Promise.resolve(null) : fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.name}`),
-      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.name}/commits?per_page=6`),
-      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.name}/actions/runs?per_page=2`),
-      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.name}/contents`),
+      repo.meta ? Promise.resolve(null) : fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.id}`),
+      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.id}/commits?per_page=6`),
+      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.id}/actions/runs?per_page=2`),
+      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.id}/contents`),
     ]);
 
     if (repoInfo) {
@@ -1386,104 +1563,169 @@
     if (Array.isArray(files)) {
       entry.files = [...files].sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'dir' ? -1 : 1));
     }
-    if (selectedTile && repos[selectedTile[0]][selectedTile[1]] === repo.name) renderRepoDetailsUI(repo.name);
+    if (selectedTile && pins[selectedTile[0]][selectedTile[1]] === repo.id) renderDetailsUI(repo);
     return entry;
   }
 
   // ---------- inspector workspace panel ----------
-  function renderRepoDetailsUI(repoName) {
-    const repo = getRepo(repoName);
-    const cached = repoCache.get(repo.name);
-    const meta = repo.meta || {};
-    const branch = meta.branch || 'main';
+  function buildGoogleBots(app) {
+    let host = 'Google Workspace';
+    try { host = new URL(app.web).hostname.replace(/^www\./, ''); } catch (e) {}
+    const bmCount = (bookmarks[app.id] || []).length;
+    return [
+      { name: 'LinkBot', state: 'ok', task: `Direct portal ready at ${host}` },
+      { name: 'SyncBot', state: 'ok', task: `${(app.shortcuts || []).length} quick shortcuts available` },
+      { name: 'PinBot', state: 'busy', task: `${bmCount} pinned bookmark${bmCount === 1 ? '' : 's'} saved` },
+    ];
+  }
 
-    // Metrics strip
+  function renderDetailsUI(item) {
+    const isGit = item.kind === 'github' && !item.isCustom;
+    const cached = isGit ? repoCache.get(item.id) : null;
+    const meta = item.meta || {};
+    const branch = meta.branch || 'main';
+    let host = 'Web';
+    try { host = item.web ? new URL(item.web).hostname.replace(/^www\./, '') : 'Local'; } catch (e) {}
+
     const metricsEl = $('inspMetrics');
     metricsEl.innerHTML = '';
-    const cells = [
-      ['Lang', repo.lang || 'Web'],
-      ['Access', repo.isPrivate ? 'Private' : 'Public'],
-      ['Stars', meta.stars !== undefined ? String(meta.stars) : (repo.isPrivate ? '-' : '0')],
+    const cells = isGit ? [
+      ['Lang', item.lang || 'Web'],
+      ['Access', item.isPrivate ? 'Private' : 'Public'],
+      ['Stars', meta.stars !== undefined ? String(meta.stars) : (item.isPrivate ? '-' : '0')],
       ['Updated', meta.pushedAt ? timeAgo(meta.pushedAt) : (cached?.commits?.[0]?.commit?.author?.date ? timeAgo(cached.commits[0].commit.author.date) : 'Active')],
+    ] : [
+      ['District', item.kind === 'google' ? 'South' : 'North'],
+      ['Category', item.cat || 'App'],
+      ['Host', host.split('.')[0]],
+      ['Pinned', String((bookmarks[item.id] || []).length)],
     ];
     for (const [lbl, val] of cells) {
-      const cell = document.createElement('div');
-      cell.className = 'metric-cell';
+      const cell = document.createElement('div'); cell.className = 'metric-cell';
       const lEl = document.createElement('span'); lEl.className = 'stat-label'; lEl.textContent = lbl;
       const vEl = document.createElement('span'); vEl.className = 'metric-val'; vEl.textContent = val;
       cell.append(lEl, vEl);
       metricsEl.appendChild(cell);
     }
 
-    // Bots list
-    const botsData = cached?.bots || buildFallbackBots(repo);
-    $('botsLive').textContent = cached?.loading ? 'Syncing' : cached?.live ? 'Live GitHub' : repo.isPrivate ? 'Private app' : 'Active';
-    const listEl = $('inspBots');
-    listEl.innerHTML = '';
+    const botsData = isGit ? (cached?.bots || buildFallbackBots(item)) : buildGoogleBots(item);
+    $('botsLive').textContent = isGit
+      ? (cached?.loading ? 'Syncing' : cached?.live ? 'Live GitHub' : item.isPrivate ? 'Private app' : 'Active')
+      : 'Ready';
+    const botsEl = $('inspBots');
+    botsEl.innerHTML = '';
     for (const bot of botsData) {
-      const item = document.createElement('div');
-      item.className = 'bot-item';
+      const row = document.createElement('div'); row.className = 'bot-item';
       const dot = document.createElement('span');
       dot.className = 'bot-dot' + (bot.state === 'busy' ? ' busy' : bot.state === 'err' ? ' err' : '');
       const body = document.createElement('div');
-      const nameEl = document.createElement('div'); nameEl.className = 'bot-name'; nameEl.textContent = bot.name;
-      const taskEl = document.createElement('div'); taskEl.className = 'bot-task'; taskEl.textContent = bot.task;
-      body.append(nameEl, taskEl);
-      item.append(dot, body);
-      listEl.appendChild(item);
+      const nEl = document.createElement('div'); nEl.className = 'bot-name'; nEl.textContent = bot.name;
+      const tEl = document.createElement('div'); tEl.className = 'bot-task'; tEl.textContent = bot.task;
+      body.append(nEl, tEl); row.append(dot, body);
+      botsEl.appendChild(row);
     }
 
-    // Commits tab
-    const commitsEl = $('inspCommits');
-    commitsEl.innerHTML = '';
-    if (cached?.loading) {
-      const p = document.createElement('p'); p.className = 'insp-body'; p.textContent = 'Loading commits from GitHub...';
-      commitsEl.appendChild(p);
-    } else if (cached?.commits?.length) {
-      for (const c of cached.commits) {
-        const a = document.createElement('a');
-        a.className = 'detail-row';
-        a.href = c.html_url || `${repo.git}/commits/${branch}`;
-        a.target = '_blank'; a.rel = 'noopener noreferrer';
-        const top = document.createElement('div'); top.className = 'detail-top';
-        const sha = document.createElement('code'); sha.className = 'sha'; sha.textContent = (c.sha || '').slice(0, 7);
-        const dtEl = document.createElement('span'); dtEl.className = 'detail-meta'; dtEl.textContent = timeAgo(c.commit?.author?.date);
-        top.append(sha, dtEl);
-        const msg = document.createElement('div'); msg.className = 'detail-sub';
-        msg.textContent = (c.commit?.message || '').split('\n')[0];
-        a.append(top, msg);
-        commitsEl.appendChild(a);
-      }
-    } else {
-      const p = document.createElement('p'); p.className = 'insp-body';
-      p.textContent = repo.isPrivate ? 'Commit history is private on GitHub. Open GitHub or github.dev with your account to view commits.' : 'No public commits loaded right now.';
-      commitsEl.appendChild(p);
-    }
+    $('tab2Btn').textContent = isGit ? 'Commits' : 'Shortcuts';
+    $('tab3Btn').textContent = isGit ? 'Files' : 'Pinned links';
+    $('pinBookmarkForm').hidden = isGit;
 
-    // Files tab
-    const filesEl = $('inspFiles');
-    filesEl.innerHTML = '';
-    if (cached?.loading) {
-      const p = document.createElement('p'); p.className = 'insp-body'; p.textContent = 'Loading repository files...';
-      filesEl.appendChild(p);
-    } else if (cached?.files?.length) {
-      for (const f of cached.files.slice(0, 24)) {
-        const a = document.createElement('a');
-        a.className = 'detail-row';
-        const isDir = f.type === 'dir';
-        a.href = isDir ? `${repo.git}/tree/${branch}/${f.path}` : `https://github.dev/${GITHUB_OWNER}/${repo.name}/blob/${branch}/${f.path}`;
-        a.target = '_blank'; a.rel = 'noopener noreferrer';
-        const top = document.createElement('div'); top.className = 'detail-top';
-        const name = document.createElement('span'); name.className = 'detail-title'; name.textContent = isDir ? `${f.name}/` : f.name;
-        const kind = document.createElement('span'); kind.className = 'detail-meta'; kind.textContent = isDir ? 'Folder' : 'Edit';
-        top.append(name, kind);
-        a.appendChild(top);
-        filesEl.appendChild(a);
+    const list2 = $('inspSecondList');
+    list2.innerHTML = '';
+    const list3 = $('inspThirdList');
+    list3.innerHTML = '';
+
+    if (isGit) {
+      if (cached?.loading) {
+        const p = document.createElement('p'); p.className = 'insp-body'; p.textContent = 'Loading commits from GitHub...';
+        list2.appendChild(p);
+      } else if (cached?.commits?.length) {
+        for (const c of cached.commits) {
+          const a = document.createElement('a');
+          a.className = 'detail-row';
+          a.href = c.html_url || `${item.git}/commits/${branch}`;
+          a.target = '_blank'; a.rel = 'noopener noreferrer';
+          const top = document.createElement('div'); top.className = 'detail-top';
+          const sha = document.createElement('code'); sha.className = 'sha'; sha.textContent = (c.sha || '').slice(0, 7);
+          const dtEl = document.createElement('span'); dtEl.className = 'detail-meta'; dtEl.textContent = timeAgo(c.commit?.author?.date);
+          top.append(sha, dtEl);
+          const msg = document.createElement('div'); msg.className = 'detail-sub';
+          msg.textContent = (c.commit?.message || '').split('\n')[0];
+          a.append(top, msg); list2.appendChild(a);
+        }
+      } else {
+        const p = document.createElement('p'); p.className = 'insp-body';
+        p.textContent = item.isPrivate ? 'Commit history is private on GitHub. Open github.dev or GitHub to inspect commits.' : 'No public commits loaded.';
+        list2.appendChild(p);
+      }
+
+      if (cached?.loading) {
+        const p = document.createElement('p'); p.className = 'insp-body'; p.textContent = 'Loading repository files...';
+        list3.appendChild(p);
+      } else if (cached?.files?.length) {
+        for (const f of cached.files.slice(0, 24)) {
+          const a = document.createElement('a');
+          a.className = 'detail-row';
+          const isDir = f.type === 'dir';
+          a.href = isDir ? `${item.git}/tree/${branch}/${f.path}` : `https://github.dev/${GITHUB_OWNER}/${item.id}/blob/${branch}/${f.path}`;
+          a.target = '_blank'; a.rel = 'noopener noreferrer';
+          const top = document.createElement('div'); top.className = 'detail-top';
+          const name = document.createElement('span'); name.className = 'detail-title'; name.textContent = isDir ? `${f.name}/` : f.name;
+          const kind = document.createElement('span'); kind.className = 'detail-meta'; kind.textContent = isDir ? 'Folder' : 'Edit';
+          top.append(name, kind); a.append(top); list3.appendChild(a);
+        }
+      } else {
+        const p = document.createElement('p'); p.className = 'insp-body';
+        p.textContent = item.isPrivate ? 'File tree requires GitHub sign-in. Click Open github.dev above.' : 'Open github.dev or GitHub repo above to browse files.';
+        list3.appendChild(p);
       }
     } else {
-      const p = document.createElement('p'); p.className = 'insp-body';
-      p.textContent = repo.isPrivate ? 'File tree requires GitHub sign-in. Click Open github.dev above to browse and edit files.' : 'Open github.dev or GitHub repo above to browse files.';
-      filesEl.appendChild(p);
+      const sc = item.shortcuts || [];
+      if (sc.length) {
+        for (const s of sc) {
+          const a = document.createElement('a');
+          a.className = 'detail-row';
+          a.href = s.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+          const top = document.createElement('div'); top.className = 'detail-top';
+          const title = document.createElement('span'); title.className = 'detail-title'; title.textContent = s.label;
+          const metaEl = document.createElement('span'); metaEl.className = 'detail-meta'; metaEl.textContent = 'Open';
+          top.append(title, metaEl);
+          const sub = document.createElement('div'); sub.className = 'detail-sub'; sub.textContent = s.sub || s.url;
+          a.append(top, sub); list2.appendChild(a);
+        }
+      } else {
+        const p = document.createElement('p'); p.className = 'insp-body'; p.textContent = 'Use Edit above to customize URLs for this building.';
+        list2.appendChild(p);
+      }
+
+      const bms = bookmarks[item.id] || [];
+      if (bms.length) {
+        bms.forEach((bm, idx) => {
+          const wrap = document.createElement('div'); wrap.className = 'bookmark-row';
+          const a = document.createElement('a'); a.className = 'detail-row';
+          a.href = bm.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+          const top = document.createElement('div'); top.className = 'detail-top';
+          const title = document.createElement('span'); title.className = 'detail-title'; title.textContent = bm.label;
+          const metaEl = document.createElement('span'); metaEl.className = 'detail-meta'; metaEl.textContent = 'Open';
+          top.append(title, metaEl);
+          const sub = document.createElement('div'); sub.className = 'detail-sub'; sub.textContent = bm.url;
+          a.append(top, sub);
+
+          const del = document.createElement('button');
+          del.type = 'button'; del.className = 'chip icon tiny'; del.setAttribute('aria-label', `Remove ${bm.label}`);
+          del.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+          del.onclick = () => {
+            bookmarks[item.id].splice(idx, 1);
+            scheduleSave();
+            renderDetailsUI(item);
+          };
+          wrap.append(a, del);
+          list3.appendChild(wrap);
+        });
+      } else {
+        const p = document.createElement('p'); p.className = 'insp-body';
+        p.textContent = `Pin specific ${item.name} links above (for example a Google Doc draft, Slides deck, or SEQTA link) for 1-click access.`;
+        list3.appendChild(p);
+      }
     }
   }
 
@@ -1493,60 +1735,95 @@
       b.setAttribute('aria-selected', String(b.dataset.tab === name));
     });
     $('tabOverview').hidden = name !== 'overview';
-    $('tabCommits').hidden = name !== 'commits';
-    $('tabFiles').hidden = name !== 'files';
+    $('tabSecond').hidden = name !== 'second';
+    $('tabThird').hidden = name !== 'third';
   }
   document.querySelectorAll('.tab-btn').forEach((b) => {
     b.onclick = () => { setTab(b.dataset.tab); sfx('tap'); };
   });
 
+  function closeEditForm() {
+    $('inspEditBox').hidden = true;
+    $('inspEditBtn').setAttribute('aria-expanded', 'false');
+  }
+
   function renderInspect(forceFetch = false) {
     const card = $('inspectCard');
-    if (!selectedTile) { card.dataset.open = 'false'; return; }
+    if (!selectedTile) { card.dataset.open = 'false'; closeEditForm(); return; }
     const [x, y] = selectedTile;
     const t = grid[x][y];
-    const rp = repos[x][y];
-    if (!t || !rp) { selectedTile = null; card.dataset.open = 'false'; return; }
-    const repo = getRepo(rp);
-    const d = TYPES[t];
+    const id = pins[x][y];
+    if (!t || !id) { selectedTile = null; card.dataset.open = 'false'; closeEditForm(); return; }
 
-    $('inspTitle').textContent = repo.name;
-    $('inspSub').textContent = `${d.name} landmark · Tile (${x}, ${y})`;
-    $('inspDesc').textContent = repo.desc;
+    const item = getItem(id);
+    const d = TYPES[t];
+    const isGit = item.kind === 'github' && !item.isCustom;
+
+    $('inspTitle').textContent = item.name;
+    $('inspSub').textContent = `${d.name} (${item.kind === 'google' ? 'South Bank' : 'North Bank'}) · (${x}, ${y})`;
+    $('inspDesc').textContent = item.desc || item.web || '';
 
     const webLink = $('inspWeb');
-    if (repo.web) {
-      webLink.href = repo.web;
+    if (item.web) {
+      webLink.href = item.web;
+      webLink.textContent = isGit ? 'Open live site' : `Open ${item.name}`;
       webLink.hidden = false;
     } else {
       webLink.hidden = true;
     }
-    $('inspEditor').href = `https://github.dev/${GITHUB_OWNER}/${repo.name}`;
-    $('inspGit').href = repo.git;
-    $('inspCloneCode').textContent = `git clone ${repo.git}.git`;
 
-    const sel = $('inspRepo');
-    if (sel.options.length !== REPOS.length) {
-      sel.innerHTML = '';
-      for (const r of REPOS) {
-        const opt = document.createElement('option');
-        opt.value = r.name;
-        opt.textContent = `${r.name} (${r.lang})`;
-        sel.appendChild(opt);
-      }
+    const editorLink = $('inspEditor');
+    if (isGit) {
+      editorLink.href = `https://github.dev/${GITHUB_OWNER}/${item.id}`;
+      editorLink.textContent = 'Open github.dev';
+      editorLink.hidden = false;
+    } else if (item.alt) {
+      editorLink.href = item.alt;
+      editorLink.textContent = item.altLabel || 'Quick action';
+      editorLink.hidden = false;
+    } else {
+      editorLink.hidden = true;
     }
-    sel.value = repo.name;
+
+    const gitLink = $('inspGit');
+    if (isGit && item.git) {
+      gitLink.href = item.git;
+      gitLink.hidden = false;
+    } else {
+      gitLink.hidden = true;
+    }
+
+    $('inspCopy').textContent = isGit && item.git ? 'Copy clone' : 'Copy link';
+    $('inspCloneBox').hidden = !(isGit && item.git);
+    if (isGit && item.git) $('inspCloneCode').textContent = `git clone ${item.git}.git`;
+
+    const catalog = allItems();
+    const sel = $('inspRepo');
+    sel.innerHTML = '';
+    for (const c of catalog) {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.kind === 'github' ? `${c.name} (${c.lang || 'GitHub'})` : `${c.name} (${c.cat || 'Google'})`;
+      sel.appendChild(opt);
+    }
+    sel.value = item.id;
+
+    $('editName').value = item.name || '';
+    $('editWeb').value = item.web || '';
+    $('editAlt').value = isGit ? (item.git || '') : (item.alt || '');
+    $('editStyle').value = t;
+    $('editDeleteBtn').hidden = !item.isCustom;
 
     setTab(activeTab);
-    fetchRepoActivity(repo.name, forceFetch);
-    renderRepoDetailsUI(repo.name);
+    if (isGit) fetchRepoActivity(item, forceFetch);
+    renderDetailsUI(item);
     card.dataset.open = 'true';
   }
 
   $('inspRepo').onchange = (e) => {
     if (!selectedTile) return;
     const [x, y] = selectedTile;
-    repos[x][y] = e.target.value;
+    pins[x][y] = e.target.value;
     scheduleSave();
     sfx('tap');
     renderInspect();
@@ -1554,35 +1831,175 @@
   $('inspClose').onclick = () => { selectedTile = null; renderInspect(); };
   $('inspCopy').onclick = async () => {
     if (!selectedTile) return;
-    const rp = repos[selectedTile[0]][selectedTile[1]];
-    if (!rp) return;
-    const cmd = `git clone ${getRepo(rp).git}.git`;
-    try { await navigator.clipboard.writeText(cmd); } catch (e) {}
+    const id = pins[selectedTile[0]][selectedTile[1]];
+    if (!id) return;
+    const item = getItem(id);
+    const val = (item.kind === 'github' && item.git && !item.isCustom) ? `git clone ${item.git}.git` : (item.web || item.git || '');
+    try { await navigator.clipboard.writeText(val); } catch (e) {}
     const b = $('inspCopy');
+    const prev = b.textContent;
     b.textContent = 'Copied';
-    setTimeout(() => { b.textContent = 'Copy clone'; }, 1400);
+    setTimeout(() => { b.textContent = prev; }, 1400);
   };
 
-  // ---------- Google Maps search & filter ----------
-  function matchesFilter(repo, q) {
-    if (activeFilter === 'web' && !repo.web) return false;
-    if (activeFilter === 'js' && repo.lang !== 'JavaScript' && repo.lang !== 'TypeScript') return false;
-    if (activeFilter === 'other' && (repo.lang === 'JavaScript' || repo.lang === 'TypeScript')) return false;
+  $('inspEditBtn').onclick = () => {
+    const box = $('inspEditBox');
+    const open = box.hidden;
+    box.hidden = !open;
+    $('inspEditBtn').setAttribute('aria-expanded', String(open));
+  };
+
+  $('inspEditBox').onsubmit = (e) => {
+    e.preventDefault();
+    if (!selectedTile) return;
+    const [x, y] = selectedTile;
+    const id = pins[x][y];
+    if (!id) return;
+    const name = $('editName').value.trim();
+    const web = $('editWeb').value.trim();
+    const alt = $('editAlt').value.trim();
+    const style = $('editStyle').value;
+    const base = getItem(id);
+
+    const patch = { ...(overrides[id] || {}) };
+    if (name) patch.name = name;
+    patch.web = web;
+    if (base.kind === 'github' && !base.isCustom) patch.git = alt || base.git;
+    else patch.alt = alt;
+    overrides[id] = patch;
+
+    if (style && TYPES[style] && grid[x][y] !== style) {
+      grid[x][y] = style;
+      worldDirty = true;
+      recompute();
+    }
+    scheduleSave();
+    closeEditForm();
+    renderInspect();
+    if (!$('searchResults').hidden) renderSearchResults();
+    sfx('select');
+  };
+
+  $('editDeleteBtn').onclick = () => {
+    if (!selectedTile) return;
+    const [x, y] = selectedTile;
+    const id = pins[x][y];
+    const idx = customItems.findIndex((c) => c.id === id);
+    if (idx < 0) return;
+    customItems.splice(idx, 1);
+    delete overrides[id];
+    pins[x][y] = null;
+    grid[x][y] = 'forest';
+    levels[x][y] = 1;
+    selectedTile = null;
+    worldDirty = true;
+    recompute();
+    updateCountUI();
+    scheduleSave();
+    renderInspect();
+    sfx('tap');
+  };
+
+  $('pinBookmarkForm').onsubmit = (e) => {
+    e.preventDefault();
+    if (!selectedTile) return;
+    const id = pins[selectedTile[0]][selectedTile[1]];
+    if (!id) return;
+    const label = $('bmLabel').value.trim();
+    const url = $('bmUrl').value.trim();
+    if (!label || !url) return;
+    if (!bookmarks[id]) bookmarks[id] = [];
+    bookmarks[id].unshift({ label, url });
+    $('bmLabel').value = '';
+    $('bmUrl').value = '';
+    scheduleSave();
+    renderDetailsUI(getItem(id));
+    sfx('select');
+  };
+
+  // ---------- edition tabs, search & filters ----------
+  function renderFiltersUI() {
+    const row = $('filterRow');
+    row.innerHTML = '';
+    const filters = edition === 'github'
+      ? [['all', 'All'], ['web', 'Live web'], ['js', 'JS / TS'], ['other', 'Python / HTML']]
+      : edition === 'google'
+        ? [['all', 'All'], ['google', 'Google'], ['study', 'Study'], ['custom', 'Custom']]
+        : [['all', 'All city'], ['github', 'GitHub'], ['google', 'Google & Study'], ['custom', 'Custom']];
+    for (const [key, lbl] of filters) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'filter-chip'; b.dataset.filter = key;
+      b.setAttribute('aria-pressed', String(activeFilter === key));
+      b.textContent = lbl;
+      b.onclick = () => {
+        activeFilter = key;
+        renderFiltersUI();
+        renderSearchResults();
+        $('searchResults').hidden = false;
+        sfx('tap');
+      };
+      row.appendChild(b);
+    }
+  }
+
+  function setEdition(ed, focusCamera = true) {
+    if (ed !== 'github' && ed !== 'google' && ed !== 'all') return;
+    edition = ed;
+    activeFilter = 'all';
+    activeTab = 'overview';
+    selectedTile = null;
+    hover = null; hoveredLabel = null;
+    document.querySelectorAll('.edition-btn').forEach((b) => {
+      b.setAttribute('aria-selected', String(b.dataset.edition === ed));
+    });
+    $('repoSearch').value = '';
+    $('repoSearch').placeholder = ed === 'github' ? 'Search GitHub repos...' : ed === 'google' ? 'Search Gmail, Docs, SEQTA...' : 'Search all city places...';
+    $('searchResults').hidden = true;
+    renderFiltersUI();
+    updateCountUI();
+    renderInspect();
+    if (focusCamera) {
+      if (ed === 'github') flyToTile(13, 9, W >= 760 ? 0.94 : 0.78, false);
+      else if (ed === 'google') flyToTile(14, 24, W >= 760 ? 0.96 : 0.82, false);
+      else center(true);
+    }
+    scheduleSave();
+    sfx('tap');
+  }
+
+  document.querySelectorAll('.edition-btn').forEach((b) => {
+    b.onclick = () => setEdition(b.dataset.edition, true);
+  });
+
+  function matchesFilter(item, q) {
+    if (edition === 'github') {
+      if (activeFilter === 'web' && !item.web) return false;
+      if (activeFilter === 'js' && item.lang !== 'JavaScript' && item.lang !== 'TypeScript') return false;
+      if (activeFilter === 'other' && (item.lang === 'JavaScript' || item.lang === 'TypeScript')) return false;
+    } else if (edition === 'google') {
+      if (activeFilter === 'google' && item.cat !== 'Google') return false;
+      if (activeFilter === 'study' && item.cat !== 'Study') return false;
+      if (activeFilter === 'custom' && !item.isCustom) return false;
+    } else {
+      if (activeFilter === 'github' && item.kind !== 'github') return false;
+      if (activeFilter === 'google' && item.kind !== 'google') return false;
+      if (activeFilter === 'custom' && !item.isCustom) return false;
+    }
     if (!q) return true;
-    const hay = `${repo.name} ${repo.lang} ${repo.desc}`.toLowerCase();
+    const hay = `${item.name} ${item.lang || ''} ${item.cat || ''} ${item.desc || ''}`.toLowerCase();
     return hay.includes(q);
   }
 
-  function focusRepoByName(repoName) {
-    let tile = findRepoTile(repoName);
+  function focusItemById(id) {
+    let tile = findItemTile(id);
     if (!tile) {
-      assignUnpinnedRepos();
+      assignUnpinnedItems();
       if (worldDirty) buildWorld();
-      tile = findRepoTile(repoName);
+      tile = findItemTile(id);
     }
     if (!tile) return;
     selectedTile = tile;
-    flyToTile(tile[0], tile[1]);
+    flyToTile(tile[0], tile[1], null, true);
     renderInspect();
     $('searchResults').hidden = true;
     $('hint').dataset.hidden = 'true';
@@ -1594,48 +2011,41 @@
     $('clearSearch').hidden = !q;
     const boxEl = $('searchResults');
     boxEl.innerHTML = '';
-    const matches = REPOS.filter((r) => matchesFilter(r, q));
+    const matches = activeCatalog().filter((item) => matchesFilter(item, q));
     if (!matches.length) {
-      const empty = document.createElement('div');
-      empty.className = 'detail-row';
-      const sub = document.createElement('div'); sub.className = 'detail-sub'; sub.textContent = 'No matching repositories found.';
-      empty.appendChild(sub);
-      boxEl.appendChild(empty);
+      const empty = document.createElement('div'); empty.className = 'detail-row';
+      const sub = document.createElement('div'); sub.className = 'detail-sub'; sub.textContent = 'No matching places found.';
+      empty.appendChild(sub); boxEl.appendChild(empty);
       return;
     }
-    const selName = selectedTile ? repos[selectedTile[0]][selectedTile[1]] : null;
-    for (const r of matches) {
+    const selId = selectedTile ? pins[selectedTile[0]][selectedTile[1]] : null;
+    for (const item of matches) {
       const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'search-item';
+      btn.type = 'button'; btn.className = 'search-item';
       btn.setAttribute('role', 'option');
-      btn.setAttribute('aria-selected', String(r.name === selName));
+      btn.setAttribute('aria-selected', String(item.id === selId));
       const dot = document.createElement('span');
-      dot.className = 'search-dot' + (r.isPrivate ? ' priv' : '');
+      dot.className = 'search-dot' + (item.isPrivate ? ' priv' : '');
       const main = document.createElement('div'); main.className = 'search-main';
-      const title = document.createElement('div'); title.className = 'search-title'; title.textContent = r.name;
-      const sub = document.createElement('div'); sub.className = 'search-sub'; sub.textContent = `${r.lang} · ${r.desc}`;
+      const title = document.createElement('div'); title.className = 'search-title'; title.textContent = item.name;
+      const sub = document.createElement('div'); sub.className = 'search-sub';
+      sub.textContent = `${item.lang || item.cat || 'App'} · ${item.desc || item.web || ''}`;
       main.append(title, sub);
-      const tag = document.createElement('span'); tag.className = 'search-tag'; tag.textContent = r.web ? 'Live' : 'GitHub';
+      const tag = document.createElement('span'); tag.className = 'search-tag';
+      tag.textContent = item.kind === 'github' ? (item.web ? 'Live' : 'GitHub') : 'Open';
       btn.append(dot, main, tag);
-      btn.onclick = () => focusRepoByName(r.name);
+      btn.onclick = () => focusItemById(item.id);
       boxEl.appendChild(btn);
     }
   }
 
-  $('repoSearch').addEventListener('focus', () => {
-    renderSearchResults();
-    $('searchResults').hidden = false;
-  });
-  $('repoSearch').addEventListener('input', () => {
-    renderSearchResults();
-    $('searchResults').hidden = false;
-  });
+  $('repoSearch').addEventListener('focus', () => { renderSearchResults(); $('searchResults').hidden = false; });
+  $('repoSearch').addEventListener('input', () => { renderSearchResults(); $('searchResults').hidden = false; });
   $('repoSearch').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       const q = ($('repoSearch').value || '').trim().toLowerCase();
-      const first = REPOS.find((r) => matchesFilter(r, q));
-      if (first) focusRepoByName(first.name);
+      const first = activeCatalog().find((r) => matchesFilter(r, q));
+      if (first) focusItemById(first.id);
     }
   });
   $('clearSearch').onclick = () => {
@@ -1643,15 +2053,6 @@
     renderSearchResults();
     $('repoSearch').focus();
   };
-  document.querySelectorAll('.filter-chip').forEach((btn) => {
-    btn.onclick = () => {
-      activeFilter = btn.dataset.filter;
-      document.querySelectorAll('.filter-chip').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
-      renderSearchResults();
-      $('searchResults').hidden = false;
-      sfx('tap');
-    };
-  });
   $('syncBtn').onclick = async () => {
     const b = $('syncBtn');
     b.disabled = true;
@@ -1660,7 +2061,71 @@
     sfx('select');
   };
 
-  // ---------- map controls & options ----------
+  // ---------- customization panel & map controls ----------
+  function setPop(id, btnId, open) {
+    const pop = $(id), btn = $(btnId);
+    if (open) {
+      if (id === 'customPop') setPop('morePop', 'moreBtn', false);
+      if (id === 'morePop') setPop('customPop', 'customBtn', false);
+    }
+    pop.dataset.open = String(open);
+    btn.setAttribute('aria-expanded', String(open));
+  }
+
+  $('customBtn').onclick = (e) => { e.stopPropagation(); setPop('customPop', 'customBtn', $('customPop').dataset.open !== 'true'); };
+  $('customClose').onclick = () => setPop('customPop', 'customBtn', false);
+  $('moreBtn').onclick = (e) => { e.stopPropagation(); setPop('morePop', 'moreBtn', $('morePop').dataset.open !== 'true'); };
+
+  document.querySelectorAll('.theme-btn').forEach((btn) => {
+    btn.onclick = () => {
+      themeId = btn.dataset.theme;
+      syncThemeUI();
+      rebuildCrownSprites();
+      worldDirty = true;
+      scheduleSave();
+      sfx('tap');
+    };
+  });
+
+  $('agentsBtn').onclick = () => {
+    showAgents = !showAgents;
+    $('agentsBtn').setAttribute('aria-pressed', String(showAgents));
+    syncAgents();
+    scheduleSave();
+    sfx('tap');
+  };
+
+  $('addPlaceForm').onsubmit = (e) => {
+    e.preventDefault();
+    const name = $('addName').value.trim();
+    const url = $('addUrl').value.trim();
+    const style = $('addBuilding').value || 'shop';
+    if (!name || !url) return;
+    const targetKind = edition === 'google' ? 'google' : 'github';
+    const id = 'custom-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 24) + '-' + Date.now().toString(36).slice(-4);
+    const entry = {
+      id, kind: targetKind, name, web: url,
+      lang: 'Custom', cat: 'Custom', style, isCustom: true,
+      desc: `Custom shortcut on ${targetKind === 'google' ? 'South Bank (Google & Study)' : 'North Bank (GitHub)'}.`,
+      shortcuts: [{ label: `Open ${name}`, url, sub: url }],
+    };
+    customItems.push(entry);
+    const lot = findFreeLot(targetKind, style);
+    if (lot) {
+      grid[lot.x][lot.y] = style;
+      levels[lot.x][lot.y] = lot.lv;
+      pins[lot.x][lot.y] = id;
+      worldDirty = true;
+      recompute();
+    }
+    $('addName').value = '';
+    $('addUrl').value = '';
+    updateCountUI();
+    scheduleSave();
+    setPop('customPop', 'customBtn', false);
+    focusItemById(id);
+  };
+
   $('labelsBtn').onclick = () => {
     showLabels = !showLabels;
     $('labelsBtn').setAttribute('aria-pressed', String(showLabels));
@@ -1679,12 +2144,6 @@
   $('zoomIn').onclick = () => zoomAt(1.2);
   $('zoomOut').onclick = () => zoomAt(1 / 1.2);
 
-  function setMoreOpen(open) {
-    $('morePop').dataset.open = String(open);
-    $('moreBtn').setAttribute('aria-expanded', String(open));
-  }
-  $('moreBtn').onclick = (e) => { e.stopPropagation(); setMoreOpen($('morePop').dataset.open !== 'true'); };
-
   $('soundBtn').onclick = () => {
     soundOn = !soundOn;
     const b = $('soundBtn');
@@ -1699,20 +2158,21 @@
     draw(performance.now(), 0);
     const a = document.createElement('a');
     a.href = canvas.toDataURL('image/png');
-    a.download = 'github-city.png';
+    a.download = `workspace-city-${edition}.png`;
     a.click();
     hover = prevHover; selectedTile = prevSel;
-    setMoreOpen(false);
+    setPop('morePop', 'moreBtn', false);
   };
 
   $('exportBtn').onclick = () => {
-    const blob = new Blob([JSON.stringify({ grid, levels, repos, hour, showLabels }, null, 2)], { type: 'application/json' });
+    const payload = { edition, themeId, showAgents, showLabels, hour, customItems, overrides, bookmarks, grid, levels, pins };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'github-city-layout.json';
+    a.download = 'workspace-city-config.json';
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    setMoreOpen(false);
+    setPop('morePop', 'moreBtn', false);
   };
 
   $('importBtn').onclick = () => $('importFile').click();
@@ -1723,28 +2183,31 @@
     try {
       const d = JSON.parse(await file.text());
       if (!applySaveData(d)) return;
-      worldDirty = true; recompute(); renderInspect(); saveNow(); center(false);
-      setMoreOpen(false);
+      setEdition(edition, false);
+      worldDirty = true; recompute(); saveNow(); center(false);
+      setPop('morePop', 'moreBtn', false);
     } catch (err) { /* ignore invalid JSON */ }
   };
 
   $('resetBtn').onclick = () => {
+    customItems.length = 0;
+    for (const k of Object.keys(overrides)) delete overrides[k];
     starter();
-    worldDirty = true;
-    recompute();
-    renderInspect();
-    saveNow();
-    center(true);
-    setMoreOpen(false);
+    themeId = 'autumn'; showAgents = true; showLabels = true;
+    syncThemeUI(); rebuildCrownSprites();
+    $('agentsBtn').setAttribute('aria-pressed', 'true');
+    $('labelsBtn').setAttribute('aria-pressed', 'true');
+    worldDirty = true; recompute(); renderFiltersUI(); updateCountUI(); renderInspect(); saveNow(); center(true);
+    setPop('morePop', 'moreBtn', false);
     sfx('tap');
   };
 
-  // Close search dropdown / more pop on outside click
   addEventListener('pointerdown', (e) => {
     const dock = document.querySelector('.search-dock');
     if (!$('searchResults').hidden && !dock.contains(e.target)) $('searchResults').hidden = true;
-    const mp = $('morePop');
-    if (mp.dataset.open === 'true' && !mp.contains(e.target) && e.target !== $('moreBtn')) setMoreOpen(false);
+    const cp = $('customPop'), mp = $('morePop');
+    if (cp.dataset.open === 'true' && !cp.contains(e.target) && e.target !== $('customBtn')) setPop('customPop', 'customBtn', false);
+    if (mp.dataset.open === 'true' && !mp.contains(e.target) && e.target !== $('moreBtn')) setPop('morePop', 'moreBtn', false);
   });
 
   // ---------- canvas pan, zoom, label & building click ----------
@@ -1777,15 +2240,15 @@
     }
 
     const lbl = hitLabel(e.clientX, e.clientY);
-    hoveredLabel = lbl ? lbl.repoName : null;
+    hoveredLabel = lbl ? lbl.id : null;
     const t = lbl ? [lbl.x, lbl.y] : pick(e.clientX, e.clientY);
     hover = t;
-    if (!drag) canvas.style.cursor = (lbl || (t && repos[t[0]]?.[t[1]])) ? 'pointer' : 'grab';
+    if (!drag) canvas.style.cursor = (lbl || (t && pins[t[0]]?.[t[1]])) ? 'pointer' : 'grab';
 
     const tip = $('tip');
-    if (t && !drag && repos[t[0]]?.[t[1]]) {
-      const repo = getRepo(repos[t[0]][t[1]]);
-      const txt = `${repo.name} (${repo.lang}) · Click to open`;
+    if (t && !drag && pins[t[0]]?.[t[1]]) {
+      const item = getItem(pins[t[0]][t[1]]);
+      const txt = `${item.name} (${item.lang || item.cat || 'App'}) · Click to open`;
       if (tip.textContent !== txt) tip.textContent = txt;
       if (tip.hidden) tip.hidden = false;
       tip.style.transform = `translate3d(${Math.min(W - 250, e.clientX + 16)}px, ${e.clientY + 16}px, 0)`;
@@ -1800,7 +2263,7 @@
     if (drag && !drag.moved && !drag.pinch) {
       const lbl = hitLabel(e.clientX, e.clientY);
       const t = lbl ? [lbl.x, lbl.y] : pick(e.clientX, e.clientY);
-      if (t && repos[t[0]]?.[t[1]]) {
+      if (t && pins[t[0]]?.[t[1]]) {
         selectedTile = t;
         renderInspect();
         sfx('select');
@@ -1818,7 +2281,7 @@
 
   function zoomAt(f, mx = W / 2, my = H / 2) {
     camAnim = null;
-    const nz = Math.max(0.55, Math.min(2.4, cam.z * f));
+    const nz = Math.max(0.45, Math.min(2.4, cam.z * f));
     const k = nz / cam.z;
     cam.x = mx - (mx - cam.x) * k; cam.y = my - (my - cam.y) * k; cam.z = nz;
   }
@@ -1827,7 +2290,8 @@
   addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       $('searchResults').hidden = true;
-      setMoreOpen(false);
+      setPop('customPop', 'customBtn', false);
+      setPop('morePop', 'moreBtn', false);
       if (selectedTile) { selectedTile = null; renderInspect(); }
       return;
     }
@@ -1847,10 +2311,10 @@
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
   }
   function center(animateMove = false) {
-    const tz = Math.max(0.55, Math.min(1.06, W / (N * TW) * 1.12, H / (N * TH + 150) * 1.12));
+    const tz = Math.max(0.45, Math.min(0.95, W / (N * TW) * 1.12, H / (N * TH + 150) * 1.12));
     const tx = W / 2, ty = H / 2 - (N * TH / 2) * tz + 26;
     if (!animateMove || reduceMotion) { cam.x = tx; cam.y = ty; cam.z = tz; camAnim = null; return; }
-    camAnim = { sx: cam.x, sy: cam.y, sz: cam.z, tx, ty, tz, start: performance.now(), dur: 320 };
+    camAnim = { sx: cam.x, sy: cam.y, sz: cam.z, tx, ty, tz, start: performance.now(), dur: 360 };
   }
   addEventListener('resize', resize);
 
@@ -1865,20 +2329,21 @@
       cam.z = camAnim.sz + (camAnim.tz - camAnim.sz) * e;
       if (p >= 1) camAnim = null;
     }
-    stepList(cars, dt, isRoad);
-    stepList(walkers, dt, isRoad);
-    stepList(bots, dt, isRoad);
-    stepList(boats, dt, isWater);
+    if (showAgents) {
+      stepList(cars, dt, isRoad);
+      stepList(walkers, dt, isRoad);
+      stepList(bots, dt, isRoad);
+      stepList(boats, dt, isWater);
+    }
     draw(now, dt);
     requestAnimationFrame(frame);
   }
 
   resize();
   if (!load()) starter();
-  center(false);
   recompute();
-  updateRepoCountUI();
-  syncLightUI();
+  setEdition(edition, false);
+  center(false);
   fetchUserRepos(false);
   requestAnimationFrame(frame);
 })();

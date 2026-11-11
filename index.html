@@ -3,41 +3,42 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>GitHub City, Peterachss repository workspace</title>
-  <meta name="description" content="Interactive isometric map of Peterachss GitHub repositories. Search projects, inspect live commits and files, launch live sites, and open web editors directly." />
-  <meta property="og:title" content="GitHub City, Peterachss repository workspace" />
-  <meta property="og:description" content="Explore Peterachss GitHub repositories on an interactive map with live commits, files, deployments, and one-click editor links." />
+  <title>Workspace City, GitHub &amp; Google Edition</title>
+  <meta name="description" content="Interactive isometric city workspace for GitHub repositories and Google productivity apps. Search, customize themes and buildings, and launch links directly." />
+  <meta property="og:title" content="Workspace City, GitHub &amp; Google Edition" />
+  <meta property="og:description" content="Switch between GitHub City and Google Study Edition on a customizable interactive map." />
   <meta property="og:type" content="website" />
-  <link rel="stylesheet" href="city.css?v=13" />
+  <link rel="stylesheet" href="city.css?v=15" />
 </head>
 <body>
   <main class="app">
-    <canvas id="stage" aria-label="Interactive GitHub City map. Drag to pan, scroll to zoom, click any building or label to open its repository."></canvas>
+    <canvas id="stage" aria-label="Interactive workspace city map. Drag to pan, scroll to zoom, click any building or label to open it."></canvas>
 
-    <section class="search-dock" aria-label="Repository search and navigation">
+    <section class="search-dock" aria-label="Workspace edition and search">
+      <div class="edition-tabs three" role="tablist" aria-label="City district">
+        <button class="edition-btn" type="button" role="tab" data-edition="github" aria-selected="true">GitHub</button>
+        <button class="edition-btn" type="button" role="tab" data-edition="google" aria-selected="false">Google &amp; Study</button>
+        <button class="edition-btn" type="button" role="tab" data-edition="all" aria-selected="false">Full City</button>
+      </div>
+
       <div class="search-bar">
         <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input id="repoSearch" type="search" placeholder="Search GitHub repos..." autocomplete="off" aria-label="Search GitHub repositories" />
+        <input id="repoSearch" type="search" placeholder="Search GitHub repos..." autocomplete="off" aria-label="Search current city items" />
         <button id="clearSearch" class="chip icon tiny" type="button" aria-label="Clear search" hidden>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
         <span id="repoCount" class="repo-count tnum">11 repos</span>
-        <button id="syncBtn" class="chip icon tiny" type="button" aria-label="Refresh GitHub data" title="Sync GitHub repositories">
+        <button id="syncBtn" class="chip icon tiny" type="button" aria-label="Refresh live data" title="Refresh live data">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         </button>
       </div>
 
-      <div class="filter-row" role="group" aria-label="Filter repositories">
-        <button class="filter-chip" type="button" data-filter="all" aria-pressed="true">All</button>
-        <button class="filter-chip" type="button" data-filter="web" aria-pressed="false">Live web</button>
-        <button class="filter-chip" type="button" data-filter="js" aria-pressed="false">JS / TS</button>
-        <button class="filter-chip" type="button" data-filter="other" aria-pressed="false">Python / HTML</button>
-      </div>
-
-      <div id="searchResults" class="search-results" role="listbox" aria-label="Matching repositories" hidden></div>
+      <div id="filterRow" class="filter-row" role="group" aria-label="Filter items"></div>
+      <div id="searchResults" class="search-results" role="listbox" aria-label="Matching items" hidden></div>
     </section>
 
-    <section class="map-controls" aria-label="Map view controls">
+    <section class="map-controls" aria-label="Map view and customization">
+      <button id="customBtn" class="chip" type="button" aria-expanded="false" aria-controls="customPop">Customize</button>
       <button id="labelsBtn" class="chip" type="button" aria-pressed="true" aria-label="Toggle map labels">Labels</button>
       <button id="lightBtn" class="chip" type="button" aria-label="Cycle lighting mode">Dusk</button>
       <button id="centerBtn" class="chip icon" type="button" aria-label="Recenter map" title="Recenter map">
@@ -52,32 +53,77 @@
       <button id="zoomOut" class="chip icon" type="button" aria-label="Zoom out" title="Zoom out (-)">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </button>
-      <button id="moreBtn" class="chip icon" type="button" aria-expanded="false" aria-controls="morePop" aria-label="Map options" title="Map options">
+      <button id="moreBtn" class="chip icon" type="button" aria-expanded="false" aria-controls="morePop" aria-label="Workspace options" title="Workspace options">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
       </button>
     </section>
+
+    <div id="customPop" class="pop custom-pop" role="dialog" aria-label="Customize city workspace" data-open="false">
+      <div class="inspect-head">
+        <h2>Customize city</h2>
+        <button id="customClose" class="chip icon tiny" type="button" aria-label="Close customize panel">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="custom-group">
+        <span class="stat-label">City biome theme</span>
+        <div id="themeRow" class="theme-row" role="group" aria-label="City biome theme">
+          <button class="filter-chip theme-btn" type="button" data-theme="autumn" aria-pressed="true">Autumn</button>
+          <button class="filter-chip theme-btn" type="button" data-theme="alpine" aria-pressed="false">Alpine</button>
+          <button class="filter-chip theme-btn" type="button" data-theme="slate" aria-pressed="false">Slate</button>
+          <button class="filter-chip theme-btn" type="button" data-theme="sakura" aria-pressed="false">Spring</button>
+        </div>
+      </div>
+
+      <div class="custom-group">
+        <span class="stat-label">Map display</span>
+        <div class="more-grid">
+          <button id="agentsBtn" class="chip small" type="button" aria-pressed="true">Bots &amp; traffic</button>
+          <button id="soundBtn" class="chip small" type="button" aria-pressed="false">Sound off</button>
+        </div>
+      </div>
+
+      <form id="addPlaceForm" class="custom-group">
+        <span class="stat-label">Add building shortcut to city</span>
+        <input id="addName" class="field-input" type="text" placeholder="Name (e.g. Google Drive)" required />
+        <input id="addUrl" class="field-input" type="url" placeholder="URL (https://drive.google.com)" required />
+        <div class="field-row">
+          <select id="addBuilding" class="repo-select" aria-label="Building style">
+            <option value="office">Tower</option>
+            <option value="school">Research Hall</option>
+            <option value="clinic">Terrace Hub</option>
+            <option value="shop">Studio</option>
+            <option value="plaza">Civic Plaza</option>
+            <option value="house">Villa</option>
+            <option value="windmill">Lab Mill</option>
+            <option value="wheel">Wheel Studio</option>
+          </select>
+          <button class="chip small primary" type="submit">Add to map</button>
+        </div>
+      </form>
+    </div>
 
     <div id="morePop" class="pop more-pop" role="dialog" aria-label="Workspace options" data-open="false">
       <div class="pop-head">
         <h2>Workspace options</h2>
       </div>
       <div class="more-grid">
-        <button id="soundBtn" class="chip small" type="button" aria-pressed="false">Sound off</button>
         <button id="pngBtn" class="chip small" type="button">Export PNG</button>
         <button id="exportBtn" class="chip small" type="button">Export JSON</button>
         <button id="importBtn" class="chip small" type="button">Import JSON</button>
-        <button id="resetBtn" class="chip small" type="button">Reset layout</button>
+        <button id="resetBtn" class="chip small" type="button">Reset city</button>
         <input id="importFile" type="file" accept=".json,application/json" hidden />
       </div>
     </div>
 
-    <aside id="inspectCard" class="pop inspect-card" role="dialog" aria-label="Repository workspace" data-open="false">
+    <aside id="inspectCard" class="pop inspect-card" role="dialog" aria-label="Place workspace" data-open="false">
       <div class="inspect-head">
         <div class="inspect-title-wrap">
-          <h2 id="inspTitle">Repository</h2>
+          <h2 id="inspTitle">Workspace</h2>
           <p id="inspSub" class="insp-sub"></p>
         </div>
-        <button id="inspClose" class="chip icon tiny" type="button" aria-label="Close repository panel">
+        <button id="inspClose" class="chip icon tiny" type="button" aria-label="Close workspace panel">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
@@ -88,15 +134,51 @@
         <a id="inspWeb" class="chip small primary link-btn" href="#" target="_blank" rel="noopener noreferrer">Open live site</a>
         <a id="inspEditor" class="chip small link-btn" href="#" target="_blank" rel="noopener noreferrer">Open github.dev</a>
         <a id="inspGit" class="chip small link-btn" href="#" target="_blank" rel="noopener noreferrer">GitHub repo</a>
-        <button id="inspCopy" class="chip small" type="button">Copy clone</button>
+        <button id="inspCopy" class="chip small" type="button">Copy link</button>
+        <button id="inspEditBtn" class="chip small" type="button" aria-expanded="false" aria-controls="inspEditBox">Edit</button>
       </div>
+
+      <form id="inspEditBox" class="edit-box" hidden>
+        <div class="edit-grid">
+          <label class="edit-field">
+            <span class="stat-label">Label name</span>
+            <input id="editName" class="field-input" type="text" required />
+          </label>
+          <label class="edit-field">
+            <span class="stat-label">Main URL</span>
+            <input id="editWeb" class="field-input" type="url" placeholder="https://..." />
+          </label>
+          <label class="edit-field">
+            <span class="stat-label">Quick action URL</span>
+            <input id="editAlt" class="field-input" type="url" placeholder="https://..." />
+          </label>
+          <div class="field-row">
+            <label class="edit-field grow">
+              <span class="stat-label">Building style</span>
+              <select id="editStyle" class="repo-select">
+                <option value="office">Tower</option>
+                <option value="apt">Vault Tower</option>
+                <option value="school">Research Hall</option>
+                <option value="clinic">Terrace Hub</option>
+                <option value="shop">Studio</option>
+                <option value="plaza">Civic Plaza</option>
+                <option value="house">Villa</option>
+                <option value="windmill">Lab Mill</option>
+                <option value="wheel">Wheel Studio</option>
+              </select>
+            </label>
+            <button id="editSaveBtn" class="chip small primary" type="submit">Save</button>
+            <button id="editDeleteBtn" class="chip small danger" type="button" hidden>Remove</button>
+          </div>
+        </div>
+      </form>
 
       <div id="inspMetrics" class="metrics-strip"></div>
 
-      <div class="tabs-bar" role="tablist" aria-label="Repository details">
+      <div class="tabs-bar" role="tablist" aria-label="Place details">
         <button class="tab-btn" type="button" role="tab" data-tab="overview" aria-selected="true">Overview</button>
-        <button class="tab-btn" type="button" role="tab" data-tab="commits" aria-selected="false">Commits</button>
-        <button class="tab-btn" type="button" role="tab" data-tab="files" aria-selected="false">Files</button>
+        <button id="tab2Btn" class="tab-btn" type="button" role="tab" data-tab="second" aria-selected="false">Commits</button>
+        <button id="tab3Btn" class="tab-btn" type="button" role="tab" data-tab="third" aria-selected="false">Files</button>
       </div>
 
       <div id="tabOverview" class="tab-panel" role="tabpanel">
@@ -108,29 +190,34 @@
           <div id="inspBots" class="bots-list"></div>
         </div>
 
-        <div class="clone-box">
+        <div id="inspCloneBox" class="clone-box">
           <span class="stat-label">Quick clone</span>
           <code id="inspCloneCode" class="clone-code"></code>
         </div>
 
-        <div class="repo-reassign">
-          <label for="inspRepo" class="stat-label">Pinned repository</label>
+        <div id="inspReassignBox" class="repo-reassign">
+          <label for="inspRepo" class="stat-label">Pinned item</label>
           <select id="inspRepo" class="repo-select"></select>
         </div>
       </div>
 
-      <div id="tabCommits" class="tab-panel" role="tabpanel" hidden>
-        <div id="inspCommits" class="detail-list"></div>
+      <div id="tabSecond" class="tab-panel" role="tabpanel" hidden>
+        <div id="inspSecondList" class="detail-list"></div>
       </div>
 
-      <div id="tabFiles" class="tab-panel" role="tabpanel" hidden>
-        <div id="inspFiles" class="detail-list"></div>
+      <div id="tabThird" class="tab-panel" role="tabpanel" hidden>
+        <form id="pinBookmarkForm" class="bookmark-form" hidden>
+          <input id="bmLabel" class="field-input" type="text" placeholder="Pin label (e.g. Bio IA draft)" required />
+          <input id="bmUrl" class="field-input" type="url" placeholder="https://docs.google.com/..." required />
+          <button class="chip small primary" type="submit">Pin</button>
+        </form>
+        <div id="inspThirdList" class="detail-list"></div>
       </div>
     </aside>
 
     <div id="tip" class="tip" role="status" hidden></div>
-    <p class="hint" id="hint">Click any labeled building to inspect its commits, files, bots, and live web links.</p>
+    <p class="hint" id="hint">Switch between GitHub City and Google &amp; Study, search above, or click any labeled building.</p>
   </main>
-  <script src="city.js?v=13"></script>
+  <script src="city.js?v=15"></script>
 </body>
 </html>

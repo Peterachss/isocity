@@ -1,15 +1,15 @@
-# GitHub City
+# Workspace City
 
-An interactive Google Maps style workspace for `Peterachss` GitHub repositories. Search projects, pan and zoom the isometric city map, click any labeled building to inspect live commits, files, CI status, and worker bots, or jump straight to the live website or `github.dev` editor.
+An interactive Google Maps style isometric workspace uniting `Peterachss` GitHub repositories (North Bank) and Google & Study apps (across the bridges on the South Bank). Switch tabs between GitHub, Google & Study, and Full City, search and customize buildings or biome themes, and launch live sites or `github.dev` directly.
 
 Live app: https://isocity-mu.vercel.app/ (GitHub Pages: https://peterachss.github.io/isocity/)
 
 ## Features
 
-- **Google Maps style search and filters:** Search repositories by name, language, or description, filter by Live web or language stack, and smoothly fly the camera directly to any pinned building.
-- **Floating map pin labels:** Every repository landmark carries a clickable pill label above its roof with live/private status indicators and automatic zoom-out collision handling.
-- **Workspace place card:** Click any building or label to open its live website link, `github.dev` browser editor, GitHub repository, copyable `git clone` command, live commit feed, root file list, and active bot statuses.
-- **2.5D isometric city backdrop:** Plain canvas renderer with animated cars, boats, walkers, patrolling coding bots, orbiting worker bots on the selected building, and Dusk/Day/Night lighting modes.
+- **Two-sided 32x32 district map:** North Bank hosts GitHub repositories; three bridges cross the river to the South Bank hosting Gmail, Google Chat, SEQTA, Google Slides, Google Docs, MyBib, and Google Calendar.
+- **Edition tabs and search:** Switch between `GitHub`, `Google & Study`, and `Full City`, filter by stack or category, and smoothly fly the camera onto any building.
+- **Place workspace drawer:** Click any building or floating map label to open live sites, `github.dev` editor, quick shortcuts, live GitHub commits/files/worker bots, or pin custom study/doc bookmarks.
+- **Customization:** Change biome themes (Autumn, Alpine, Slate, Spring), toggle traffic/bots and labels, cycle Dusk/Day/Night lighting, edit any place's name, URL, or building architecture, or add new shortcut buildings onto the map.
 
 ## Run locally
 
@@ -21,8 +21,8 @@ Open http://localhost:4173. Any static file server works.
 
 ## Files
 
-- `index.html`: map container, search dock, workspace drawer, and controls
-- `city.css`: surface palette, floating dock, responsive sheet, and reduced-motion rules
-- `city.js`: isometric renderer, label hit-testing, camera fly-to, and live GitHub REST API client
+- `index.html`: map canvas, edition switcher, search dock, customize popover, and place drawer
+- `city.css`: surface palette, floating controls, responsive bottom sheet, and reduced-motion rules
+- `city.js`: 32x32 isometric renderer, label picking, two-district state, customization CRUD, and GitHub API client
 
 MIT licensed.
