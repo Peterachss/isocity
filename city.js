@@ -30,6 +30,7 @@
   const $ = (id) => document.getElementById(id);
 
   let grid, levels, money, tool = 'road', milestoneReached = 0;
+  let workspaceMode = true;
   let cam = { x: 0, y: 0, z: 1 };
   let hover = null, cars = [], walkers = [], boats = [], orphansList = [], wheelsList = [], beaconsList = [], housesList = [], waterCells = [];
   let hour = 17.4, auto = false, simSpeed = 1, stats = {};
@@ -1464,8 +1465,8 @@
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     $('hint').dataset.hidden = 'true';
     if (ptrs.size === 2) { drag = { pinch: true, d: dist() }; return; }
-    const panning = e.button === 2 || e.button === 1 || e.shiftKey || tool === 'pan';
-    if (panning) { drag = { pan: true, sx: e.clientX, sy: e.clientY, cx: cam.x, cy: cam.y }; canvas.style.cursor = 'grabbing'; return; }
+    const panning = e.button === 2 || e.button === 1 || e.shiftKey || tool === 'pan' || workspaceMode;
+    if (panning) { drag = { pan: true, workspaceTap: workspaceMode && e.button === 0 && !e.shiftKey, sx: e.clientX, sy: e.clientY, cx: cam.x, cy: cam.y }; canvas.style.cursor = 'grabbing'; return; }
     strokeId++;
     drag = { pan: false };
     const t = pick(e.clientX, e.clientY);
@@ -1483,6 +1484,15 @@
     }
     const t = pick(e.clientX, e.clientY);
     hover = t;
+    if (workspaceMode) {
+      const tip = $('tip'), building = !drag ? workspaceBuilding(e.clientX, e.clientY) : null;
+      const department = building && window.WorkspaceData?.departments.find(d => d.types.includes(building.type));
+      if (department) {
+        tip.textContent = department.name + ' - click to open'; tip.hidden = false;
+        tip.style.transform = `translate3d(${Math.max(8, Math.min(W - 240, e.clientX + 16))}px, ${Math.max(8, Math.min(H - 60, e.clientY + 16))}px, 0)`;
+      } else tip.hidden = true;
+      return;
+    }
     if (drag && !drag.pan && t && t.join() !== lastTile) { apply(t[0], t[1]); lastTile = t.join(); }
     if (!flashTimer) {
       const tip = $('tip');
@@ -1498,7 +1508,29 @@
       }
     }
   });
-  const end = (e) => { ptrs.delete(e.pointerId); if (ptrs.size) return; drag = null; lastTile = null; canvas.style.cursor = tool === 'pan' ? 'grab' : 'crosshair'; };
+  function workspaceBuilding(mx, my) {
+    // Test frontmost buildings first, including their roofs, not just the ground tile.
+    for (let sum = N * 2 - 2; sum >= 0; sum--) {
+      for (let x = Math.min(N - 1, sum); x >= Math.max(0, sum - N + 1); x--) {
+        const y = sum - x, type = grid[x][y], def = TYPES[type];
+        if (!def || !['house', 'apt', 'office', 'shop', 'school', 'clinic', 'plaza', 'wheel', 'park'].includes(type)) continue;
+        const cx = (x - y) * 32 * cam.z + cam.x;
+        const bottom = (x + y + 1) * 16 * cam.z + cam.y;
+        const height = (def.h || 8) * (LVL_MULT[levels[x][y]] || 1) * cam.z;
+        const half = 32 * (1 - 2 * (def.inset || 0)) * cam.z;
+        if (Math.abs(mx - cx) <= half && my >= bottom - height - 16 * cam.z && my <= bottom + 16 * cam.z) return {x, y, type};
+      }
+    }
+    return null;
+  }
+  const end = (e) => {
+    ptrs.delete(e.pointerId); if (ptrs.size) return;
+    if (e.type !== 'pointercancel' && drag?.workspaceTap && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 7) {
+      const building = workspaceBuilding(e.clientX, e.clientY);
+      if (building) dispatchEvent(new CustomEvent('isocity:building', {detail: building}));
+    }
+    drag = null; lastTile = null; canvas.style.cursor = workspaceMode || tool === 'pan' ? 'grab' : 'crosshair';
+  };
   canvas.addEventListener('pointerup', end);
   canvas.addEventListener('pointercancel', end);
   canvas.addEventListener('pointerleave', () => { hover = null; if (!flashTimer) { $('tip').hidden = true; lastTipKey = ''; } });
@@ -1508,7 +1540,12 @@
     const k = nz / cam.z;
     cam.x = mx - (mx - cam.x) * k; cam.y = my - (my - cam.y) * k; cam.z = nz;
   }
-  canvas.addEventListener('wheel', (e) => { e.preventDefault(); zoomAt(e.deltaY < 0 ? 1.1 : 1 / 1.1, e.clientX, e.clientY); }, { passive: false });
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? H : 1;
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) { cam.x -= e.deltaX * unit; cam.y -= e.deltaY * unit; return; }
+    if (e.deltaY) zoomAt(Math.exp(-Math.max(-240, Math.min(240, e.deltaY * unit)) * 0.0015), e.clientX, e.clientY);
+  }, { passive: false });
   $('zoomIn').onclick = () => zoomAt(1.2);
   $('zoomOut').onclick = () => zoomAt(1 / 1.2);
   $('rotBtn').onclick = () => rotateCity(true);
@@ -1548,7 +1585,12 @@
 
   addEventListener('keydown', (e) => {
     if (e.key === 'Escape') setCitiesOpen(false);
-    if (e.target.matches('input')) return;
+    if (e.defaultPrevented || e.target.matches('input, textarea, select, button, a, [contenteditable]') || e.target.closest?.('#workspacePanel')) return;
+    if (workspaceMode) {
+      if (e.key === '+' || e.key === '=') zoomAt(1.2);
+      if (e.key === '-') zoomAt(1 / 1.2);
+      return;
+    }
     if (e.code === 'Space') { e.preventDefault(); setSpeed(simSpeed === 0 ? 1 : 0); return; }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); return e.shiftKey ? redo() : undo(); }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); return redo(); }
@@ -1627,10 +1669,29 @@
     requestAnimationFrame(frame);
   }
 
+  window.Isocity = {
+    setWorkspace(enabled) {
+      workspaceMode = enabled; drag = null; ptrs.clear(); hover = null;
+      setTool(enabled ? 'pan' : 'road');
+      canvas.style.cursor = enabled ? 'grab' : 'crosshair';
+      setCitiesOpen(false);
+    },
+    focusBuilding(types) {
+      for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) if (types.includes(grid[x][y])) {
+        cam.z = Math.max(0.7, Math.min(1.25, cam.z));
+        const centerX = W > 900 ? (W - 440) / 2 : W / 2;
+        cam.x = centerX - (x - y) * 32 * cam.z;
+        cam.y = H * 0.48 - (x + y + 1) * 16 * cam.z + (TYPES[grid[x][y]].h || 0) * cam.z / 2;
+        return true;
+      }
+      return false;
+    },
+    fit: center
+  };
   resize();
   if (!load()) starter();
   center();
   recompute();
-  setTool('road');
+  setTool('pan');
   requestAnimationFrame(frame);
 })();

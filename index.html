@@ -8,10 +8,11 @@
   <meta property="og:title" content="Isocity, build your own city" />
   <meta property="og:description" content="Lay roads, place buildings and watch the city grow through day and night." />
   <meta property="og:type" content="website" />
-  <link rel="stylesheet" href="city.css?v=10" />
+  <link rel="stylesheet" href="city.css?v=11" />
+  <link rel="stylesheet" href="workspace.css?v=1" />
 </head>
 <body>
-  <main class="app">
+  <main class="app" data-workspace="true">
     <canvas id="stage" aria-label="Isometric city map. Click or drag to build."></canvas>
 
     <header class="stats" aria-label="City statistics">
@@ -58,6 +59,26 @@
     <div id="tip" class="tip" role="status" hidden></div>
     <p class="hint" id="hint">Click or drag to build. Right drag pans, scroll zooms, R rotates view, Space pauses, Ctrl+Z undoes.</p>
   </main>
-  <script src="city.js?v=10"></script>
+  <header class="workspace-header" id="workspaceHeader">
+    <div class="workspace-brand"><strong>Isocity</strong><span>Your GitHub workspace</span></div>
+    <div class="workspace-switch" role="group" aria-label="City mode"><button id="workspaceMode" aria-pressed="true">Workspace</button><button id="buildMode" aria-pressed="false">Build city</button></div>
+    <button id="directoryBtn" class="workspace-primary" aria-expanded="true" aria-controls="workspacePanel">Directory <kbd>/</kbd></button>
+  </header>
+  <nav class="department-dock" id="departmentDock" aria-label="City departments"></nav>
+  <aside class="workspace-panel" id="workspacePanel" aria-labelledby="workspaceTitle">
+    <div class="workspace-panel-head"><div><h1 id="workspaceTitle">Headquarters</h1><p id="workspaceDescription">Your projects, tools, and shortcuts.</p></div><button id="closeWorkspace" aria-label="Close directory">Close</button></div>
+    <form id="accountForm" class="account-form"><label for="githubUser">GitHub account</label><div><input id="githubUser" value="Peterachss" autocomplete="off" spellcheck="false" maxlength="39" required /><button type="submit">Load</button><button id="refreshGithub" type="button">Refresh</button></div></form>
+    <nav class="github-links" id="githubLinks" aria-label="GitHub shortcuts"></nav>
+    <div class="workspace-search"><label for="workspaceSearch">Search this department</label><input id="workspaceSearch" type="search" placeholder="Name, description, or language" autocomplete="off" /><div class="workspace-filters"><select id="languageFilter" aria-label="Filter by language"><option value="">All languages</option></select><select id="sortRepos" aria-label="Sort results"><option value="updated">Recently updated</option><option value="name">Name</option><option value="stars">Most stars</option></select></div></div>
+    <p id="githubStatus" class="workspace-status" role="status"></p>
+    <div id="workspaceList" class="workspace-list"></div>
+    <button id="moreResults" hidden>Show more results</button>
+    <details id="shortcutDetails" class="shortcut-details"><summary>Add a shortcut to this department</summary><form id="shortcutForm"><label for="shortcutName">Name</label><input id="shortcutName" maxlength="80" required /><label for="shortcutURL">Link</label><input id="shortcutURL" type="url" placeholder="https://" required /><button type="submit">Save shortcut</button><p>Saved in this browser only. Private repository links can go here.</p></form></details>
+    <p class="workspace-footnote">Public repositories and stars appear here. Use All repositories on GitHub for private projects and organization access.</p>
+  </aside>
+  <div id="workspaceToast" class="workspace-toast" role="status" hidden></div>
+  <script src="city.js?v=11"></script>
+  <script src="workspace-data.js?v=1"></script>
+  <script src="workspace.js?v=1"></script>
 </body>
 </html>
