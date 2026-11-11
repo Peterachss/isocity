@@ -18,9 +18,9 @@ window.ISOCITY_DATA = (() => {
     },
     autumn: {
       name: 'Autumn',
-      skyNight: '#0d0a07', skyDay: '#f0dcc0', forestA: '#7a5a2c', forestB: '#725428',
-      grassA: '#b39a5c', grassB: '#ab9255', park: '#9fae62', waterA: '#4a8590', waterB: '#437b86',
-      road: '#4c4a48', curb: '#b8ab92',
+      skyNight: '#07110c', skyDay: '#1f3b2a', forestA: '#2a4a28', forestB: '#274524',
+      grassA: '#7da663', grassB: '#74a05a', park: '#86b65f', waterA: '#295b60', waterB: '#26565b',
+      road: '#454c54', curb: '#9c9586',
       crowns: [['#2c5a2b', '#3f7a35'], ['#3a6b2e', '#5a8f3c'], ['#c98a14', '#e8b832'], ['#d9a21f', '#f0c64a'], ['#b8601a', '#e08a2c'], ['#8a9a2a', '#b7b93a']],
     },
     sakura: {

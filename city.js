@@ -32,11 +32,11 @@
   const audio = new D.CityAudio();
 
   // Persistent state
-  let themeId = 'dark';
+  let themeId = 'autumn';
   let timeMode = 'auto'; // 'auto' | 'realtime' | 'paused'
   let simSpeed = 1;
   let weather = 'clear'; // 'clear' | 'rain' | 'fog' | 'overcast'
-  let darkMode = true;
+  let darkMode = false;
   let cbMode = false;
   let largeText = false;
   let ghostMode = false;
@@ -101,7 +101,7 @@
   const isBuilding = (t) => !!t && t !== 'road' && t !== 'bridge' && t !== 'water' && t !== 'forest';
   const makeLevels = () => Array.from({ length: N }, () => Array(N).fill(1));
   const makePins = () => Array.from({ length: N }, () => Array(N).fill(null));
-  const curTheme = () => D.THEMES[themeId] || D.THEMES.dark;
+  const curTheme = () => D.THEMES[themeId] || D.THEMES.autumn;
   const fmt = (n) => Math.round(n).toLocaleString('en-US');
 
   function allItems() {
@@ -306,11 +306,11 @@
       ? d.pins.map((row) => Array.isArray(row) ? row.map((v) => (v && typeof v === 'string') ? v : null) : Array(N).fill(null))
       : makePins();
 
-    themeId = D.THEMES[d.themeId] ? d.themeId : 'dark';
+    themeId = D.THEMES[d.themeId] ? d.themeId : 'autumn';
     timeMode = d.timeMode || 'auto';
     simSpeed = Number.isFinite(d.simSpeed) ? d.simSpeed : 1;
     weather = d.weather || 'clear';
-    darkMode = d.darkMode !== false; cbMode = !!d.cbMode; largeText = !!d.largeText; ghostMode = !!d.ghostMode;
+    darkMode = !!d.darkMode; cbMode = !!d.cbMode; largeText = !!d.largeText; ghostMode = !!d.ghostMode;
     showAgents = d.showAgents !== false; showLabels = d.showLabels !== false; showHeatmap = d.showHeatmap !== false;
     money = Number.isFinite(d.money) ? d.money : 5000;
     dayCount = Number.isFinite(d.dayCount) ? d.dayCount : 1;
@@ -2547,7 +2547,7 @@
   };
   $('resetBtn').onclick = () => {
     customItems.length = 0; Object.keys(overrides).forEach((k) => delete overrides[k]);
-    starter(); themeId = 'dark'; money = 5000; dayCount = 1; hour = 17.4;
+    starter(); themeId = 'autumn'; money = 5000; dayCount = 1; hour = 17.4;
     worldDirty = true; recompute(); syncBodyPrefs(); rebuildCrownSprites(); renderInspect(); saveNow(); center(true);
     setPop('citiesPop', 'citiesBtn', false);
   };
@@ -3034,11 +3034,11 @@
 
   resize();
   if (!load()) starter();
-  // One-time switch to the all-black look for returning visitors.
+  // One-time switch back to the classic look (cream cards, deep teal, autumn trees).
   try {
-    if (!localStorage.getItem('isocity-black-ui-v1')) {
-      localStorage.setItem('isocity-black-ui-v1', '1');
-      darkMode = true; themeId = 'dark';
+    if (!localStorage.getItem('isocity-classic-look-v1')) {
+      localStorage.setItem('isocity-classic-look-v1', '1');
+      darkMode = false; themeId = 'autumn';
     }
   } catch (e) { /* storage unavailable */ }
   document.documentElement.dataset.mode = appMode;
