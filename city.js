@@ -1194,8 +1194,8 @@
   (() => {
     const vc = vigCanvas.getContext('2d');
     const g = vc.createRadialGradient(128, 128, 76, 128, 128, 192);
-    g.addColorStop(0, 'rgba(8,14,34,0)');
-    g.addColorStop(1, 'rgba(8,14,34,1)');
+    g.addColorStop(0, 'rgba(22,20,9,0)');
+    g.addColorStop(1, 'rgba(22,20,9,1)');
     vc.fillStyle = g; vc.fillRect(0, 0, 256, 256);
   })();
 
@@ -1529,9 +1529,9 @@
       const na = (1 - L) * (weather === 'overcast' ? 0.74 : 0.68);
       const a = wa + na * (1 - wa);
       if (a > 0.004) {
-        const r = Math.round((255 * wa + 10 * na * (1 - wa)) / a);
-        const g = Math.round((155 * wa + 18 * na * (1 - wa)) / a);
-        const b = Math.round((45 * wa + 40 * na * (1 - wa)) / a);
+        const r = Math.round((255 * wa + 26 * na * (1 - wa)) / a);
+        const g = Math.round((155 * wa + 22 * na * (1 - wa)) / a);
+        const b = Math.round((45 * wa + 10 * na * (1 - wa)) / a);
         ctx.fillStyle = `rgba(${r},${g},${b},${a.toFixed(3)})`;
         ctx.fillRect(0, 0, W, H);
       }

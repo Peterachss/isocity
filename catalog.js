@@ -5,7 +5,7 @@ window.ISOCITY_DATA = (() => {
     dark: {
       name: 'Dark',
       skyNight: '#14180f', skyDay: '#2a3322', forestA: '#414833', forestB: '#3b4230',
-      grassA: '#656D4A', grassB: '#5f6744', park: '#7b8458', waterA: '#4d5f57', waterB: '#47584f',
+      grassA: '#656D4A', grassB: '#5f6744', park: '#7b8458', waterA: '#566650', waterB: '#50604a',
       road: '#4a4337', curb: '#A68A64',
       crowns: [['#414833', '#656D4A'], ['#565e3f', '#7b8458'], ['#7F4F24', '#936639'], ['#656D4A', '#A4AC86']],
     },
