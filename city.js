@@ -23,7 +23,7 @@
   let grid, money, tool = 'road';
   let cam = { x: 0, y: 0, z: 1 };
   let hover = null, cars = [];
-  let hour = 12, auto = false, tick = 0, stats = {};
+  let hour = 12, auto = false, stats = {};
   let dpr = 1, W = 0, H = 0;
   const rnd = (a, b) => a + Math.random() * (b - a);
   const inb = (x, y) => x >= 0 && y >= 0 && x < N && y < N;
@@ -121,12 +121,10 @@
     $('sJobs').textContent = fmt(stats.jobs);
     $('sHappy').textContent = stats.happy + '%';
     $('sNet').textContent = (stats.net >= 0 ? '+' : '') + fmt(stats.net);
-    for (const id of ['tools']) {
-      document.querySelectorAll('.tool').forEach((b) => {
-        const c = TYPES[b.dataset.tool].cost;
-        b.style.opacity = c > money ? '0.45' : '1';
-      });
-    }
+    $('undoBtn').disabled = history.length === 0;
+    document.querySelectorAll('.tool').forEach((b) => {
+      b.dataset.unaffordable = String(TYPES[b.dataset.tool].cost > money);
+    });
   }
 
   // ---------- cars ----------
@@ -356,8 +354,11 @@
   // Keep one sprite per tile. Camera translation never invalidates scenery.
   // Cap raster density to bound memory on high-DPI displays at maximum zoom.
   const tileSprites = new Map();
+  let spriteWork = 0;
+  const spriteQueue = new Set();
   function drawCachedTile(x, y, t, L, hs) {
     if (hs !== 1 || t === 'road' || (TYPES[t]?.h && !connected(x, y))) {
+      spriteQueue.delete(x * N + y);
       drawTile(x, y, t, L, hs);
       return;
     }
@@ -365,11 +366,23 @@
     const key = x * N + y;
     const signature = `${t}|${L}|${warm}|${scale}`;
     let sprite = tileSprites.get(key);
-    if (!sprite || sprite.signature !== signature) {
+    // Existing scenery can catch up to a lighting change over a few frames.
+    // Edits are always immediate; only palette refreshes share this budget.
+    const needsRefresh = !sprite || sprite.signature !== signature;
+    if (needsRefresh) spriteQueue.add(key);
+    else spriteQueue.delete(key);
+    if (needsRefresh && (!sprite || sprite.type !== t || sprite.scale !== scale || (spriteWork < 2 && spriteQueue.values().next().value === key))) {
+      const started = performance.now();
       const top = TYPES[t]?.h ? TYPES[t].h + 12 : 36;
       const surface = sprite?.surface || document.createElement('canvas');
-      surface.width = Math.ceil(68 * scale);
-      surface.height = Math.ceil((top + 34) * scale);
+      const width = Math.ceil(68 * scale), height = Math.ceil((top + 34) * scale);
+      if (surface.width !== width || surface.height !== height) {
+        surface.width = width; surface.height = height;
+      } else {
+        const tileCtx = surface.getContext('2d');
+        tileCtx.setTransform(1, 0, 0, 1, 0, 0);
+        tileCtx.clearRect(0, 0, width, height);
+      }
       const sceneCtx = ctx, sceneCam = cam;
       try {
         ctx = surface.getContext('2d');
@@ -380,8 +393,10 @@
         ctx = sceneCtx;
         cam = sceneCam;
       }
-      sprite = { surface, signature, top, scale };
+      sprite = { surface, signature, top, scale, type: t };
       tileSprites.set(key, sprite);
+      spriteWork += performance.now() - started;
+      spriteQueue.delete(key);
     }
     const [sx, sy] = P(x, y);
     ctx.drawImage(sprite.surface, sx - 34 * cam.z, sy - sprite.top * cam.z,
@@ -389,6 +404,12 @@
   }
 
   function draw() {
+    spriteWork = 0;
+    // Drop offscreen work so a camera move cannot block the refresh queue.
+    for (const key of spriteQueue) {
+      const [x, y] = P(Math.floor(key / N) + 0.5, key % N + 0.5);
+      if (x < -90 * cam.z - 40 || x > W + 90 * cam.z + 40 || y < -220 * cam.z || y > H + 60 * cam.z) spriteQueue.delete(key);
+    }
     const L = Math.round(daylight(hour) * 40) / 40;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     warm = Math.max(0, 1 - Math.abs(hour - 17.6) / 2.2, 1 - Math.abs(hour - 6.4) / 1.6);
@@ -510,6 +531,7 @@
     canvas.setPointerCapture(e.pointerId);
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     $('hint').dataset.hidden = 'true';
+    zoomTarget = null;
     if (ptrs.size === 2) { drag = { pinch: true, d: dist() }; return; }
     const panning = e.button === 2 || e.button === 1 || e.shiftKey || tool === 'pan';
     if (panning) { drag = { pan: true, sx: e.clientX, sy: e.clientY, cx: cam.x, cy: cam.y }; canvas.style.cursor = 'grabbing'; return; }
@@ -545,19 +567,41 @@
   canvas.addEventListener('pointerleave', () => { hover = null; $('tip').hidden = true; });
 
   function zoomAt(f, mx = W / 2, my = H / 2) {
-    const nz = Math.max(0.5, Math.min(2.4, cam.z * f));
+    const nz = Math.max(0.15, Math.min(2.4, cam.z * f));
     const k = nz / cam.z;
     cam.x = mx - (mx - cam.x) * k; cam.y = my - (my - cam.y) * k; cam.z = nz;
   }
-  canvas.addEventListener('wheel', (e) => { e.preventDefault(); zoomAt(e.deltaY < 0 ? 1.1 : 1 / 1.1, e.clientX, e.clientY); }, { passive: false });
-  $('zoomIn').onclick = () => zoomAt(1.2);
-  $('zoomOut').onclick = () => zoomAt(1 / 1.2);
+  let zoomTarget = null, zoomAnchor = [0, 0];
+  function requestZoom(f, mx = W / 2, my = H / 2) {
+    if (reduceMotion) return zoomAt(f, mx, my);
+    zoomTarget = Math.max(0.15, Math.min(2.4, (zoomTarget ?? cam.z) * f));
+    zoomAnchor = [mx, my];
+  }
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const pixels = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? H : 1);
+    requestZoom(Math.exp(-Math.max(-240, Math.min(240, pixels)) * 0.002), e.clientX, e.clientY);
+  }, { passive: false });
+  $('zoomIn').onclick = () => requestZoom(1.2);
+  $('zoomOut').onclick = () => requestZoom(1 / 1.2);
+  $('fitBtn').onclick = center;
 
   function setTool(t) {
     tool = t;
     document.querySelectorAll('.tool').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tool === t)));
     canvas.style.cursor = t === 'pan' ? 'grab' : 'crosshair';
   }
+  const toolIcons = {
+    pan: '<path d="M12 3v18M3 12h18m-12-6 3-3 3 3m-6 12 3 3 3-3M6 9l-3 3 3 3m12-6 3 3-3 3"/>',
+    road: '<path d="m7 3-3 18M17 3l3 18M12 3v3m0 4v4m0 4v3"/>',
+    house: '<path d="m3 11 9-8 9 8M5 10v11h14V10M10 21v-7h4v7"/>',
+    apt: '<path d="M5 21V3h14v18ZM9 7h1m4 0h1m-6 4h1m4 0h1m-6 4h1m4 0h1M10 21v-3h4v3"/>',
+    shop: '<path d="M4 10v11h16V10M3 10l2-7h14l2 7ZM9 21v-7h6v7M8 3l-1 7m9-7 1 7"/>',
+    office: '<path d="M6 21V3h12v18ZM10 7h4m-4 4h4m-4 4h4m-4 6v-3h4v3"/>',
+    park: '<path d="M7 14V9m-3 5h16M5 18h14m-12-4v7m10-7v7"/><path d="M7 9a3 3 0 1 1 0-6 3 3 0 0 1 0 6Z"/>',
+    forest: '<path d="m12 2-6 8h3l-5 7h16l-5-7h3ZM12 17v5"/>',
+    bulldoze: '<path d="m4 14 8-10 8 7-8 10H7Zm4 3 8-10M12 21h9"/>'
+  };
   const toolsEl = $('tools');
   ORDER.forEach((id, i) => {
     const d = TYPES[id];
@@ -565,7 +609,7 @@
     b.className = 'tool'; b.type = 'button'; b.dataset.tool = id;
     b.setAttribute('aria-pressed', 'false');
     b.setAttribute('aria-label', `${d.name}${d.cost ? ', costs ' + d.cost : ''}, shortcut ${i + 1}`);
-    b.innerHTML = `<span class="swatch" style="background:${d.color}"></span><span class="name">${d.name}</span><span class="cost">${d.cost ? '$' + d.cost : ''}</span>`;
+    b.innerHTML = `<svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true">${toolIcons[id]}</svg><span class="name">${d.name}</span><span class="cost">${d.cost ? '$' + d.cost : ''}</span><kbd aria-hidden="true">${i + 1}</kbd>`;
     b.onclick = () => setTool(id);
     toolsEl.appendChild(b);
   });
@@ -574,8 +618,8 @@
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); return undo(); }
     const n = Number(e.key);
     if (n >= 1 && n <= ORDER.length) setTool(ORDER[n - 1]);
-    if (e.key === '+' || e.key === '=') zoomAt(1.2);
-    if (e.key === '-') zoomAt(1 / 1.2);
+    if (e.key === '+' || e.key === '=') requestZoom(1.2);
+    if (e.key === '-') requestZoom(1 / 1.2);
   });
 
   $('clock').addEventListener('input', (e) => { hour = Number(e.target.value); auto = false; $('autoBtn').setAttribute('aria-pressed', 'false'); });
@@ -589,19 +633,24 @@
       return;
     }
     clearTimeout(resetArmed); resetArmed = 0; b.textContent = 'New city';
-    history.length = 0; anims.clear(); tileSprites.clear(); starter(); recompute(); save(); center();
+    history.length = 0; anims.clear(); tileSprites.clear(); spriteQueue.clear(); starter(); recompute(); save(); center();
   };
   $('undoBtn').onclick = undo;
 
   // ---------- loop ----------
   function resize() {
     dpr = Math.min(2, devicePixelRatio || 1);
+    cam.x += (innerWidth - W) / 2; cam.y += (innerHeight - H) / 2;
     W = innerWidth; H = innerHeight;
     canvas.width = W * dpr; canvas.height = H * dpr;
   }
   function center() {
-    cam.z = Math.max(0.55, Math.min(1.1, W / (N * TW) * 1.15, H / (N * TH + 120) * 1.15));
-    cam.x = W / 2; cam.y = H / 2 - (N * TH / 2) * cam.z;
+    zoomTarget = null;
+    const mobile = W <= 640;
+    const viewW = W - (mobile ? 24 : 260), viewH = H - (mobile ? 340 : 160);
+    cam.z = Math.max(0.15, Math.min(1.1, viewW / (N * TW), viewH / (N * TH + 120)));
+    cam.x = W / 2 + (mobile ? 0 : 110);
+    cam.y = 100 + viewH / 2 - (N * TH / 2) * cam.z;
   }
   addEventListener('resize', () => { resize(); });
 
@@ -609,6 +658,13 @@
   let last = performance.now(), acc = 0, lastLabel = '';
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    if (zoomTarget !== null) {
+      const next = cam.z + (zoomTarget - cam.z) * (1 - Math.exp(-18 * dt));
+      const settled = Math.abs(zoomTarget - next) < 0.001;
+      zoomAt((settled ? zoomTarget : next) / cam.z, ...zoomAnchor);
+      if (settled) zoomTarget = null;
+      hover = null;
+    }
     if (auto) hour = (hour + dt * 0.35) % 24;
     const hh = Math.floor(hour), mm = Math.floor((hour % 1) * 60);
     const label = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;

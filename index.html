@@ -14,6 +14,10 @@
   <main class="app">
     <canvas id="stage" aria-label="Isometric city map. Click or drag to build."></canvas>
 
+    <div class="brand" aria-label="Isocity">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="m16 3 13 7v12l-13 7L3 22V10Zm0 14L3 10m13 7 13-7M16 17v12"/></svg>
+      <span>Isocity</span>
+    </div>
     <header class="stats" aria-label="City statistics">
       <div class="stat"><span class="stat-label">Funds</span><span class="stat-value" id="sMoney">0</span></div>
       <div class="stat"><span class="stat-label">Residents</span><span class="stat-value" id="sPop">0</span></div>
@@ -33,7 +37,8 @@
     <section class="actions" aria-label="City actions">
       <button id="zoomIn" class="chip icon" type="button" aria-label="Zoom in">+</button>
       <button id="zoomOut" class="chip icon" type="button" aria-label="Zoom out">&minus;</button>
-      <button id="undoBtn" class="chip" type="button" aria-label="Undo last change">Undo</button>
+      <button id="fitBtn" class="chip" type="button" aria-label="Fit city in view">Fit</button>
+      <button id="undoBtn" class="chip" disabled type="button" aria-label="Undo last change">Undo</button>
       <button id="resetBtn" class="chip" type="button">New city</button>
     </section>
 
