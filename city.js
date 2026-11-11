@@ -1086,9 +1086,11 @@
   function drawHeat(now) {
     if (!showHeat) return;
     for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
-      const rp = repos[x][y];
-      if (!rp || !isBuilding(grid[x][y])) continue;
-      const h = heatOf(getRepo(rp));
+      const id = pins[x][y];
+      if (!id || !isBuilding(grid[x][y])) continue;
+      const item = getItem(id);
+      if (!item || item.kind !== 'github') continue;
+      const h = heatOf(item);
       if (h <= 0) continue;
       const cx = px(x + 0.5, y + 0.5), cy = py(x + 0.5, y + 0.5);
       if (cx < -120 || cx > W + 120 || cy < -80 || cy > H + 80) continue;
