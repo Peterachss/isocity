@@ -20,7 +20,7 @@ Live demo: https://peterachss.github.io/isocity/
 ## Run locally
 
 ```bash
-node server.mjs
+node scripts/server.mjs
 ```
 
 Then open http://localhost:4173. Any static file server works.
