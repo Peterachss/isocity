@@ -224,7 +224,7 @@ html, body { height: 100%; overflow: hidden; background: #162b1f; }
   .time .chip { display: none; }
   .actions { gap: 3px; padding: 5px; }
   .actions .chip { padding: 8px 8px; font-size: 12px; }
-  .actions .chip.icon, #soundBtn, #citiesBtn { display: none; }
+  .actions .chip.icon, #soundBtn, #citiesBtn, #rotBtn { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

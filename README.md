@@ -6,10 +6,10 @@ Live demo: https://peterachss.github.io/isocity/
 
 ## Play
 
-- Pick a tool on the left (keys 1 to 9, B for Bulldoze, P for Pan, R for Road) and click or drag on the map.
+- Pick a tool on the left (keys 1 to 9, U for Upgrade, B for Bulldoze, P for Pan) and click or drag on the map.
 - Lay roads over water to build bridges. Homes and parks beside water earn a waterfront bonus.
-- Place Parks, Town Plazas, Clinics, and Schools to raise happiness and help nearby buildings upgrade from Level 1 to Level 3.
-- Use the speed toggle (or Space) to pause or run at 2x speed, and use Saves to store 3 local slots, export/import JSON, or save a PNG snapshot.
+- Place Parks, Town Plazas, Clinics, Schools, and a Ferris Wheel to raise happiness and help nearby buildings upgrade from Level 1 to Level 3.
+- Press R or Q (or Rotate) to turn the camera 90 degrees, Space (or the speed toggle) to pause or run at 2x speed, and Saves for 3 local slots, JSON export/import, or a PNG snapshot.
 - Forest tiles clear with Bulldoze or get built over.
 - Buildings only count when they touch a road. Unconnected ones show a red marker.
 - Residents need jobs. Parks raise happiness. Roads, parks and buildings cost upkeep.
