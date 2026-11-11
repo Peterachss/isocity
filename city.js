@@ -2409,6 +2409,9 @@
     $('acctPersonal').setAttribute('aria-pressed', String(!school));
     $('acctSchool').setAttribute('aria-pressed', String(school));
     $('acctBtn').textContent = school ? 'School' : 'Personal';
+    $('inspAcctP').setAttribute('aria-pressed', String(!school));
+    $('inspAcctS').setAttribute('aria-pressed', String(school));
+    window.isoAcctIdx = school ? 1 : 0;
     $('acctNote').textContent = school
       ? 'School account opens as your second signed-in Google account. Calendar stays personal.'
       : 'Calendar is personal only.';
@@ -2420,4 +2423,27 @@
   $('acctBtn').onclick = () => apply($('acctSchool').getAttribute('aria-pressed') === 'true' ? 'personal' : 'school');
   $('acctSchool').onclick = () => apply('school');
   apply(saved);
+  $('inspAcctP').onclick = () => apply('personal');
+  $('inspAcctS').onclick = () => apply('school');
+
+  // Google Docs/Slides/Gmail/Drive links follow the chosen account; Calendar stays personal.
+  const GOOGLE_HOST = /^(docs|mail|drive)\.google\.com$/;
+  function acctize(url, u) {
+    try {
+      const x = new URL(url);
+      if (!GOOGLE_HOST.test(x.host)) return url;
+      if (/\/u\/\d+\//.test(x.pathname)) x.pathname = x.pathname.replace(/\/u\/\d+\//, `/u/${u}/`);
+      else x.searchParams.set('authuser', u);
+      return x.toString();
+    } catch (e) { return url; }
+  }
+  const card = $('inspectCard');
+  card.addEventListener('click', (e) => {
+    const a = e.target.closest && e.target.closest('a[href]');
+    if (a) a.href = acctize(a.href, window.isoAcctIdx || 0);
+  }, true);
+  const web = $('inspWeb');
+  const sync = () => { $('inspAcct').hidden = !GOOGLE_HOST.test((web.href && web.href !== '#' ? new URL(web.href, location.href).host : '')); };
+  new MutationObserver(sync).observe(web, { attributes: true, attributeFilter: ['href', 'hidden'] });
+  sync();
 })();
