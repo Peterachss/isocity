@@ -732,3 +732,10 @@ html, body { height: 100%; overflow: hidden; background: #162b1f; }
 :root[data-dark="true"] .chip.tiny { font-size: 12.5px; }
 :root[data-dark="true"] .insp-body, :root[data-dark="true"] .detail-sub { font-size: 13px; line-height: 1.45; }
 :root[data-dark="true"] .stat-label { font-size: 12px; letter-spacing: 0.02em; }
+
+
+/* quick account switch + app launcher */
+.launch-pop { position: fixed; right: 14px; bottom: 84px; z-index: 6; width: 250px; max-width: calc(100vw - 28px); padding: 12px; border-radius: 16px; background: var(--surface); color: var(--ink); box-shadow: 0 12px 32px rgba(8, 16, 12, 0.35); display: none; gap: 8px; }
+.launch-pop[data-open="true"] { display: grid; }
+.launch-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.launch-grid .chip { justify-content: center; text-align: center; text-decoration: none; }

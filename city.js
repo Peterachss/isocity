@@ -67,6 +67,8 @@
   const overrides = {};
   const bookmarks = {};
   const accountPrefs = {};
+  let globalAcct = 0;
+  try { globalAcct = localStorage.getItem('isocity-acct') === '1' ? 1 : 0; } catch (e) { /* ignore */ }
   let timetable = D.DEFAULT_TIMETABLE.map((r) => ({ ...r }));
   let deadlines = [{ title: 'Maths IA draft review', due: 'Fri', place: 'seqta' }];
   let quickNoteText = 'Workspace notes:\n- Check open PRs\n- Review Maths IA charts\n- Focus sprint 25m';
@@ -126,8 +128,8 @@
     const base = repoMap.get(id) || googleMap.get(id) || customItems.find((c) => c.id === id) || REPOS[0];
     const merged = { ...base, ...(overrides[base.id] || {}) };
     const acctForced = FORCED_ACCT[merged.id];
-    if (merged.kind === 'google' && (acctForced !== undefined || accountPrefs[merged.id] !== undefined)) {
-      const a = acctForced !== undefined ? acctForced : accountPrefs[merged.id];
+    if (merged.kind === 'google' && (acctForced !== undefined || accountPrefs[merged.id] !== undefined || globalAcct !== 0)) {
+      const a = acctForced !== undefined ? acctForced : (accountPrefs[merged.id] !== undefined ? accountPrefs[merged.id] : globalAcct);
       merged.web = applyAccountToUrl(merged.web, a);
       merged.alt = applyAccountToUrl(merged.alt, a);
       if (Array.isArray(merged.shortcuts)) {
@@ -1889,7 +1891,7 @@
     $('accountRow').hidden = !isGoogleAcct;
     if (isGoogleAcct) {
       const forced = FORCED_ACCT[item.id];
-      const curA = String(forced !== undefined ? forced : (accountPrefs[item.id] ?? 0));
+      const curA = String(forced !== undefined ? forced : (accountPrefs[item.id] ?? globalAcct));
       $('acctNote').textContent = item.id === 'google-chat' ? 'Chat always uses your school account' : item.id === 'google-calendar' ? 'Calendar is personal only' : '';
       document.querySelectorAll('.acct-btn').forEach((b) => {
         b.setAttribute('aria-pressed', String(b.dataset.acct === curA));
@@ -3026,6 +3028,46 @@
       a.py = a.oy + Math.cos(now * 0.0005 + a.phase * 1.7) * amp * 0.85;
     }
   }
+
+
+  // ---------- quick account switch + app launcher (bottom bar) ----------
+  const LAUNCH = [['google-slides', 'Slides'], ['google-docs', 'Docs'], ['gmail', 'Gmail'], ['google-calendar', 'Calendar'], ['seqta', 'SEQTA']];
+  function syncAcctUI() {
+    const school = globalAcct === 1;
+    $('acctBtn').textContent = school ? 'School' : 'Personal';
+    $('acctBtn').setAttribute('aria-pressed', String(school));
+    $('acctBtn').title = school ? 'School account (Slides, Docs, Gmail). Calendar stays personal, Chat always uses school.' : 'Personal account (Slides, Docs, Gmail). Chat always uses school.';
+    $('launchNote').textContent = school ? 'Opening with your school account. Calendar stays personal.' : 'Opening with your personal account.';
+    $('launchGrid').innerHTML = '';
+    for (const [id, label] of LAUNCH) {
+      const it = getItem(id);
+      const a = document.createElement('a');
+      a.className = 'chip small link-btn';
+      a.textContent = label; a.href = it.web || '#'; a.target = '_blank'; a.rel = 'noopener noreferrer';
+      $('launchGrid').appendChild(a);
+    }
+  }
+  $('acctBtn').onclick = () => {
+    globalAcct = globalAcct === 1 ? 0 : 1;
+    for (const k of Object.keys(accountPrefs)) delete accountPrefs[k];
+    try { localStorage.setItem('isocity-acct', String(globalAcct)); } catch (e) { /* ignore */ }
+    syncAcctUI(); scheduleSave();
+    if (selectedTile) renderInspect();
+    audio.sfx('tap');
+  };
+  $('launchBtn').onclick = (e) => {
+    e.stopPropagation();
+    const open = $('launchPop').dataset.open !== 'true';
+    $('launchPop').dataset.open = String(open);
+    $('launchBtn').setAttribute('aria-expanded', String(open));
+    if (open) syncAcctUI();
+  };
+  addEventListener('pointerdown', (e) => {
+    if ($('launchPop').dataset.open === 'true' && !$('launchPop').contains(e.target) && e.target !== $('launchBtn')) {
+      $('launchPop').dataset.open = 'false'; $('launchBtn').setAttribute('aria-expanded', 'false');
+    }
+  });
+  syncAcctUI();
 
   // Register offline PWA service worker
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
