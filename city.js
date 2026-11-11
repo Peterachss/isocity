@@ -896,7 +896,7 @@
     if (!t || t === 'water') return;
     if (t === 'forest') {
       const sd = x * 17 + y * 31;
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < 5; i++) {
         const [a, b] = FOREST_SPOTS[i];
         const sc = 0.8 + ((Math.imul(sd + i * 331, 2246822519) >>> 24) % 4) * 0.1;
         const cs = Math.imul(sd + i * 977, 2654435761) >>> 20;

@@ -4,10 +4,10 @@ window.ISOCITY_DATA = (() => {
   const THEMES = {
     dark: {
       name: 'Dark',
-      skyNight: '#14180f', skyDay: '#2a3322', forestA: '#414833', forestB: '#3b4230',
+      skyNight: '#14180f', skyDay: '#2a3322', forestA: '#2a4a28', forestB: '#274524',
       grassA: '#656D4A', grassB: '#5f6744', park: '#7b8458', waterA: '#566650', waterB: '#50604a',
       road: '#4a4337', curb: '#A68A64',
-      crowns: [['#414833', '#656D4A'], ['#565e3f', '#7b8458'], ['#7F4F24', '#936639'], ['#656D4A', '#A4AC86']],
+      crowns: [['#2c5a2b', '#3f7a35'], ['#3a6b2e', '#5a8f3c'], ['#c98a14', '#e8b832'], ['#d9a21f', '#f0c64a'], ['#b8601a', '#e08a2c'], ['#8a9a2a', '#b7b93a']],
     },
     forest: {
       name: 'Forest',
@@ -21,7 +21,7 @@ window.ISOCITY_DATA = (() => {
       skyNight: '#0d0a07', skyDay: '#f0dcc0', forestA: '#7a5a2c', forestB: '#725428',
       grassA: '#b39a5c', grassB: '#ab9255', park: '#9fae62', waterA: '#4a8590', waterB: '#437b86',
       road: '#4c4a48', curb: '#b8ab92',
-      crowns: [['#9a5a1a', '#d98a2c'], ['#b3701a', '#e8b043'], ['#6d7a24', '#a3b537'], ['#8a3f18', '#c9672a']],
+      crowns: [['#2c5a2b', '#3f7a35'], ['#3a6b2e', '#5a8f3c'], ['#c98a14', '#e8b832'], ['#d9a21f', '#f0c64a'], ['#b8601a', '#e08a2c'], ['#8a9a2a', '#b7b93a']],
     },
     sakura: {
       name: 'Sakura',
