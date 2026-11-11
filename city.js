@@ -213,7 +213,7 @@
   let activeFilter = 'all';
   let cars = [], walkers = [], boats = [], bots = [], wheelsList = [], millsList = [], beaconsList = [], housesList = [], waterCells = [];
   let labelHits = [];
-  let hour = 17.4;
+  let hour = 13.0;
   let dpr = 1, W = 0, H = 0;
 
   const LIGHT_MODES = [
@@ -221,7 +221,7 @@
     { label: 'Day', hour: 13.0 },
     { label: 'Night', hour: 22.4 },
   ];
-  let lightIdx = 0;
+  let lightIdx = Math.max(0, LIGHT_MODES.findIndex((m) => Math.abs(m.hour - hour) < 1));
 
   const BOT_COLORS = ['#0f766e', '#0284c7', '#d97706'];
   const rnd = (a, b) => a + Math.random() * (b - a);
@@ -413,7 +413,7 @@
     themeId = THEMES[d.themeId] ? d.themeId : 'verdant';
     showAgents = d.showAgents !== false;
     showLabels = d.showLabels !== false;
-    hour = Number.isFinite(d.hour) ? d.hour : 17.4;
+    hour = Number.isFinite(d.hour) ? d.hour : 13.0;
     lightIdx = LIGHT_MODES.findIndex((m) => Math.abs(m.hour - hour) < 1);
     if (lightIdx < 0) lightIdx = 0;
 
@@ -850,7 +850,7 @@
     if (!t || t === 'water') return;
     if (t === 'forest') {
       const sd = x * 17 + y * 31;
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 3; i++) {
         const [a, b] = FOREST_SPOTS[i];
         const sc = 0.8 + ((Math.imul(sd + i * 331, 2246822519) >>> 24) % 4) * 0.1;
         const cs = Math.imul(sd + i * 977, 2654435761) >>> 20;
@@ -899,6 +899,7 @@
       : t === 'clinic' ? '#f2efe8'
       : t === 'school' ? '#c87c5d'
       : d.color;
+    const wallG = curTheme().vines && t !== 'house' ? mix(wall, '#8fc48a', 0.38) : wall;
     const roof = t === 'house' ? red
       : t === 'apt' ? '#a2432f'
       : t === 'shop' ? red
@@ -907,7 +908,7 @@
       : '#4b6c8a';
     const H = Math.max(1, bldHeight(t, lv));
     if (!skipGround) castShadow(x + i, y + i, x + 1 - i, y + 1 - i, H);
-    box(x + i, y + i, x + 1 - i, y + 1 - i, 0, H, wall, L, { roof, windows: seed, glass: t === 'office' });
+    box(x + i, y + i, x + 1 - i, y + 1 - i, 0, H, wallG, L, { roof, windows: seed, glass: t === 'office' });
 
     if (curTheme().vines && (t === 'apt' || t === 'office' || t === 'school' || t === 'clinic')) drawVines(x, y, i, H, seed, L);
     if (t === 'shop') {
@@ -941,14 +942,14 @@
   }
 
   function drawCar(c, L, headlightsOnly = false) {
-    const s = 0.12;
+    const s = 0.17;
     const dx = c.tx - c.fx, dy = c.ty - c.fy;
     const ox = -dy * 0.16, oy = dx * 0.16;
     const x = c.px + 0.5 + ox, y = c.py + 0.5 + oy;
     const z0 = grid[Math.round(c.px)]?.[Math.round(c.py)] === 'bridge' ? 2 : 0;
     if (!headlightsOnly) {
-      const lx = dx ? 0.16 : s, ly = dy ? 0.16 : s;
-      box(x - lx, y - ly, x + lx, y + ly, z0, z0 + 7, c.color, L);
+      const lx = dx ? 0.24 : s, ly = dy ? 0.24 : s;
+      box(x - lx, y - ly, x + lx, y + ly, z0, z0 + 10, c.color, L);
     } else if (L < 0.5) {
       const hx = px(x + dx * 0.2, y + dy * 0.2), hy = py(x + dx * 0.2, y + dy * 0.2, z0 + 4);
       rctx.fillStyle = 'rgba(255,230,160,0.55)';
@@ -964,9 +965,9 @@
     const sx = px(x, y), sy = py(x, y, z0);
     const sz = rcam.z;
     rctx.fillStyle = w.color;
-    rctx.fillRect(sx - 1.5 * sz, sy - 5 * sz, 3 * sz, 5 * sz);
+    rctx.fillRect(sx - 2.4 * sz, sy - 8 * sz, 4.8 * sz, 8 * sz);
     rctx.fillStyle = '#e7c6a5';
-    rctx.fillRect(sx - 1 * sz, sy - 7 * sz, 2 * sz, 2 * sz);
+    rctx.fillRect(sx - 1.7 * sz, sy - 11.5 * sz, 3.4 * sz, 3.4 * sz);
   }
 
   function drawBot(b, now, orbit = false) {
@@ -2398,7 +2399,7 @@
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
   }
   function center(animateMove = false) {
-    const tz = Math.max(0.45, Math.min(0.95, W / (N * TW) * 1.12, H / (N * TH + 150) * 1.12));
+    const tz = Math.max(0.8, Math.min(1.25, W / (N * TW) * 2.1, H / (N * TH + 150) * 2.1));
     const tx = W / 2, ty = H / 2 - (N * TH / 2) * tz + 26;
     if (!animateMove || reduceMotion) { cam.x = tx; cam.y = ty; cam.z = tz; camAnim = null; return; }
     camAnim = { sx: cam.x, sy: cam.y, sz: cam.z, tx, ty, tz, start: performance.now(), dur: 360 };
