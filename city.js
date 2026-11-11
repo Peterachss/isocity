@@ -810,14 +810,11 @@
       c.width = SPR_W * SPR_S; c.height = SPR_H * SPR_S;
       const sc = c.getContext('2d');
       sc.setTransform(SPR_S, 0, 0, SPR_S, 0, 0);
-      const R = 9.5;
+      const R = 10;
       sc.fillStyle = dark;
-      sc.beginPath(); sc.arc(SPR_CX - 3, SPR_CY + 2, R * 0.75, 0, 7); sc.fill();
-      sc.beginPath(); sc.arc(SPR_CX + 3.5, SPR_CY + 2, R * 0.72, 0, 7); sc.fill();
-      sc.beginPath(); sc.arc(SPR_CX, SPR_CY - 1, R * 0.92, 0, 7); sc.fill();
+      sc.beginPath(); sc.arc(SPR_CX, SPR_CY, R, 0, 7); sc.fill();
       sc.fillStyle = light;
-      sc.beginPath(); sc.arc(SPR_CX - 2.5, SPR_CY - 3.5, R * 0.62, 0, 7); sc.fill();
-      sc.beginPath(); sc.arc(SPR_CX + 2, SPR_CY - 2, R * 0.42, 0, 7); sc.fill();
+      sc.beginPath(); sc.arc(SPR_CX - R * 0.25, SPR_CY - R * 0.3, R * 0.68, 0, 7); sc.fill();
       return c;
     });
   }
@@ -899,7 +896,7 @@
     if (!t || t === 'water') return;
     if (t === 'forest') {
       const sd = x * 17 + y * 31;
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 4; i++) {
         const [a, b] = FOREST_SPOTS[i];
         const sc = 0.8 + ((Math.imul(sd + i * 331, 2246822519) >>> 24) % 4) * 0.1;
         const cs = Math.imul(sd + i * 977, 2654435761) >>> 20;
