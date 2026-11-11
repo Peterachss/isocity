@@ -11,6 +11,9 @@ Live demo: https://peterachss.github.io/isocity/
 - Buildings only count when they touch a road. Unconnected ones show a red marker.
 - Residents need jobs. Parks raise happiness. Roads, parks and buildings cost upkeep.
 - Right drag, shift drag or the Pan tool moves the map. Scroll, pinch or +/- to zoom.
+- Road modes: Freehand paints immediately; Line snaps to a grid axis; Block previews a rectangular road loop. Planned roads show cost and commit on release. Escape cancels. Buildings or insufficient funds reject the entire plan.
+- Move (M): select a building or park, then an empty or forest tile. Relocation is free and undoable.
+- Photo mode (P): frame the city with pan/zoom, then Save PNG. The interface and warning markers are excluded; simulation pauses until you exit.
 - Fast build drags fill gaps between pointer samples. Ctrl+Z undoes a whole stroke; Ctrl+Shift+Z or Ctrl+Y redoes it.
 - F fits the whole city; arrow keys move the camera. Trackpad scrolling zooms proportionally and horizontal scrolling pans.
 - Pause (or Space) stops traffic, income, and the automatic day cycle while you plan.

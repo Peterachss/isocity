@@ -4,6 +4,7 @@
   const SAVE_KEY = 'isocity-v2';
 
   const TYPES = {
+    move:   { name: 'Move', cost: 0, color: '#0f766e' },
     pan:    { name: 'Pan',      cost: 0,   color: '#9aa39d' },
     road:   { name: 'Road',     cost: 10,  color: '#3b3f44' },
     house:  { name: 'House',    cost: 100, color: '#d9a273', pop: 4,  h: 22, inset: 0.2 },
@@ -14,7 +15,7 @@
     forest: { name: 'Forest',   cost: 5,   color: '#d9a21f' },
     bulldoze:{ name: 'Bulldoze',cost: 0,   color: '#b4513f' },
   };
-  const ORDER = ['pan', 'road', 'house', 'apt', 'shop', 'office', 'park', 'forest', 'bulldoze'];
+  const ORDER = ['pan', 'road', 'house', 'apt', 'shop', 'office', 'park', 'forest', 'bulldoze', 'move'];
 
   const canvas = document.getElementById('stage');
   const ctx = canvas.getContext('2d', { alpha: false });
@@ -24,6 +25,7 @@
   let cam = { x: 0, y: 0, z: 1 };
   let zoomTarget = null;
   let zoomAnchorX = 0, zoomAnchorY = 0;
+  let roadMode = 'freehand', roadDraft = null, moveSource = null, photoMode = false, photoWasPaused = false;
   let hover = null, cars = [], orphansList = [];
   let hour = 17.4, auto = false, paused = false, stats = {};
   let dpr = 1, W = 0, H = 0;
@@ -133,6 +135,7 @@
     $('sJobs').textContent = fmt(stats.jobs);
     $('sHappy').textContent = stats.happy + '%';
     $('sNet').textContent = (stats.net >= 0 ? '+' : '') + fmt(stats.net);
+    if (roadDraft) refreshRoadDraft();
     $('undoBtn').disabled = history.length === 0;
     $('redoBtn').disabled = redoHistory.length === 0;
     for (const b of toolBtns) b.dataset.unaffordable = String(TYPES[b.dataset.tool].cost > money);
@@ -632,7 +635,7 @@
       for (let i = 0; i < ov.length; i++) if (ov[i].k === 1) drawCar(ov[i].c, L, true);
     }
 
-    if (orphansList.length) {
+    if (!photoMode && orphansList.length) {
       const bob = Math.sin(now / 260) * 3;
       const rad = 9 * cam.z;
       ctx.font = `700 ${Math.round(12 * cam.z)}px system-ui`;
@@ -648,11 +651,11 @@
       }
     }
 
-    if (hover && tool !== 'pan') {
+    if (!photoMode && !roadDraft && hover && tool !== 'pan') {
       const [x, y] = hover;
       const T = TYPES[tool];
       const cur = grid[x][y];
-      const bad = tool === 'bulldoze' ? !cur
+      const bad = tool === 'move' ? (moveSource ? !!cur && cur !== 'forest' : !movable(cur)) : tool === 'bulldoze' ? !cur
         : (T.cost > money || (tool === 'forest' ? !!cur : (cur && cur !== 'forest')));
       const col = tool === 'bulldoze' ? '#b4513f' : bad ? '#b4513f' : '#0f766e';
       quadZ(x, y, x + 1, y + 1, 0, col + '88');
@@ -663,6 +666,14 @@
       ctx.closePath(); ctx.stroke();
     }
 
+    if (!photoMode && roadDraft) {
+      const color = roadDraft.blocked || roadDraft.cost > money ? '#b4513f99' : '#0f766e99';
+      for (const [x, y] of roadDraft.tiles) quadZ(x, y, x + 1, y + 1, 0, color);
+    }
+    if (!photoMode && moveSource) {
+      const [x, y] = moveSource;
+      quadZ(x, y, x + 1, y + 1, 0, '#e0c25baa');
+    }
     if (L < 0.6) {
       ctx.globalAlpha = (0.6 - L) * 0.6;
       ctx.drawImage(vigCanvas, 0, 0, W, H);
@@ -675,7 +686,7 @@
   let activeStroke = null;
   function apply(x, y, defer = false) {
     const cur = grid[x][y];
-    if (tool === 'pan') return false;
+    if (photoMode || tool === 'pan' || tool === 'move') return false;
     const cost = tool === 'bulldoze' ? 0 : TYPES[tool].cost;
     if (tool === 'bulldoze') {
       if (!cur) return false;
@@ -715,7 +726,81 @@
     if (changed) { recompute(); scheduleSave(); }
   }
 
+  const movable = t => ['house', 'apt', 'shop', 'office', 'park'].includes(t);
+  function updatePlanner() {
+    $('planner').hidden = photoMode || (tool !== 'road' && tool !== 'move');
+    $('roadModes').hidden = tool !== 'road';
+    $('planStatus').textContent = tool === 'move'
+      ? (moveSource ? 'Choose an empty or forest tile. Moving is free. Esc cancels.' : 'Select a building or park to move. Esc cancels.')
+      : roadDraft ? `${roadDraft.tiles.length} tiles | $${fmt(roadDraft.cost)}${roadDraft.blocked ? ' | Path blocked' : roadDraft.cost > money ? ' | Not enough funds' : ' | Release to build'}`
+      : roadMode === 'freehand' ? 'Drag to paint roads | $10 per tile'
+      : `Drag to preview a ${roadMode === 'line' ? 'straight road' : 'rectangular road loop'}. Release to build.`;
+  }
+  function cancelPlan() { roadDraft = null; moveSource = null; updatePlanner(); }
+  function setRoadMode(mode) {
+    roadMode = mode; roadDraft = null;
+    for (const id of ['freehand', 'line', 'block']) $('road-' + id).setAttribute('aria-pressed', String(id === mode));
+    updatePlanner();
+  }
+  function roadTilesFor(from, to, mode) {
+    let [x1, y1] = from, [x2, y2] = to;
+    if (mode === 'line') {
+      if (Math.abs(x2 - x1) >= Math.abs(y2 - y1)) y2 = y1; else x2 = x1;
+    }
+    const tiles = [];
+    for (let x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) {
+      for (let y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) {
+        if (mode === 'line' || x === x1 || x === x2 || y === y1 || y === y2) tiles.push([x, y]);
+      }
+    }
+    return tiles;
+  }
+  function refreshRoadDraft() {
+    if (!roadDraft) return;
+    roadDraft.tiles = roadTilesFor(roadDraft.from, roadDraft.to, roadMode);
+    roadDraft.cost = 0; roadDraft.blocked = false;
+    for (const [x, y] of roadDraft.tiles) {
+      const t = grid[x][y];
+      if (t === 'road') continue;
+      if (t && t !== 'forest') roadDraft.blocked = true;
+      roadDraft.cost += TYPES.road.cost;
+    }
+    updatePlanner();
+  }
+  function commitRoadDraft() {
+    if (!roadDraft) return;
+    refreshRoadDraft();
+    const plan = roadDraft; roadDraft = null; updatePlanner();
+    if (plan.blocked || plan.cost > money) return flash(plan.blocked ? 'Road blocked by a building. Adjust the path.' : 'Not enough funds for this road.');
+    activeStroke = [];
+    let changed = false;
+    for (const [x, y] of plan.tiles) changed = apply(x, y, true) || changed;
+    activeStroke = null;
+    if (changed) { recompute(); scheduleSave(); }
+  }
+  function moveAt(x, y) {
+    if (photoMode) return;
+    if (!moveSource) {
+      if (!movable(grid[x][y])) return flash('Select a building or park to move.');
+      moveSource = [x, y]; updatePlanner(); return;
+    }
+    const [sx, sy] = moveSource;
+    if (x === sx && y === sy) { cancelPlan(); return; }
+    if (grid[x][y] && grid[x][y] !== 'forest') return flash('Choose an empty or forest tile.');
+    const type = grid[sx][sy];
+    if (!movable(type)) { cancelPlan(); return; }
+    history.push([{ x: sx, y: sy, prev: type, next: null, cost: 0 },
+      { x, y, prev: grid[x][y], next: type, cost: 0 }]);
+    if (history.length > 200) history.shift();
+    redoHistory.length = 0;
+    grid[sx][sy] = null; grid[x][y] = type;
+    animate(sx, sy, true, type); animate(x, y, false);
+    dirtyCols.add(sx - sy); dirtyCols.add(x - y);
+    cancelPlan(); recompute(); scheduleSave();
+  }
+
   function undo() {
+    cancelPlan();
     activeStroke = null;
     const group = history.pop();
     if (!group) return flash('Nothing to undo');
@@ -730,6 +815,7 @@
   }
 
   function redo() {
+    cancelPlan();
     activeStroke = null;
     const group = redoHistory.at(-1);
     if (!group) return flash('Nothing to redo');
@@ -774,14 +860,22 @@
     canvas.setPointerCapture(e.pointerId);
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     $('hint').dataset.hidden = 'true';
+    if (!flashTimer) $('tip').hidden = true;
     if (ptrs.size === 2) {
       const [a, b] = [...ptrs.values()];
       drag = { pinch: true, d: dist(), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
-      activeStroke = null; hover = null;
+      activeStroke = null; hover = null; roadDraft = null; updatePlanner();
       return;
     }
-    const panning = e.button === 2 || e.button === 1 || e.shiftKey || tool === 'pan';
+    const panning = e.button === 2 || e.button === 1 || e.shiftKey || tool === 'pan' || photoMode;
     if (panning) { drag = { pan: true, sx: e.clientX, sy: e.clientY, cx: cam.x, cy: cam.y }; canvas.style.cursor = 'grabbing'; return; }
+    const tile = pick(e.clientX, e.clientY);
+    if (tool === 'move') { drag = { movePick: true }; return; }
+    if (tool === 'road' && roadMode !== 'freehand') {
+      drag = { planning: true };
+      if (tile) { roadDraft = { from: tile, to: tile }; refreshRoadDraft(); }
+      return;
+    }
     drag = { pan: false, pendingTouch: e.pointerType === 'touch', sx: e.clientX, sy: e.clientY };
     activeStroke = [];
     const t = pick(e.clientX, e.clientY);
@@ -797,6 +891,12 @@
       drag.d = nd; drag.mx = mx; drag.my = my; return;
     }
     if (drag?.pinch) return;
+    if (drag?.planning) {
+      const t = pick(e.clientX, e.clientY);
+      if (t && roadDraft) { roadDraft.to = t; refreshRoadDraft(); }
+      hover = null; return;
+    }
+    if (drag?.movePick) { hover = pick(e.clientX, e.clientY); return; }
     if (drag?.pendingTouch) {
       if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 8) return;
       drag.pendingTouch = false;
@@ -831,9 +931,17 @@
   const end = (e) => {
     ptrs.delete(e.pointerId);
     if (ptrs.size) return;
+    if (drag?.planning) {
+      const t = pick(e.clientX, e.clientY);
+      if (e.type !== 'pointercancel' && t && roadDraft) { roadDraft.to = t; commitRoadDraft(); }
+      else { roadDraft = null; updatePlanner(); }
+    }
+    if (drag?.movePick && e.type !== 'pointercancel') {
+      const t = pick(e.clientX, e.clientY); if (t) moveAt(...t);
+    }
     if (e.type !== 'pointercancel' && drag?.pendingTouch && lastTile) apply(lastTile[0], lastTile[1]);
     drag = null; lastTile = null; activeStroke = null;
-    canvas.style.cursor = tool === 'pan' ? 'grab' : 'crosshair';
+    canvas.style.cursor = photoMode || tool === 'pan' ? 'grab' : 'crosshair';
   };
   canvas.addEventListener('pointerup', end);
   canvas.addEventListener('pointercancel', end);
@@ -872,11 +980,12 @@
   $('zoomOut').onclick = () => requestZoom(1 / 1.2);
 
   function setTool(t) {
-    tool = t;
+    tool = t; cancelPlan(); drag = null; activeStroke = null;
     for (const b of toolBtns) b.setAttribute('aria-pressed', String(b.dataset.tool === t));
     canvas.style.cursor = t === 'pan' ? 'grab' : 'crosshair';
   }
   const toolIcons = {
+    move: '<path d="M4 4h7v7H4Zm9 9h7v7h-7ZM14 4h6v6m0-6-7 7M4 14v6h6m-6 0 7-7"/>',
     pan: '<path d="M12 3v18M3 12h18m-12-6 3-3 3 3m-6 12 3 3 3-3M6 9l-3 3 3 3m12-6 3 3-3 3"/>',
     road: '<path d="m7 3-3 18M17 3l3 18M12 3v3m0 4v4m0 4v3"/>',
     house: '<path d="m3 11 9-8 9 8M5 10v11h14V10M10 21v-7h4v7"/>',
@@ -893,14 +1002,18 @@
     const b = document.createElement('button');
     b.className = 'tool'; b.type = 'button'; b.dataset.tool = id;
     b.setAttribute('aria-pressed', 'false');
-    b.setAttribute('aria-label', `${d.name}${d.cost ? ', costs ' + d.cost : ''}, shortcut ${i + 1}`);
-    b.innerHTML = `<svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true">${toolIcons[id]}</svg><span class="name">${d.name}</span><span class="cost">${d.cost ? '$' + d.cost : ''}</span><kbd aria-hidden="true">${i + 1}</kbd>`;
+    b.setAttribute('aria-label', `${d.name}${d.cost ? ', costs ' + d.cost : ''}, shortcut ${id === 'move' ? 'M' : i + 1}`);
+    b.innerHTML = `<svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true">${toolIcons[id]}</svg><span class="name">${d.name}</span><span class="cost">${d.cost ? '$' + d.cost : ''}</span><kbd aria-hidden="true">${id === 'move' ? 'M' : i + 1}</kbd>`;
     b.onclick = () => setTool(id);
     toolsEl.appendChild(b);
     toolBtns.push(b);
   });
   addEventListener('keydown', (e) => {
     if (e.target.matches('input, textarea, select, [contenteditable]')) return;
+    if (e.key === 'Escape') { setPhoto(false); cancelPlan(); drag = null; activeStroke = null; return; }
+    if (e.key.toLowerCase() === 'p' && !e.ctrlKey && !e.metaKey && !e.altKey) { setPhoto(!photoMode); return; }
+    if (photoMode && !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '+', '=', '-', 'f', 'F'].includes(e.key)) return;
+    if (e.key.toLowerCase() === 'm' && !e.ctrlKey && !e.metaKey && !e.altKey) setTool('move');
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); return e.shiftKey ? redo() : undo(); }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); return redo(); }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -909,12 +1022,38 @@
     if (move) { e.preventDefault(); zoomTarget = null; cam.x += move[0]; cam.y += move[1]; hover = null; }
     if (e.code === 'Space' && !e.target.matches('button')) { e.preventDefault(); if (!e.repeat) togglePause(); }
     const n = Number(e.key);
-    if (n >= 1 && n <= ORDER.length) setTool(ORDER[n - 1]);
+    if (n >= 1 && n <= 9) setTool(ORDER[n - 1]);
     if (e.key === '+' || e.key === '=') requestZoom(1.2);
     if (e.key === '-') requestZoom(1 / 1.2);
   });
 
   $('clock').addEventListener('input', (e) => { hour = Number(e.target.value); scheduleSave(); auto = false; $('autoBtn').setAttribute('aria-pressed', 'false'); });
+  for (const mode of ['freehand', 'line', 'block']) $('road-' + mode).onclick = () => setRoadMode(mode);
+  function setPhoto(enabled) {
+    if (enabled === photoMode) return;
+    photoMode = enabled; cancelPlan(); hover = null; drag = null; activeStroke = null;
+    $('app').dataset.photo = String(enabled);
+    canvas.style.cursor = enabled || tool === 'pan' ? 'grab' : 'crosshair';
+    $('photoBar').hidden = !enabled;
+    $('tip').hidden = true;
+    if (enabled) { photoWasPaused = paused; paused = true; $('exitPhoto').focus?.(); }
+    else { paused = photoWasPaused; $('photoBtn').focus?.(); }
+  }
+  $('photoBtn').onclick = () => setPhoto(true);
+  $('exitPhoto').onclick = () => setPhoto(false);
+  $('photoFit').onclick = center;
+  $('exportPhoto').onclick = () => {
+    draw(performance.now());
+    $('exportPhoto').disabled = true;
+    canvas.toBlob(blob => {
+      $('exportPhoto').disabled = false;
+      if (!blob) { $('photoStatus').textContent = 'Export failed. Try again.'; return; }
+      const url = URL.createObjectURL(blob), link = document.createElement('a');
+      link.href = url; link.download = 'isocity.png'; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      $('photoStatus').textContent = 'PNG ready. Check your downloads.';
+    }, 'image/png');
+  };
   function togglePause() {
     paused = !paused;
     $('pauseBtn').textContent = paused ? 'Resume' : 'Pause';
@@ -933,7 +1072,7 @@
       return;
     }
     clearTimeout(resetArmed); resetArmed = 0; b.textContent = 'New city';
-    history.length = 0; redoHistory.length = 0; activeStroke = null; anims.clear(); dirtyCols.clear(); starter(); worldDirty = true; recompute(); saveNow(); center();
+    cancelPlan(); history.length = 0; redoHistory.length = 0; activeStroke = null; anims.clear(); dirtyCols.clear(); starter(); worldDirty = true; recompute(); saveNow(); center();
   };
   $('undoBtn').onclick = undo;
 
@@ -947,9 +1086,9 @@
   function center() {
     zoomTarget = null;
     const mobile = W <= 640;
-    const viewW = W - (mobile ? 24 : 260), viewH = H - (mobile ? 390 : 160);
+    const viewW = W - (photoMode ? 48 : mobile ? 24 : 260), viewH = H - (photoMode ? 160 : mobile ? 390 : 160);
     cam.z = Math.max(0.15, Math.min(1.1, viewW / (N * TW), viewH / (N * TH + 120)));
-    cam.x = W / 2 + (mobile ? 0 : 110);
+    cam.x = W / 2 + (photoMode || mobile ? 0 : 110);
     cam.y = 100 + viewH / 2 - (N * TH / 2) * cam.z;
   }
   addEventListener('resize', resize);

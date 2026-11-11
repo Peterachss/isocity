@@ -120,3 +120,24 @@ button { touch-action: manipulation; }
   .hint { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .tool, .chip, .hint { transition: none; } }
+
+/* Contextual tools stay separate from camera and simulation controls. */
+[hidden] { display: none !important; }
+.planner { position: absolute; top: 104px; left: 244px; width: 310px; padding: 10px; background: var(--surface); border-radius: var(--radius); box-shadow: var(--elevation); }
+.road-modes { display: flex; gap: 5px; }
+.road-modes .chip { flex: 1; }
+#planStatus, #photoStatus { font-size: 12px; line-height: 1.5; color: var(--ink-muted); }
+#planStatus { margin: 8px 4px 0; }
+.photo-launch { position: absolute; top: 104px; right: 20px; background: var(--surface); box-shadow: var(--elevation); }
+.photo-bar { position: absolute; bottom: max(20px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100% - 24px); padding: 12px; background: var(--surface); border-radius: var(--radius); box-shadow: var(--elevation); }
+.photo-bar > div { display: flex; gap: 6px; margin-top: 8px; }
+#exportPhoto { background: var(--accent); color: var(--accent-ink); }
+.app[data-photo="true"] > :not(#stage):not(#photoBar) { display: none !important; }
+@media (max-width: 900px) and (min-width: 641px) {
+  .planner { left: 230px; width: 300px; }
+}
+@media (max-width: 640px) {
+  .planner { top: max(120px, calc(env(safe-area-inset-top) + 108px)); left: 12px; right: 12px; width: auto; padding: 6px; }
+  #planStatus { margin: 5px 4px 0; font-size: 11px; }
+  .photo-launch { top: max(8px, env(safe-area-inset-top)); right: 12px; min-height: 32px; font-size: 11px; padding: 0 10px; }
+}

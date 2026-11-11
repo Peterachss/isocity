@@ -28,7 +28,7 @@ function city(reduced = false, saved = null) {
     requestAnimationFrame: fn => { nextFrame = fn; }, console
   };
   const source = readFileSync(new URL('../city.js', import.meta.url), 'utf8')
-    .replace(/\}\)\(\);\s*$/, 'globalThis.camera = () => ({...cam});globalThis.testState = () => ({grid,money,hour,paused});globalThis.testActions = {apply,applyLine,undo,redo,setTool,togglePause,stroke:()=>activeStroke=[]};})();');
+    .replace(/\}\)\(\);\s*$/, 'globalThis.camera = () => ({...cam});globalThis.testState = () => ({grid,money,hour,paused,photoMode});globalThis.testActions = {apply,applyLine,undo,redo,setTool,togglePause,moveAt,setPhoto,roadTilesFor,commitRoadDraft,plan:(from,to,mode)=>{setTool("road");setRoadMode(mode);roadDraft={from,to};refreshRoadDraft();return roadDraft;},stroke:()=>activeStroke=[]};})();');
   vm.runInNewContext(source, sandbox);
   const stage = elements.get('stage');
   return {
@@ -136,4 +136,51 @@ test('cancelled touches leave the city unchanged', () => {
   app.event('pointerdown', {pointerType:'touch',button:0,clientX:cam.x,clientY:cam.y+41*16*cam.z});
   app.event('pointercancel', {});
   assert.equal(app.state().money,before);
+});
+
+
+test('relocation is free, preserves a replaced forest on undo, and redoes atomically', () => {
+  const app = city(); app.actions.setTool('house'); app.actions.apply(20,20);
+  const balance = app.state().money;
+  app.actions.setTool('move'); app.actions.moveAt(20,20); app.actions.moveAt(22,22);
+  assert.equal(app.state().grid[20][20], null); assert.equal(app.state().grid[22][22], 'house');
+  assert.equal(app.state().money,balance);
+  app.actions.undo();
+  assert.equal(app.state().grid[20][20], 'house'); assert.equal(app.state().grid[22][22], 'forest');
+  app.actions.redo(); assert.equal(app.state().grid[22][22], 'house'); assert.equal(app.state().money,balance);
+});
+
+test('road line preview costs only new tiles; block perimeter has no duplicates', () => {
+  const app=city(); app.actions.setTool('road');app.actions.apply(20,20);
+  const balance=app.state().money;
+  const plan=app.actions.plan([20,20],[24,21],'line');
+  assert.equal(plan.tiles.length,5);assert.equal(plan.cost,40);
+  app.actions.commitRoadDraft();assert.equal(app.state().money,balance-40);
+  app.actions.undo();assert.equal(app.state().grid[20][20],'road');assert.equal(app.state().grid[24][20],'forest');
+  const tiles=app.actions.roadTilesFor([20,20],[24,24],'block');
+  assert.equal(tiles.length,16);assert.equal(new Set(tiles.map(t=>t.join())).size,16);
+});
+
+test('blocked road plans do not spend funds or partially build', () => {
+  const app=city();app.actions.setTool('house');app.actions.apply(22,20);
+  const before=JSON.stringify(app.state().grid), balance=app.state().money;
+  assert.equal(app.actions.plan([20,20],[24,20],'line').blocked,true);
+  app.actions.commitRoadDraft();assert.equal(JSON.stringify(app.state().grid),before);assert.equal(app.state().money,balance);
+});
+
+test('photo mode blocks building and restores the prior pause state', () => {
+  const app=city(), balance=app.state().money;
+  app.actions.setPhoto(true);app.actions.apply(20,20);app.step(240);
+  assert.equal(app.state().money,balance);assert.equal(app.state().paused,true);
+  app.actions.setPhoto(false);assert.equal(app.state().paused,false);
+  app.actions.togglePause();app.actions.setPhoto(true);app.actions.setPhoto(false);
+  assert.equal(app.state().paused,true);
+});
+
+
+test('unaffordable road plans leave the city and funds untouched', () => {
+  const grid=Array.from({length:26},()=>Array(26).fill('forest'));
+  const app=city(false,JSON.stringify({grid,money:20,hour:12}));
+  app.actions.plan([20,20],[24,20],'line');app.actions.commitRoadDraft();
+  assert.equal(app.state().money,20);assert.equal(app.state().grid[20][20],'forest');
 });

@@ -8,10 +8,10 @@
   <meta property="og:title" content="Isocity, build your own city" />
   <meta property="og:description" content="Lay roads, place buildings and watch the city grow through day and night." />
   <meta property="og:type" content="website" />
-  <link rel="stylesheet" href="city.css?v=6" />
+  <link rel="stylesheet" href="city.css?v=7" />
 </head>
 <body>
-  <main class="app">
+  <main class="app" id="app">
     <canvas id="stage" aria-label="Isometric city map. Click or drag to build."></canvas>
 
     <div class="brand" aria-label="Isocity">
@@ -28,6 +28,21 @@
 
     <nav class="tools" aria-label="Build tools" id="tools"></nav>
 
+    <section class="planner" id="planner" aria-label="Tool options">
+      <div class="road-modes" id="roadModes" role="group" aria-label="Road shape">
+        <button class="chip" id="road-freehand" type="button" aria-pressed="true">Freehand</button>
+        <button class="chip" id="road-line" type="button" aria-pressed="false">Line</button>
+        <button class="chip" id="road-block" type="button" aria-pressed="false">Block</button>
+      </div>
+      <p id="planStatus" role="status"></p>
+    </section>
+    <button class="chip photo-launch" id="photoBtn" type="button" title="Photo mode (P)">Photo mode</button>
+    <section class="photo-bar" id="photoBar" aria-label="Photo controls" hidden>
+      <p id="photoStatus" role="status">Drag to frame your city. Scroll to zoom.</p>
+      <div><button class="chip" id="photoFit" type="button">Fit city</button>
+      <button class="chip" id="exportPhoto" type="button">Save PNG</button>
+      <button class="chip" id="exitPhoto" type="button">Exit photo</button></div>
+    </section>
     <section class="time" aria-label="Time of day">
       <label for="clock" class="stat-label">Time <span id="clockText" class="tnum">12:00</span></label>
       <input id="clock" type="range" min="0" max="24" step="0.05" value="12" />
@@ -47,6 +62,6 @@
     <div id="tip" class="tip" role="status" hidden></div>
     <p class="hint" id="hint">Click or drag to build. Right drag, or the Pan tool, moves the map. Scroll to zoom. F fits the city. Arrow keys pan. Ctrl+Z undoes a stroke.</p>
   </main>
-  <script src="city.js?v=6"></script>
+  <script src="city.js?v=7"></script>
 </body>
 </html>
