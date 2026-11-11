@@ -1,4 +1,4 @@
-const CACHE = 'workspace-city-v48';
+const CACHE = 'workspace-city-v49';
 const ASSETS = [
   './',
   './index.html',
@@ -35,6 +35,6 @@ self.addEventListener('fetch', (e) => {
         caches.open(CACHE).then((c) => c.put(e.request, copy));
         return res;
       })
-      .catch(() => caches.match(e.request).then((m) => m || caches.match('./index.html')))
+      .catch(() => caches.match(e.request, { ignoreSearch: true }).then((m) => m || caches.match('./index.html')))
   );
 });

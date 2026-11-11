@@ -739,3 +739,18 @@ html, body { height: 100%; overflow: hidden; background: #162b1f; }
 .launch-pop[data-open="true"] { display: grid; }
 .launch-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .launch-grid .chip { justify-content: center; text-align: center; text-decoration: none; }
+
+
+/* keep panels from overlapping each other */
+.search-dock { z-index: 9; }
+body:has(#searchResults:not([hidden])) .build-bar { visibility: hidden; }
+.launch-pop { bottom: 120px; }
+.side-pop { max-height: calc(100dvh - 300px); }
+@media (min-width: 761px) { .side-pop { max-height: calc(100dvh - 240px); } }
+@media (max-width: 760px) {
+  .build-bar { top: 168px; }
+  #customPop, #econPop, #citiesPop, #comparePop, #helpPop { top: 168px; bottom: 128px; max-height: none; }
+}
+@media (min-width: 761px) {
+  #customPop, #econPop, #citiesPop, #comparePop, #helpPop { top: 100px; bottom: 120px; max-height: none; }
+}

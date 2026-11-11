@@ -233,7 +233,7 @@ window.ISOCITY_DATA = (() => {
     ['R / E / Q', 'Rotate city 90 degrees'],
     ['+ / -', 'Zoom in or out'],
     ['P', 'Toggle Photo mode (hide UI)'],
-    ['1 / 2 / 3', 'Overview, Street, or Cinematic camera'],
+    ['1 / 2', 'Overview or Street camera'],
     ['Double-click', 'Zoom smoothly to building'],
     ['Esc', 'Close active drawer or exit Photo mode'],
   ];

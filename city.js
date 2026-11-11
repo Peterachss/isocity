@@ -1644,14 +1644,33 @@
     return `${Math.floor(sec / 86400)}d ago`;
   }
 
+  // GitHub allows only 60 anonymous requests per hour, so responses are cached for 30 minutes and
+  // requests pause (serving cached data) after a rate-limit response.
+  const GH_TTL = 30 * 60 * 1000;
+  let ghBlockedUntil = 0;
+  function ghCacheGet(url) { try { const v = JSON.parse(localStorage.getItem('ghc:' + url)); return v && v.d !== undefined ? v : null; } catch (e) { return null; } }
+  function ghCacheSet(url, d) { try { localStorage.setItem('ghc:' + url, JSON.stringify({ t: Date.now(), d })); } catch (e) { /* quota */ } }
   async function fetchJsonTimed(url, ms = 5000) {
+    const isGh = url.startsWith('https://api.github.com/');
+    const cached = isGh ? ghCacheGet(url) : null;
+    if (cached && Date.now() - cached.t < GH_TTL) return cached.d;
+    if (isGh && Date.now() < ghBlockedUntil) return cached ? cached.d : null;
     const ac = new AbortController();
     const tid = setTimeout(() => ac.abort(), ms);
     try {
       const res = await fetch(url, { signal: ac.signal });
-      if (!res.ok) return null;
-      return await res.json();
-    } catch (e) { return null; }
+      if (!res.ok) {
+        if (isGh && (res.status === 403 || res.status === 429)) {
+          const reset = Number(res.headers.get('x-ratelimit-reset'));
+          ghBlockedUntil = reset ? reset * 1000 + 2000 : Date.now() + 10 * 60 * 1000;
+          const n = $('carToast'); if (n) { n.textContent = 'GitHub rate limit reached. Showing saved data until it resets.'; n.hidden = false; setTimeout(() => { n.hidden = true; }, 3500); }
+        }
+        return cached ? cached.d : null;
+      }
+      const d = await res.json();
+      if (isGh) ghCacheSet(url, d);
+      return d;
+    } catch (e) { return cached ? cached.d : null; }
     finally { clearTimeout(tid); }
   }
 
@@ -2165,6 +2184,7 @@
     if (style && TYPES[style]) grid[x][y] = style;
     worldDirty = true; recompute(); scheduleSave();
     $('inspEditBox').hidden = true;
+    $('inspEditBtn').setAttribute('aria-expanded', 'false');
     renderInspect();
     audio.sfx('select');
   };
@@ -2656,6 +2676,7 @@
       if (photoMode) { setPhotoMode(false); return; }
       $('searchResults').hidden = true;
       ['econPop', 'citiesPop', 'customPop', 'comparePop', 'helpPop'].forEach((id) => setPop(id, '', false));
+      if ($('launchPop')) { $('launchPop').dataset.open = 'false'; $('launchBtn').setAttribute('aria-expanded', 'false'); }
       if (selectedTile) { selectedTile = null; renderInspect(); }
       return;
     }
