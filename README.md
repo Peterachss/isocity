@@ -6,8 +6,8 @@ Live demo: https://peterachss.github.io/isocity/
 
 ## Play
 
-- Pick a tool on the left (or press 1 to 9). Forest tiles clear with Bulldoze or get built over.
-- Pick a tool on the left and click or drag on the map.
+- Pick a tool on the left (or press 1 to 9) and click or drag on the map.
+- Forest tiles clear with Bulldoze or get built over.
 - Buildings only count when they touch a road. Unconnected ones show a red marker.
 - Residents need jobs. Parks raise happiness. Roads, parks and buildings cost upkeep.
 - Right drag, shift drag or the Pan tool moves the map. Scroll, pinch or +/- to zoom.

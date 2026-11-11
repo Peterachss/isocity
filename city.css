@@ -13,7 +13,7 @@
 
 * { box-sizing: border-box; margin: 0; }
 
-html, body { height: 100%; overflow: hidden; background: #cfe3e0; }
+html, body { height: 100%; overflow: hidden; background: #162b1f; }
 
 .app {
   position: relative;
