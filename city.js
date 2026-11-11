@@ -140,6 +140,11 @@
   ];
 
   const THEMES = {
+    dark: {
+      skyNight: '#030807', skyDay: '#0e1a15', forestA: '#183323', forestB: '#142d1f',
+      grassA: '#2b5336', grassB: '#274c32', park: '#376a43', waterA: '#173f4a', waterB: '#143945',
+      crowns: [['#12402a', '#1f6a40'], ['#0e3522', '#1a5a38'], ['#1a4a2a', '#2a7a46'], ['#6e4310', '#a8721c'], ['#522a10', '#8e5319'], ['#245a30', '#3b8447']],
+    },
     autumn: {
       skyNight: '#07110c', skyDay: '#1f3b2a', forestA: '#2a4a28', forestB: '#274524',
       grassA: '#7da663', grassB: '#74a05a', park: '#86b65f', waterA: '#295b60', waterB: '#26565b',
@@ -185,7 +190,7 @@
   const $ = (id) => document.getElementById(id);
 
   let edition = 'all'; // 'github' | 'google' | 'all'
-  let themeId = 'autumn';
+  let themeId = 'dark';
   let showAgents = true;
   let showLabels = true;
 
@@ -225,7 +230,7 @@
   const isBuilding = (t) => !!t && t !== 'road' && t !== 'bridge' && t !== 'water' && t !== 'forest';
   const makeLevels = () => Array.from({ length: N }, () => Array(N).fill(1));
   const makePins = () => Array.from({ length: N }, () => Array(N).fill(null));
-  const curTheme = () => THEMES[themeId] || THEMES.autumn;
+  const curTheme = () => THEMES[themeId] || THEMES.dark;
 
   function allItems() {
     return [...REPOS, ...GOOGLE_APPS, ...customItems].map((it) => ({ ...it, ...(overrides[it.id] || {}) }));
@@ -404,7 +409,7 @@
       : makePins();
 
     edition = 'all'; // single Full City view
-    themeId = THEMES[d.themeId] ? d.themeId : 'autumn';
+    themeId = THEMES[d.themeId] ? d.themeId : 'dark';
     showAgents = d.showAgents !== false;
     showLabels = d.showLabels !== false;
     hour = Number.isFinite(d.hour) ? d.hour : 17.4;
@@ -633,8 +638,10 @@
       if ((x + y) % 3 === 0) {
         const z = t === 'bridge' ? 2 : 0;
         const ax = px(x + 0.5, y + 0.5), ay = py(x + 0.5, y + 0.5, z + 6);
-        rctx.fillStyle = 'rgba(255,214,130,0.34)';
-        rctx.beginPath(); rctx.arc(ax, ay, 18 * rcam.z, 0, 7); rctx.fill();
+        const gr = 16 * rcam.z, gg = rctx.createRadialGradient(ax, ay, 0, ax, ay, gr);
+        gg.addColorStop(0, 'rgba(255,214,130,0.5)'); gg.addColorStop(1, 'rgba(255,214,130,0)');
+        rctx.fillStyle = gg;
+        rctx.beginPath(); rctx.arc(ax, ay, gr, 0, 7); rctx.fill();
       }
       return;
     }
@@ -729,7 +736,7 @@
     }
   }
 
-  const SPR_W = 36, SPR_H = 42, SPR_CX = 16, SPR_CY = 14, SPR_S = 2;
+  const SPR_W = 36, SPR_H = 42, SPR_CX = 16, SPR_CY = 14, SPR_S = 3;
   let crownSprites = [];
   function rebuildCrownSprites() {
     crownSprites = curTheme().crowns.map(([dark, light]) => {
@@ -976,7 +983,7 @@
   const OX = N * (TW / 2) + PAD_X;
   const WW = N * TW + PAD_X * 2;
   const WH = OY + N * TH + 48;
-  const WS = 1.5;
+  let WS = 1.5;
 
   const worldCanvas = document.createElement('canvas');
   worldCanvas.width = Math.round(WW * WS);
@@ -1415,6 +1422,7 @@
 
     drawHeat(now);
     drawMapLabels();
+    drawExtras(now, dt);
   }
 
   // ---------- rotate ----------
@@ -2235,7 +2243,7 @@
     customItems.length = 0;
     for (const k of Object.keys(overrides)) delete overrides[k];
     starter();
-    themeId = 'autumn'; showAgents = true; showLabels = true;
+    themeId = 'dark'; showAgents = true; showLabels = true;
     syncThemeUI(); rebuildCrownSprites();
     $('agentsBtn').setAttribute('aria-pressed', 'true');
     $('labelsBtn').setAttribute('aria-pressed', 'true');
@@ -2371,10 +2379,12 @@
       cam.z = camAnim.sz + (camAnim.tz - camAnim.sz) * e;
       if (p >= 1) camAnim = null;
     }
+    tickExtras(now, dt);
     if (showAgents) {
-      stepList(cars, dt, isRoad);
-      stepList(walkers, dt, isRoad);
-      stepList(bots, dt, isRoad);
+      const sdt = simOn ? dt * 1.5 : dt;
+      stepList(cars, sdt, isRoad);
+      stepList(walkers, sdt, isRoad);
+      stepList(bots, sdt, isRoad);
       stepList(boats, dt, isWater);
     }
     draw(now, dt);
@@ -2387,6 +2397,289 @@
   setEdition(edition, false);
   center(false);
   fetchUserRepos(false);
+  // =====================================================================
+  // Extras: day/night cycle + clock, agent details & follow, building crew,
+  // simulator mode, sharper zoom.
+  // =====================================================================
+  const FIRST = ['Mai', 'Linh', 'Tuan', 'Hana', 'Minh', 'Kai', 'Sora', 'An', 'Bao', 'Lan', 'Noah', 'Eli', 'Mia', 'Leo', 'Zoe', 'Ken', 'Yuki', 'Ravi', 'Nina', 'Omar'];
+  const ROLE_TASKS = {
+    Developer: ['writing a feature', 'fixing a bug', 'refactoring a module', 'merging main', 'pairing on a PR'],
+    Designer: ['sketching a screen', 'tuning colours', 'exporting icons', 'reviewing spacing'],
+    'QA tester': ['running test suite', 'reproducing a bug', 'writing a test plan', 'checking mobile layout'],
+    DevOps: ['watching deploys', 'rotating keys', 'scaling servers', 'reading build logs'],
+    Manager: ['planning the sprint', 'answering messages', 'triaging issues', 'booking a demo'],
+    Student: ['revising notes', 'writing an essay', 'making slides', 'checking the timetable'],
+  };
+  const ROLES = Object.keys(ROLE_TASKS);
+  const BOT_NAMES = ['CommitBot', 'DeployBot', 'ReviewBot', 'LinkBot', 'SyncBot', 'PinBot', 'LintBot', 'TestBot'];
+  const BOT_TASKS = ['scanning commits', 'running CI', 'syncing bookmarks', 'checking links', 'formatting code', 'opening a PR', 'cleaning branches'];
+  const CAR_JOBS = ['Delivering servers', 'Commuting to work', 'Carrying coffee', 'Hauling laptops', 'School run', 'Courier'];
+  const pickOne = (a) => a[Math.floor(Math.random() * a.length)];
+  const initial = () => String.fromCharCode(65 + Math.floor(Math.random() * 26));
+  const pinnedNames = () => { const o = []; for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) if (pins[x][y]) o.push(getItem(pins[x][y]).name); return o.length ? o : ['City Hall']; };
+
+  function identOf(a, kind) {
+    if (a.info) return a.info;
+    if (kind === 'walker') {
+      const role = pickOne(ROLES);
+      a.info = { kind, name: `${pickOne(FIRST)} ${initial()}.`, role, task: pickOne(ROLE_TASKS[role]), energy: rnd(55, 95), mood: pickOne(['focused', 'happy', 'relaxed', 'busy']), dest: pickOne(pinnedNames()), nextTask: 0 };
+    } else if (kind === 'car') {
+      a.info = { kind, name: `Car ${Math.floor(rnd(100, 999))}-${initial()}${initial()}`, role: 'Vehicle', task: pickOne(CAR_JOBS), driver: `${pickOne(FIRST)} ${initial()}.`, dest: pickOne(pinnedNames()), nextTask: 0, energy: rnd(50, 100) };
+    } else {
+      a.info = { kind, name: pickOne(BOT_NAMES), role: 'Worker bot', task: pickOne(BOT_TASKS), nextTask: 0, energy: rnd(40, 100) };
+    }
+    return a.info;
+  }
+  function refreshInfo(a, now) {
+    const i = a.info; if (!i) return;
+    if (now > i.nextTask) {
+      i.nextTask = now + rnd(4000, 8000);
+      if (i.kind === 'walker') { i.task = pickOne(ROLE_TASKS[i.role]); i.mood = pickOne(['focused', 'happy', 'relaxed', 'busy']); }
+      else if (i.kind === 'car') { i.task = pickOne(CAR_JOBS); i.dest = pickOne(pinnedNames()); }
+      else i.task = pickOne(BOT_TASKS);
+    }
+    i.energy = Math.max(10, Math.min(100, i.energy + rnd(-1.5, 1.2)));
+  }
+
+  // --- clock / cycle ---
+  let cycleOn = true;
+  let simOn = false;
+  const DAY_RATE = 0.22;      // game hours per real second (about 110 s per day)
+  const SIM_RATE = 0.9;
+  const fmtClock = (h) => {
+    const hh = Math.floor(h) % 24, mm = Math.floor((h % 1) * 60);
+    const period = h >= 5 && h < 8 ? 'Dawn' : h >= 8 && h < 16.5 ? 'Day' : h >= 16.5 && h < 19.5 ? 'Dusk' : 'Night';
+    return [`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`, period];
+  };
+
+  const bar = document.createElement('div');
+  bar.id = 'timeBar';
+  bar.innerHTML = '<span id="clockText" class="chip tnum">--:--</span><button id="cycleBtn" class="chip" type="button" aria-pressed="true" title="Auto day and night">Cycle</button><button id="simBtn" class="chip" type="button" aria-pressed="false" title="Simulator mode">Sim</button>';
+  document.body.appendChild(bar);
+  const simBox = document.createElement('aside');
+  simBox.id = 'simBox'; simBox.hidden = true;
+  simBox.innerHTML = '<div class="sim-head">Simulator</div><div id="simStats" class="sim-stats"></div><div id="simLog" class="sim-log"></div>';
+  document.body.appendChild(simBox);
+  const agentCard = document.createElement('aside');
+  agentCard.id = 'agentCard'; agentCard.hidden = true;
+  agentCard.innerHTML = '<div class="ag-head"><b id="agName"></b><button id="agClose" class="chip icon tiny" type="button" aria-label="Close">&times;</button></div><div id="agBody"></div><div class="ag-actions"><button id="agFollow" class="chip small" type="button" aria-pressed="true">Follow</button></div>';
+  document.body.appendChild(agentCard);
+
+  $('cycleBtn').onclick = () => { cycleOn = !cycleOn; $('cycleBtn').setAttribute('aria-pressed', String(cycleOn)); sfx('tap'); };
+  $('lightBtn').addEventListener('click', () => { cycleOn = false; $('cycleBtn').setAttribute('aria-pressed', 'false'); }, true);
+  $('simBtn').onclick = () => setSim(!simOn);
+
+  // --- agent selection / follow ---
+  let crew = [];
+  let followAgent = null, followOn = true, shownAgent = null;
+  const agentList = () => [
+    ...cars.map((a) => [a, 'car', 6]), ...walkers.map((a) => [a, 'walker', 8]), ...bots.map((a) => [a, 'bot', 9]),
+    ...crew.map((a) => [a, 'walker', 8]),
+  ];
+  const agentScreen = (a, z = 6) => [px(a.px + 0.5, a.py + 0.5), py(a.px + 0.5, a.py + 0.5, z)];
+  function nearestAgent(mx, my) {
+    let best = null, bd = Math.max(16, 14 * cam.z) ** 2;
+    for (const [a, kind, z] of agentList()) {
+      const [sx, sy] = agentScreen(a, z);
+      const d = (sx - mx) ** 2 + (sy - my) ** 2;
+      if (d < bd) { bd = d; best = [a, kind]; }
+    }
+    return best;
+  }
+  function describeAgent(a, kind) {
+    const i = identOf(a, kind);
+    const rows = [];
+    if (kind === 'walker') rows.push(['Role', i.role], ['Doing', i.task], ['Heading to', i.dest || 'the office'], ['Mood', i.mood], ['Energy', Math.round(i.energy) + '%']);
+    else if (kind === 'car') rows.push(['Driver', i.driver], ['Job', i.task], ['Going to', i.dest], ['Speed', Math.round((a.speed || 1) * 38) + ' km/h'], ['Fuel', Math.round(i.energy) + '%']);
+    else rows.push(['Type', i.role], ['Doing', i.task], ['Battery', Math.round(i.energy) + '%'], ['Speed', ((a.speed || 0.5) * 4).toFixed(1) + ' tiles/s']);
+    return { title: i.name, rows };
+  }
+  function showAgent(a, kind) {
+    shownAgent = a ? [a, kind] : null;
+    followAgent = a || null;
+    agentCard.hidden = !a;
+    if (a) { selectedTile = null; renderInspect(); renderAgentCard(); }
+  }
+  function renderAgentCard() {
+    if (!shownAgent) return;
+    const [a, kind] = shownAgent;
+    const d = describeAgent(a, kind);
+    $('agName').textContent = d.title;
+    $('agBody').innerHTML = d.rows.map(([k, v]) => `<div class="ag-row"><span>${k}</span><b>${String(v).replace(/</g, '&lt;')}</b></div>`).join('');
+    $('agFollow').setAttribute('aria-pressed', String(followOn));
+  }
+  $('agClose').onclick = () => showAgent(null);
+  $('agFollow').onclick = () => { followOn = !followOn; renderAgentCard(); };
+
+  let downAt = null;
+  canvas.addEventListener('pointerdown', (e) => { downAt = { x: e.clientX, y: e.clientY }; }, true);
+  canvas.addEventListener('pointerup', (e) => {
+    if (!downAt || Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 5) return;
+    if (hitLabel(e.clientX, e.clientY)) return;
+    const hit = nearestAgent(e.clientX, e.clientY);
+    if (hit) setTimeout(() => showAgent(hit[0], hit[1]), 0);
+  }, true);
+  canvas.addEventListener('pointermove', (e) => {
+    if (drag) return;
+    const hit = nearestAgent(e.clientX, e.clientY);
+    if (!hit) return;
+    const d = describeAgent(hit[0], hit[1]);
+    const tip = $('tip');
+    tip.textContent = `${d.title} · ${d.rows[1][1]}`;
+    tip.hidden = false;
+    tip.style.transform = `translate3d(${Math.min(W - 280, e.clientX + 16)}px, ${e.clientY + 16}px, 0)`;
+    canvas.style.cursor = 'pointer';
+  });
+
+  // --- crew working at the selected building ---
+  const CREW_SPOTS = [[1.0, 0.3], [0.35, 1.0], [1.1, 0.85], [0.75, 1.15], [1.15, 0.05]];
+  function buildCrew() {
+    crew = [];
+    if (!selectedTile) return;
+    const [x, y] = selectedTile;
+    const item = getItem(pins[x][y]);
+    const n = item.kind === 'google' ? 3 : 4;
+    const colors = ['#e6ded0', '#c95d43', '#3b6978', '#d4a23a', '#5b7a52'];
+    for (let k = 0; k < n; k++) {
+      const role = item.kind === 'google' ? pickOne(['Student', 'Student', 'Manager']) : ['Developer', 'QA tester', 'DevOps', 'Designer', 'Manager'][k % 5];
+      const [ox, oy] = CREW_SPOTS[k];
+      crew.push({ px: x + ox - 0.5, py: y + oy - 0.5, ox: x + ox - 0.5, oy: y + oy - 0.5, color: colors[k % 5], phase: Math.random() * 6, speed: 0.4, crew: true,
+        info: { kind: 'walker', name: `${pickOne(FIRST)} ${initial()}.`, role, task: pickOne(ROLE_TASKS[role]), energy: rnd(60, 95), mood: 'focused', dest: item.name, nextTask: 0 } });
+    }
+  }
+
+  // --- simulator ---
+  const sim = { commits: 0, deploys: 0, upgrades: 0, happy: 72, nextEvent: 0, rain: 0, fireworks: [], drops: [], log: [] };
+  function logSim(msg) {
+    const [t] = fmtClock(hour);
+    sim.log.unshift(`${t}  ${msg}`); sim.log.length = Math.min(sim.log.length, 7);
+    $('simLog').innerHTML = sim.log.map((l) => `<div>${l.replace(/</g, '&lt;')}</div>`).join('');
+  }
+  function setSim(on) {
+    simOn = on;
+    $('simBtn').setAttribute('aria-pressed', String(on));
+    simBox.hidden = !on;
+    if (on) { cycleOn = true; $('cycleBtn').setAttribute('aria-pressed', 'true'); sim.nextEvent = 0; logSim('Simulator started. Sit back and watch the city.'); }
+    else { sim.rain = 0; sim.fireworks.length = 0; }
+    sfx('tap');
+  }
+  const newBurst = () => ({ x: rnd(W * 0.15, W * 0.85), y: rnd(H * 0.12, H * 0.5), t: 0, hue: Math.floor(rnd(0, 360)), parts: Array.from({ length: 46 }, () => { const a = rnd(0, 6.283), s = rnd(40, 150); return [Math.cos(a) * s, Math.sin(a) * s]; }) });
+  function addAgentsBurst() {
+    const r = roadTiles(); if (!r.length) return;
+    for (let i = 0; i < 6 && cars.length < 60; i++) { const [x, y] = pickOne(r); cars.push({ fx: x, fy: y, tx: x, ty: y, t: 1, px: x, py: y, speed: rnd(0.9, 1.6), color: pickOne(['#c0463a', '#2f5d8a', '#e6e2d6', '#d89a2b', '#3d3f45', '#4f8f6a']) }); }
+    for (let i = 0; i < 6 && walkers.length < 40; i++) { const [x, y] = pickOne(r); walkers.push({ fx: x, fy: y, tx: x, ty: y, t: 1, px: x, py: y, speed: rnd(0.3, 0.5), color: pickOne(['#e6ded0', '#c95d43', '#3b6978', '#d4a23a', '#5b7a52']) }); }
+  }
+  function simEvent(now) {
+    const r = Math.random();
+    const names = pinnedNames();
+    if (r < 0.26) {
+      const cands = [];
+      for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) if (pins[x][y] && isBuilding(grid[x][y]) && TYPES[grid[x][y]].grow && (levels[x][y] || 1) < 3) cands.push([x, y]);
+      if (cands.length) { const [x, y] = pickOne(cands); levels[x][y] = (levels[x][y] || 1) + 1; worldDirty = true; sim.upgrades++; scheduleSave(); logSim(`${getItem(pins[x][y]).name} upgraded to level ${levels[x][y]}`); return; }
+    }
+    if (r < 0.5) { const b = pickOne(BOT_NAMES); sim.commits += Math.floor(rnd(1, 6)); if (b === 'DeployBot') sim.deploys++; logSim(`${b}: ${pickOne(BOT_TASKS)} in ${pickOne(names)}`); return; }
+    if (r < 0.64) { addAgentsBurst(); logSim('Rush hour: extra cars and people on the streets'); return; }
+    if (r < 0.78) { sim.rain = now + 14000; logSim('Rain is moving in'); return; }
+    if (r < 0.9 && daylight(hour) < 0.6) { for (let i = 0; i < 3; i++) setTimeout(() => sim.fireworks.push(newBurst()), i * 700); logSim('Fireworks over the city'); return; }
+    sim.happy = Math.max(30, Math.min(99, sim.happy + rnd(-8, 8)));
+    logSim(`Citizen happiness is ${Math.round(sim.happy)}%`);
+  }
+
+  // --- sharper zoom: re-rasterise the world cache at higher resolution when zoomed in ---
+  function ensureWorldRes() {
+    const want = cam.z > 1.5 ? 2.5 : cam.z > 1.05 ? 2 : 1.5;
+    if (want === WS) return;
+    WS = want;
+    worldCanvas.width = Math.round(WW * WS);
+    worldCanvas.height = Math.round(WH * WS);
+    worldDirty = true;
+  }
+
+  let lastSelKey = '', lastClock = 0, driftPrev = 0;
+  function tickExtras(now, dt) {
+    ensureWorldRes();
+    if (cycleOn) hour = (hour + dt * (simOn ? SIM_RATE : DAY_RATE)) % 24;
+    if (now - lastClock > 250) {
+      lastClock = now;
+      const [t, p] = fmtClock(hour);
+      $('clockText').textContent = `${t} ${p}`;
+      const lb = $('lightBtn'); if (cycleOn && lb.textContent !== p) lb.textContent = p;
+      if (simOn) {
+        $('simStats').innerHTML = `<span>Commits <b>${sim.commits}</b></span><span>Deploys <b>${sim.deploys}</b></span><span>Upgrades <b>${sim.upgrades}</b></span><span>Cars <b>${cars.length}</b></span><span>People <b>${walkers.length + crew.length}</b></span><span>Bots <b>${bots.length}</b></span><span>Happy <b>${Math.round(sim.happy)}%</b></span>`;
+      }
+      if (shownAgent) { refreshInfo(shownAgent[0], now); renderAgentCard(); }
+    }
+    if (simOn && now > sim.nextEvent) { sim.nextEvent = now + rnd(3500, 7000); simEvent(now); }
+
+    const key = selectedTile ? selectedTile.join(',') : '';
+    if (key !== lastSelKey) {
+      lastSelKey = key;
+      if (selectedTile) { showAgent(null); buildCrew(); flyToTile(selectedTile[0], selectedTile[1], Math.max(cam.z, W >= 760 ? 1.9 : 1.6), false); }
+      else crew = [];
+    }
+    for (const a of crew) {
+      a.px = a.ox + Math.sin(now * 0.0006 + a.phase) * 0.12;
+      a.py = a.oy + Math.cos(now * 0.0005 + a.phase * 1.7) * 0.1;
+      refreshInfo(a, now);
+    }
+    // gentle sway while a building is selected, so the crew is seen from slightly different angles
+    if (selectedTile && !camAnim && !drag) {
+      const s = Math.sin(now * 0.00035) * 26;
+      cam.x += s - driftPrev; driftPrev = s;
+    } else driftPrev = 0;
+    if (followAgent && followOn && !drag) {
+      camAnim = null;
+      const [sx, sy] = agentScreen(followAgent);
+      cam.x += (W / 2 - sx) * 0.08; cam.y += (H * 0.42 - sy) * 0.08;
+      if (cam.z < 1.5) { const nz = Math.min(1.5, cam.z * 1.012), k = nz / cam.z; cam.x = W / 2 - (W / 2 - cam.x) * k; cam.y = H / 2 - (H / 2 - cam.y) * k; cam.z = nz; }
+    }
+  }
+
+  function drawPerson(a, now) {
+    const z = rcam.z;
+    const x = px(a.px + 0.5, a.py + 0.5), y = py(a.px + 0.5, a.py + 0.5);
+    const bob = Math.sin(now * 0.008 + a.phase) * 1.2 * z;
+    ctx.fillStyle = 'rgba(8,16,18,0.28)'; ctx.beginPath(); ctx.ellipse(x, y, 5 * z, 2.4 * z, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = a.color; ctx.fillRect(x - 3.4 * z, y - 12 * z + bob, 6.8 * z, 9 * z);
+    ctx.fillStyle = '#e7c6a5'; ctx.beginPath(); ctx.arc(x, y - 15 * z + bob, 3.1 * z, 0, 7); ctx.fill();
+    ctx.fillStyle = '#2a2f33'; ctx.fillRect(x - 2.5 * z, y - 3 * z, 2 * z, 3 * z); ctx.fillRect(x + 0.5 * z, y - 3 * z, 2 * z, 3 * z);
+    ctx.fillStyle = '#5ef2d6'; ctx.fillRect(x + 3 * z, y - 9 * z + bob, 4 * z, 3 * z);
+    ctx.fillStyle = '#26323a'; ctx.fillRect(x + 3 * z, y - 6 * z + bob, 5 * z, 1.5 * z);
+    ctx.strokeStyle = a.color; ctx.lineWidth = 1.6 * z; ctx.beginPath(); ctx.moveTo(x + 3 * z, y - 9 * z + bob); ctx.lineTo(x + 5.5 * z, y - 7 * z + Math.sin(now * 0.03 + a.phase) * 1.1 * z); ctx.stroke();
+    const i = a.info;
+    const txt = `${i.name} · ${i.task}`;
+    ctx.font = `600 ${Math.max(9, 10 * Math.min(z, 1.4))}px system-ui, sans-serif`;
+    const w = ctx.measureText(txt).width + 14, h = 17;
+    const bx = Math.round(x - w / 2), by = Math.round(y - 33 * z - h);
+    ctx.fillStyle = 'rgba(244,241,234,0.96)'; ctx.beginPath(); ctx.roundRect(bx, by, w, h, 8); ctx.fill();
+    ctx.strokeStyle = 'rgba(29,35,32,0.18)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = '#1d2320'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(txt, bx + 7, by + h / 2 + 0.5);
+  }
+
+  function drawExtras(now, dt) {
+    if (crew.length) for (const a of crew.slice().sort((p, q) => (p.py + p.px) - (q.py + q.px))) drawPerson(a, now);
+    if (shownAgent) {
+      const [sx, sy] = agentScreen(shownAgent[0]);
+      ctx.strokeStyle = '#5ef2d6'; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.ellipse(sx, sy + 8 * cam.z, 12 * cam.z, 6 * cam.z, 0, 0, 7); ctx.stroke();
+    }
+    if (simOn && now < sim.rain) {
+      ctx.fillStyle = 'rgba(10,22,30,0.14)'; ctx.fillRect(0, 0, W, H);
+      while (sim.drops.length < 160) sim.drops.push({ x: Math.random() * W, y: Math.random() * H, v: rnd(500, 900) });
+      ctx.strokeStyle = 'rgba(190,225,240,0.5)'; ctx.lineWidth = 1; ctx.beginPath();
+      for (const d of sim.drops) { d.y += d.v * dt; d.x -= 80 * dt; if (d.y > H) { d.y = -10; d.x = Math.random() * W; } ctx.moveTo(d.x, d.y); ctx.lineTo(d.x + 3, d.y + 11); }
+      ctx.stroke();
+    } else if (sim.drops.length) sim.drops.length = 0;
+    if (sim.fireworks.length) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      for (const f of sim.fireworks) {
+        f.t += dt;
+        for (const [vx, vy] of f.parts) { ctx.fillStyle = `hsla(${f.hue},90%,65%,${Math.max(0, 1 - f.t / 1.6).toFixed(2)})`; ctx.beginPath(); ctx.arc(f.x + vx * f.t, f.y + vy * f.t + 40 * f.t * f.t, 2.2, 0, 7); ctx.fill(); }
+      }
+      ctx.restore();
+      sim.fireworks = sim.fireworks.filter((f) => f.t < 1.7);
+    }
+  }
+
   requestAnimationFrame(frame);
 })();
 
@@ -2425,7 +2718,7 @@
   $('inspAcctS').onclick = () => apply('school');
 
   // Google Docs/Slides/Gmail/Drive links follow the chosen account; Calendar stays personal.
-  const GOOGLE_HOST = /^(docs|mail|drive)\.google\.com$/;
+  const GOOGLE_HOST = /^(docs|mail|drive|chat)\.google\.com$/;
   function acctize(url, u) {
     try {
       const x = new URL(url);
@@ -2436,13 +2729,27 @@
     } catch (e) { return url; }
   }
   const card = $('inspectCard');
+  const forcedIdx = () => ($('inspTitle').textContent.trim() === 'Google Chat' ? 1 : null);
   card.addEventListener('click', (e) => {
     const a = e.target.closest && e.target.closest('a[href]');
-    if (a) a.href = acctize(a.href, window.isoAcctIdx || 0);
+    if (a) { const f = forcedIdx(); a.href = acctize(a.href, f === null ? (window.isoAcctIdx || 0) : f); }
   }, true);
   const web = $('inspWeb');
-  const sync = () => { $('inspAcct').hidden = !GOOGLE_HOST.test((web.href && web.href !== '#' ? new URL(web.href, location.href).host : '')); };
+  const sync = () => {
+    $('inspAcct').hidden = !GOOGLE_HOST.test((web.href && web.href !== '#' ? new URL(web.href, location.href).host : ''));
+    const locked = forcedIdx() !== null;
+    const P = $('inspAcctP'), S = $('inspAcctS');
+    P.disabled = S.disabled = locked;
+    if (locked) { P.setAttribute('aria-pressed', 'false'); S.setAttribute('aria-pressed', 'true'); }
+    else { const school = window.isoAcctIdx === 1; P.setAttribute('aria-pressed', String(!school)); S.setAttribute('aria-pressed', String(school)); }
+    let note = $('inspAcctNote');
+    if (!note) { note = document.createElement('span'); note.id = 'inspAcctNote'; note.className = 'acct-note'; $('inspAcct').appendChild(note); }
+    note.textContent = locked ? 'Chat always uses your school account' : '';
+  };
   new MutationObserver(sync).observe(web, { attributes: true, attributeFilter: ['href', 'hidden'] });
+  new MutationObserver(sync).observe($('inspTitle'), { childList: true, characterData: true, subtree: true });
+  $('inspAcctP').addEventListener('click', () => setTimeout(sync, 0));
+  $('inspAcctS').addEventListener('click', () => setTimeout(sync, 0));
   sync();
 })();
 

@@ -523,3 +523,18 @@ html, body { height: 100%; overflow: hidden; background: #162b1f; }
 .insp-acct .acct-title { margin: 0 4px 0 0; }
 
 .edition-tabs[hidden], .filter-row[hidden] { display: none !important; }
+
+/* time bar, sim box, agent card */
+#timeBar { position: fixed; left: 14px; top: 84px; z-index: 3; display: flex; gap: 6px; align-items: center; }
+#timeBar .chip { height: 30px; padding: 0 12px; font-size: 12.5px; }
+#simBox { position: fixed; left: 14px; top: 124px; z-index: 3; width: 250px; max-width: calc(100vw - 28px); padding: 10px 12px; border-radius: 14px; background: rgba(244, 241, 234, 0.96); color: #1d2320; box-shadow: 0 8px 24px rgba(8, 16, 12, 0.3); font: 12px system-ui, sans-serif; }
+#simBox[hidden], #agentCard[hidden] { display: none; }
+.sim-head { font-weight: 700; margin-bottom: 6px; }
+.sim-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; margin-bottom: 8px; }
+.sim-stats b { float: right; }
+.sim-log { display: grid; gap: 3px; max-height: 120px; overflow: hidden; color: #4c5a52; }
+#agentCard { position: fixed; right: 14px; top: 84px; z-index: 4; width: 250px; max-width: calc(100vw - 28px); padding: 12px; border-radius: 14px; background: rgba(244, 241, 234, 0.97); color: #1d2320; box-shadow: 0 8px 24px rgba(8, 16, 12, 0.3); font: 12.5px system-ui, sans-serif; }
+.ag-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 15px; }
+.ag-row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-top: 1px solid rgba(29, 35, 32, 0.08); }
+.ag-row span { color: #5a665f; }
+.ag-actions { margin-top: 8px; }
