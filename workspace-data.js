@@ -6,7 +6,7 @@
     { id: 'stars', name: 'Research library', short: 'Stars', types: ['school','apt'], description: 'Explore the projects you have starred and keep useful tools close.', path: 'm12 3 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1Z' },
     { id: 'ops', name: 'Operations clinic', short: 'Operations', types: ['clinic'], description: 'Triage your issues, review pull requests, and follow notifications.', path: 'M4 4h16v16H4ZM12 8v8M8 12h8' },
     { id: 'launch', name: 'Launch studio', short: 'Websites', types: ['shop'], description: 'Open the websites listed on your repositories, or add a deployment shortcut.', path: 'M3 4h18v16H3ZM3 9h18M7 6h1m3 0h1' },
-    { id: 'tools', name: 'Workshop plaza', short: 'Tools', types: ['plaza','park','wheel'], description: 'Your developer workbench. Add the tools you use every day.', path: 'm4 20 7-7m3-3 6-6M4 4l16 16M4 4v5m0-5h5M15 20h5v-5' }
+    { id: 'tools', name: 'Workshop plaza', short: 'Tools', types: ['plaza','park','wheel','windmill'], description: 'Your developer workbench. Add the tools you use every day.', path: 'm4 20 7-7m3-3 6-6M4 4l16 16M4 4v5m0-5h5M15 20h5v-5' }
   ];
   const validUser = value => typeof value === 'string' && /^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i.test(value);
   function safeURL(value) {
