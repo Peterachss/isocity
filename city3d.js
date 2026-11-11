@@ -6,7 +6,7 @@
 
   const N = B.N;
   const T = 4; // world units per tile
-  const HSCALE = 0.3; // 2D building height -> world units
+  const HSCALE = 0.24; // 2D building height -> world units
   const HALF = (N * T) / 2;
 
   let renderer;
@@ -16,7 +16,7 @@
   if (!renderer.getContext()) return;
 
   const stage = document.getElementById('stage');
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
   renderer.setSize(innerWidth, innerHeight);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -47,9 +47,9 @@
   scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xfff0d0, 1.4);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(1024, 1024);
   const sc = sun.shadow.camera;
-  sc.left = -100; sc.right = 100; sc.top = 100; sc.bottom = -100; sc.near = 1; sc.far = 400;
+  sc.left = -78; sc.right = 78; sc.top = 78; sc.bottom = -78; sc.near = 1; sc.far = 400;
   sun.shadow.bias = -0.0006;
   scene.add(sun); scene.add(sun.target);
 
@@ -65,6 +65,30 @@
   const sky = new THREE.Mesh(new THREE.SphereGeometry(1500, 32, 16), skyMat);
   scene.add(sky);
 
+
+  // Photo skyline backdrop (assets/backdrop.png), faded into the haze.
+  const backdrop = { mesh: null };
+  (function () {
+    const img = new Image();
+    img.onload = () => {
+      const tiles = 4, w = img.width, h = img.height;
+      const c = document.createElement('canvas'); c.width = w * tiles; c.height = h;
+      const x = c.getContext('2d');
+      for (let i = 0; i < tiles; i++) {
+        x.save(); x.translate(i * w + (i % 2 ? w : 0), 0); x.scale(i % 2 ? -1 : 1, 1); x.drawImage(img, 0, 0); x.restore();
+      }
+      x.globalCompositeOperation = 'destination-out';
+      const g = x.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.32, 'rgba(0,0,0,0.0)'); g.addColorStop(0.9, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.9)');
+      x.fillStyle = g; x.fillRect(0, 0, c.width, h);
+      const tex = new THREE.CanvasTexture(c); tex.anisotropy = 4;
+      const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.BackSide, depthWrite: false, fog: false });
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(900, 900, 330, 48, 1, true), mat);
+      m.position.y = 70; m.renderOrder = -1; scene.add(m); backdrop.mesh = m;
+    };
+    img.src = 'assets/backdrop.png';
+  })();
+
   // ---------- world group (rebuilt when the layout changes) ----------
   const world = new THREE.Group();
   scene.add(world);
@@ -77,10 +101,10 @@
   // static far scenery (built once)
   (function buildFar() {
     const r = rng(777);
-    const mounds = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 14, 10), new THREE.MeshStandardMaterial({ roughness: 0.95 }), 46);
+    const mounds = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 12, 8), new THREE.MeshStandardMaterial({ roughness: 0.95 }), 18);
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), sv = new THREE.Vector3();
     const farTowers = [];
-    for (let i = 0; i < 46; i++) {
+    for (let i = 0; i < 18; i++) {
       const ang = r() * Math.PI * 2, dist = 230 + r() * 260;
       const rad = 22 + r() * 46;
       p.set(Math.cos(ang) * dist, -2 + rad * 0.12, Math.sin(ang) * dist);
@@ -108,46 +132,43 @@
     water.rotation.x = -Math.PI / 2; water.position.y = -0.9; water.receiveShadow = true;
     scene.add(water);
     scene.userData.water = water;
-    // sun beams
-    const bc = document.createElement('canvas'); bc.width = 8; bc.height = 128;
-    const bx = bc.getContext('2d'); const bg = bx.createLinearGradient(0, 0, 0, 128);
-    bg.addColorStop(0, 'rgba(255,240,190,0.0)'); bg.addColorStop(0.3, 'rgba(255,240,190,0.55)'); bg.addColorStop(1, 'rgba(255,240,190,0)');
-    bx.fillStyle = bg; bx.fillRect(0, 0, 8, 128);
-    const beamTex = new THREE.CanvasTexture(bc);
-    const beamMat = new THREE.MeshBasicMaterial({ map: beamTex, transparent: true, opacity: 0.08, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
-    const beams = new THREE.Group();
-    for (let i = 0; i < 7; i++) {
-      const b = new THREE.Mesh(new THREE.PlaneGeometry(6 + r() * 8, 150), beamMat);
-      b.position.set((r() - 0.5) * 150, 55, (r() - 0.5) * 150 - 30);
-      b.rotation.set(0.25 + r() * 0.2, r() * 3, 0.35 + r() * 0.2);
-      beams.add(b);
-    }
-    scene.add(beams);
-    scene.userData.beams = beamMat;
+    scene.userData.beams = { opacity: 0 };
   })();
 
   // ---------- build the city from the grid ----------
+  // One "bay" of a vertical-garden facade, painted once and tiled up the tower.
   const winTex = (() => {
-    const c = document.createElement('canvas'); c.width = 64; c.height = 64;
+    const c = document.createElement('canvas'); c.width = 128; c.height = 128;
     const x = c.getContext('2d');
-    x.fillStyle = '#5a7686'; x.fillRect(0, 0, 64, 64);
-    x.fillStyle = '#c9e4ee';
-    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) x.fillRect(j * 16 + 2, i * 16 + 3, 12, 10);
-    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+    x.fillStyle = '#4d6a78'; x.fillRect(0, 0, 128, 128);
+    const g = x.createLinearGradient(0, 0, 0, 90); g.addColorStop(0, '#d7ecf2'); g.addColorStop(1, '#8fb6c4');
+    x.fillStyle = g; x.fillRect(6, 8, 52, 78); x.fillRect(70, 8, 52, 78);
+    x.fillStyle = '#2f3b36'; x.fillRect(0, 92, 128, 8);            // slab
+    const r = rng(11);
+    for (let i = 0; i < 70; i++) {                                    // planter foliage
+      x.fillStyle = ['#2f7a33', '#3f9a3f', '#58b04a', '#1f5f33', '#72c25a'][Math.floor(r() * 5)];
+      x.beginPath(); x.arc(r() * 128, 96 + r() * 8, 3 + r() * 5, 0, 7); x.fill();
+    }
+    for (let i = 0; i < 9; i++) {                                     // hanging vines
+      x.fillStyle = ['#2f8a3a', '#1f6b2e', '#4aa648'][i % 3];
+      x.fillRect(r() * 124, 100, 2 + r() * 2, 14 + r() * 14);
+    }
+    x.fillStyle = '#3a6b38'; x.fillRect(0, 118, 128, 10);
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; return t;
   })();
   const litTex = (() => {
-    const c = document.createElement('canvas'); c.width = 64; c.height = 64;
-    const x = c.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, 64, 64);
+    const c = document.createElement('canvas'); c.width = 128; c.height = 128;
+    const x = c.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, 128, 128);
     const r = rng(5);
-    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) if (r() < 0.55) { x.fillStyle = '#ffd98a'; x.fillRect(j * 16 + 2, i * 16 + 3, 12, 10); }
+    for (const px of [6, 70]) if (r() < 0.6) { x.fillStyle = '#ffd98a'; x.fillRect(px, 8, 52, 78); }
     const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
   })();
   const glassMats = [];
 
   function glassMaterial(color, w, h) {
-    const map = winTex.clone(); map.needsUpdate = true; map.repeat.set(Math.max(1, Math.round(w / 3)), Math.max(1, Math.round(h / 3.2)));
+    const map = winTex.clone(); map.needsUpdate = true; map.repeat.set(Math.max(1, Math.round(w / 3.2)), Math.max(1, Math.round(h / 4)));
     const em = litTex.clone(); em.needsUpdate = true; em.repeat.copy(map.repeat);
-    const m = new THREE.MeshStandardMaterial({ color, map, emissive: 0xffffff, emissiveMap: em, emissiveIntensity: 0, roughness: 0.3, metalness: 0.45 });
+    const m = new THREE.MeshStandardMaterial({ color: new THREE.Color(color).lerp(new THREE.Color('#ffffff'), 0.78), map, emissive: 0xffffff, emissiveMap: em, emissiveIntensity: 0, roughness: 0.3, metalness: 0.45 });
     glassMats.push(m);
     return m;
   }
@@ -214,18 +235,18 @@
       if (t === 'road') topColor = '#4a4f54';
       else if (t === 'plaza') topColor = '#cfc4ad';
       else if (t === 'park') topColor = '#86cf63';
-      else if (t === 'forest') topColor = (x + y) % 2 ? '#2f6b32' : '#2a6030';
+      else if (t === 'forest') topColor = (x + y) % 2 ? '#2a7a34' : '#25702f';
       else topColor = (x + y) % 2 ? '#6fb85a' : '#64ad52';
       tops.push({ p: V(wx, -0.15, wz), s: V(T, 0.3, T), c: col(topColor).offsetHSL(0, 0, (r() - 0.5) * 0.04) });
       if (t === 'road') {
         if ((x * 7 + y * 3) % 3 === 0) decor.push({ kind: 'box', p: V(wx, 0.03, wz), s: V(T * 0.12, 0.05, T * 0.5), c: col('#e8e2cf') });
       }
       if (t === 'forest') {
-        for (let i = 0; i < 6; i++) tree(wx + (r() - 0.5) * T * 0.9, wz + (r() - 0.5) * T * 0.9, 1.05, r() < 0.2);
+        if (r() < 0.35) tree(wx + (r() - 0.5) * T * 0.5, wz + (r() - 0.5) * T * 0.5, 1.15, false);
       } else if (t === 'park') {
-        tree(wx - 1, wz - 1, 1.1); tree(wx + 1.1, wz + 0.8, 0.9);
+        tree(wx - 1, wz - 1, 1.0);
         decor.push({ kind: 'box', p: V(wx, 0.35, wz + 0.1), s: V(1.6, 0.2, 0.5), c: col('#7a5436') });
-      } else if (!t && r() < 0.3) {
+      } else if (!t && r() < 0.06) {
         tree(wx + (r() - 0.5) * 2, wz + (r() - 0.5) * 2, 0.9);
       }
     }
@@ -255,7 +276,7 @@
       const rr = rng(seed + 99);
       const H = Math.max(2, B.bldHeight(t, lv) * HSCALE);
       const inset = d.inset || 0.15;
-      const w = T * (1 - inset * 1.1) * (t === 'school' ? 1.05 : 1);
+      const w = T * (1 - inset * 0.5) * (t === 'school' ? 1.05 : 1);
       const grp = new THREE.Group();
       grp.position.set(wx, 0, wz);
       world.add(grp);
@@ -311,43 +332,9 @@
           const up = new THREE.Mesh(new THREE.BoxGeometry(w * 0.66, th, w * 0.66), glassMaterial(glassCol, w * 0.66, th));
           up.position.y = H + th / 2; up.castShadow = true; grp.add(up); topY = H + th;
         }
-        // vertical-forest terraces: planter ledge + foliage on every ~3 units
-        if (H > 8 || t === 'clinic' || t === 'school') {
-          const floors = Math.max(2, Math.floor(H / 3.2));
-          for (let f = 1; f <= floors; f++) {
-            const fy = f * (H / floors);
-            const ext = 0.55;
-            for (const side of [0, 1, 2, 3]) {
-              const horiz = side < 2;
-              const sgn = side % 2 ? -1 : 1;
-              const len = w * (0.55 + rr() * 0.45);
-              const px = horiz ? wx + (rr() - 0.5) * (w - len) : wx + sgn * (w / 2 + ext / 2);
-              const pz = horiz ? wz + sgn * (w / 2 + ext / 2) : wz + (rr() - 0.5) * (w - len);
-              ledges.push({ p: V(px, fy - 0.1, pz), s: V(horiz ? len : ext, 0.28, horiz ? ext : len), c: col('#3a4a3a') });
-              const nb = 2 + Math.floor(rr() * 3);
-              for (let k = 0; k < nb; k++) {
-                const ox = horiz ? (rr() - 0.5) * len : sgn * (w / 2 + ext * 0.6);
-                const oz = horiz ? sgn * (w / 2 + ext * 0.6) : (rr() - 0.5) * len;
-                const sz = 0.5 + rr() * 0.7;
-                leaves.push({ p: V(wx + ox, fy + 0.45 + rr() * 0.3, wz + oz), s: V(sz * 1.15, sz * 0.9, sz * 1.15), c: col(CROWNS[Math.floor(rr() * CROWNS.length)]) });
-              }
-            }
-          }
-          // hanging vines
-          const nv = Math.round(H * 1.6);
-          for (let k = 0; k < nv; k++) {
-            const face = Math.floor(rr() * 4);
-            const off = (rr() - 0.5) * (w - 0.6);
-            const len = 2 + rr() * Math.min(H * 0.6, 11);
-            const y1 = H - rr() * H * 0.8;
-            const px = face < 2 ? wx + off : wx + (face === 2 ? 1 : -1) * (w / 2 + 0.08);
-            const pz = face < 2 ? wz + (face === 0 ? 1 : -1) * (w / 2 + 0.08) : wz + off;
-            vines.push({ p: V(px, Math.max(len / 2, y1 - len / 2), pz), s: V(face < 2 ? 0.35 + rr() * 0.4 : 0.1, len, face < 2 ? 0.1 : 0.35 + rr() * 0.4), c: col(VINES[Math.floor(rr() * VINES.length)]) });
-          }
-        }
         // rooftop garden
         const rw = (lv >= 2 && (t === 'apt' || t === 'office') ? w * 0.66 : w) * 0.5;
-        for (let k = 0; k < 7; k++) {
+        for (let k = 0; k < 2; k++) {
           const sz = 0.9 + rr() * 1.1;
           leaves.push({ p: V(wx + (rr() - 0.5) * rw * 1.6, topY + sz * 0.5, wz + (rr() - 0.5) * rw * 1.6), s: V(sz * 1.3, sz, sz * 1.3), c: col(CROWNS[Math.floor(rr() * CROWNS.length)]) });
         }
@@ -384,9 +371,9 @@
     instanced(box, new THREE.MeshStandardMaterial({ roughness: 0.95 }), tops, { receive: true });
     const cyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 7);
     instanced(cyl, new THREE.MeshStandardMaterial({ roughness: 0.9 }), trunks.map((o) => ({ ...o })), { cast: true });
-    const ico = new THREE.IcosahedronGeometry(1, 1);
-    instanced(ico, new THREE.MeshStandardMaterial({ roughness: 0.85 }), crowns, { cast: true });
-    instanced(ico, new THREE.MeshStandardMaterial({ roughness: 0.85 }), leaves, { cast: true });
+    const ico = new THREE.IcosahedronGeometry(1, 0);
+    instanced(ico, new THREE.MeshStandardMaterial({ roughness: 0.85 }), crowns, { cast: false });
+    instanced(ico, new THREE.MeshStandardMaterial({ roughness: 0.85 }), leaves, { cast: false });
     instanced(box, new THREE.MeshStandardMaterial({ roughness: 0.9 }), ledges, { cast: true });
     instanced(box, new THREE.MeshStandardMaterial({ roughness: 0.9 }), vines, {});
     const boxes = decor.filter((d) => d.kind === 'box'), cyls = decor.filter((d) => d.kind === 'cyl');
@@ -593,6 +580,7 @@
       cam.tz + cam.dist * Math.sin(cam.pol) * Math.sin(cam.az));
     camera.lookAt(cam.tx, cam.ty, cam.tz);
     sky.position.copy(camera.position);
+    if (backdrop.mesh) { backdrop.mesh.position.x = camera.position.x; backdrop.mesh.position.z = camera.position.z; const bl = 0.12 + 0.88 * L; backdrop.mesh.material.color.setRGB(bl, bl, bl); }
 
     // animation
     for (const w of anim.wheels) { w.rotation.z += dt * 0.25; w.children.forEach((c) => { if (c.userData.gondola) c.rotation.z = -w.rotation.z; }); }
