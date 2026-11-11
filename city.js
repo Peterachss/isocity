@@ -2,27 +2,31 @@
   const N = 26;
   const TW = 64, TH = 32;
   const SAVE_KEY = 'isocity-v3';
+  const SLOT_PREFIX = 'isocity-slot-';
 
   const TYPES = {
     pan:    { name: 'Pan',      cost: 0,   color: '#9aa39d' },
     road:   { name: 'Road',     cost: 10,  color: '#3b3f44' },
-    house:  { name: 'House',    cost: 100, color: '#d9a273', pop: 4,  h: 22, inset: 0.2 },
-    apt:    { name: 'Apartment',cost: 400, color: '#c98a8a', pop: 14, h: 72, inset: 0.12 },
-    shop:   { name: 'Shop',     cost: 250, color: '#e0c25b', jobs: 5, h: 28, inset: 0.1 },
-    office: { name: 'Office',   cost: 600, color: '#7fa6c9', jobs: 16, h: 118, inset: 0.1 },
-    park:   { name: 'Park',     cost: 150, color: '#8cbf5c' },
+    house:  { name: 'House',    cost: 100, color: '#d9a273', pop: 4,  h: 22, inset: 0.2, grow: true },
+    apt:    { name: 'Apartment',cost: 400, color: '#c98a8a', pop: 14, h: 72, inset: 0.12, grow: true },
+    shop:   { name: 'Shop',     cost: 250, color: '#e0c25b', jobs: 5, h: 28, inset: 0.1, grow: true },
+    office: { name: 'Office',   cost: 600, color: '#7fa6c9', jobs: 16, h: 118, inset: 0.1, grow: true },
+    park:   { name: 'Park',     cost: 150, color: '#8cbf5c', radius: 2 },
+    clinic: { name: 'Clinic',   cost: 350, color: '#d95f59', jobs: 6, h: 30, inset: 0.12, radius: 4 },
+    school: { name: 'School',   cost: 450, color: '#5f8c7a', jobs: 8, h: 34, inset: 0.1, radius: 4 },
     forest: { name: 'Forest',   cost: 5,   color: '#d9a21f' },
     water:  { name: 'Water',    cost: 15,  color: '#3b7378' },
     bridge: { name: 'Bridge',   cost: 35,  color: '#8e8372' },
     bulldoze:{ name: 'Bulldoze',cost: 0,   color: '#b4513f' },
   };
-  const ORDER = ['pan', 'road', 'house', 'apt', 'shop', 'office', 'park', 'forest', 'water', 'bulldoze'];
+  const ORDER = ['pan', 'road', 'house', 'apt', 'shop', 'office', 'park', 'clinic', 'school', 'forest', 'water', 'bulldoze'];
+  const LVL_MULT = [1, 1, 1.5, 2.2];
 
   const canvas = document.getElementById('stage');
   const ctx = canvas.getContext('2d', { alpha: false });
   const $ = (id) => document.getElementById(id);
 
-  let grid, money, tool = 'road';
+  let grid, levels, money, tool = 'road';
   let cam = { x: 0, y: 0, z: 1 };
   let hover = null, cars = [], walkers = [], orphansList = [];
   let hour = 17.4, auto = false, stats = {};
@@ -31,8 +35,13 @@
   const inb = (x, y) => x >= 0 && y >= 0 && x < N && y < N;
   const isRoad = (t) => t === 'road' || t === 'bridge';
   const isWater = (t) => t === 'water' || t === 'bridge';
+  const makeLevels = () => Array.from({ length: N }, () => Array(N).fill(1));
 
-  // Active render target (swapped between worldCanvas, nightCanvas, and main ctx)
+  // Coverage masks (recomputed when grid changes)
+  const clinicCov = new Uint8Array(N * N);
+  const schoolCov = new Uint8Array(N * N);
+  const parkCov = new Uint8Array(N * N);
+
   let rctx = ctx, rcam = cam;
   let worldDirty = true;
   const dirtyCols = new Set();
@@ -46,7 +55,6 @@
     anims.set(x * 100 + y, { start: performance.now(), dur: out ? 180 : 280, out, type });
   };
 
-  // Drifting autumn leaves (tiny screen-space particles, skipped on reduced-motion)
   const leaves = Array.from({ length: 14 }, (_, i) => ({
     x: ((i * 197) % 1000) / 1000,
     y: ((i * 353) % 1000) / 1000,
@@ -70,13 +78,13 @@
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
       osc.connect(gain); gain.connect(audioCtx.destination);
-      if (kind === 'build') {
+      if (kind === 'build' || kind === 'upgrade') {
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(300, t);
-        osc.frequency.exponentialRampToValueAtTime(440, t + 0.055);
-        gain.gain.setValueAtTime(0.05, t);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.065);
-        osc.start(t); osc.stop(t + 0.07);
+        osc.frequency.setValueAtTime(kind === 'upgrade' ? 420 : 300, t);
+        osc.frequency.exponentialRampToValueAtTime(kind === 'upgrade' ? 620 : 440, t + 0.06);
+        gain.gain.setValueAtTime(0.045, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.075);
+        osc.start(t); osc.stop(t + 0.08);
       } else if (kind === 'bulldoze') {
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(140, t);
@@ -105,22 +113,18 @@
   // ---------- state ----------
   function starter() {
     grid = Array.from({ length: N }, () => Array(N).fill('forest'));
+    levels = makeLevels();
     money = 5000;
     hour = 17.4;
-    const set = (x, y, t) => { if (inb(x, y)) grid[x][y] = t; };
+    const set = (x, y, t, lv = 1) => { if (inb(x, y)) { grid[x][y] = t; levels[x][y] = lv; } };
 
-    // Winding river across the south-east side of the forest
     let ry = 19;
     for (let rx = 0; rx < N; rx++) {
       set(rx, ry, 'water');
       set(rx, ry + 1, 'water');
-      if (rx % 5 === 3 && ry > 12) {
-        ry--;
-        set(rx, ry, 'water');
-      }
+      if (rx % 5 === 3 && ry > 12) { ry--; set(rx, ry, 'water'); }
     }
 
-    // Winding main road, side street, and river-crossing loop with bridges
     let y = 4;
     for (let x = 3; x < 23; x++) { set(x, y, 'road'); if (x % 5 === 0) { y += x % 10 === 0 ? 1 : -1; set(x, y, 'road'); } }
     for (let j = 4; j < 21; j++) set(11, j, grid[11][j] === 'water' ? 'bridge' : 'road');
@@ -138,14 +142,16 @@
       k++;
       if (k % 4 === 0) continue;
       const r = (x * 7 + j * 13) % 13;
-      set(x, j, k === 22 ? 'office' : r < 8 ? 'house' : r < 10 ? 'shop' : r < 12 ? 'park' : 'apt');
+      if (k === 18) set(x, j, 'school');
+      else if (k === 22) set(x, j, 'office');
+      else set(x, j, r < 8 ? 'house' : r < 10 ? 'shop' : r < 12 ? 'park' : 'apt');
     }
   }
 
   let saveTimer = 0;
   function saveNow() {
     clearTimeout(saveTimer); saveTimer = 0;
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ grid, money, hour })); } catch (e) { /* storage unavailable */ }
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ grid, levels, money, hour })); } catch (e) { /* storage unavailable */ }
   }
   function scheduleSave() {
     if (saveTimer) return;
@@ -154,12 +160,21 @@
   addEventListener('visibilitychange', () => { if (document.hidden && saveTimer) saveNow(); });
   addEventListener('pagehide', () => { if (saveTimer) saveNow(); });
 
+  function applySaveData(d) {
+    if (!d || !Array.isArray(d.grid) || d.grid.length !== N || !Array.isArray(d.grid[0]) || d.grid[0].length !== N) return false;
+    grid = d.grid.map((row) => row.map((t) => (t && TYPES[t]) ? t : null));
+    levels = (Array.isArray(d.levels) && d.levels.length === N)
+      ? d.levels.map((row) => row.map((v) => Math.max(1, Math.min(3, Number(v) || 1))))
+      : makeLevels();
+    money = Number.isFinite(d.money) ? d.money : 5000;
+    hour = Number.isFinite(d.hour) ? d.hour : 17.4;
+    return true;
+  }
+
   function load() {
     try {
-      const d = JSON.parse(localStorage.getItem(SAVE_KEY));
-      if (d && d.grid && d.grid.length === N) { grid = d.grid; money = d.money; hour = d.hour ?? 17.4; return true; }
-    } catch (e) { /* ignore */ }
-    return false;
+      return applySaveData(JSON.parse(localStorage.getItem(SAVE_KEY)));
+    } catch (e) { return false; }
   }
 
   // ---------- simulation ----------
@@ -167,8 +182,31 @@
   const connected = (x, y) => NB.some(([dx,dy]) => inb(x+dx,y+dy) && isRoad(grid[x+dx][y+dy]));
   const nearWater = (x, y) => NB.some(([dx,dy]) => inb(x+dx,y+dy) && isWater(grid[x+dx][y+dy]));
 
+  function stampMask(mask, cx, cy, r) {
+    for (let dx = -r; dx <= r; dx++) {
+      const x = cx + dx;
+      if (x < 0 || x >= N) continue;
+      for (let dy = -r; dy <= r; dy++) {
+        if (Math.abs(dx) + Math.abs(dy) > r + 1) continue;
+        const y = cy + dy;
+        if (y < 0 || y >= N) continue;
+        mask[x * N + y] = 1;
+      }
+    }
+  }
+
   function recompute() {
-    let pop = 0, jobs = 0, parks = 0, roads = 0, orphans = 0, blds = 0, trees = 0, waterfront = 0;
+    clinicCov.fill(0);
+    schoolCov.fill(0);
+    parkCov.fill(0);
+    for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
+      const t = grid[x][y];
+      if (t === 'clinic' && connected(x, y)) stampMask(clinicCov, x, y, TYPES.clinic.radius);
+      else if (t === 'school' && connected(x, y)) stampMask(schoolCov, x, y, TYPES.school.radius);
+      else if (t === 'park') stampMask(parkCov, x, y, TYPES.park.radius);
+    }
+
+    let pop = 0, jobs = 0, parks = 0, roads = 0, orphans = 0, blds = 0, trees = 0, waterfront = 0, coveredPop = 0, schooledPop = 0;
     orphansList = [];
     for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
       const t = grid[x][y];
@@ -178,20 +216,56 @@
       if (t === 'park') { parks++; if (nearWater(x, y)) waterfront++; continue; }
       blds++;
       if (!connected(x, y)) { orphans++; orphansList.push([x, y, TYPES[t].h]); continue; }
-      pop += TYPES[t].pop || 0;
-      jobs += TYPES[t].jobs || 0;
+      const lv = levels[x][y] || 1;
+      const mult = LVL_MULT[lv] || 1;
+      const p = Math.round((TYPES[t].pop || 0) * mult);
+      const j = Math.round((TYPES[t].jobs || 0) * mult);
+      pop += p;
+      jobs += j;
       if (nearWater(x, y)) waterfront++;
+      if (p > 0) {
+        const idx = x * N + y;
+        if (clinicCov[idx]) coveredPop += p;
+        if (schoolCov[idx]) schooledPop += p;
+      }
     }
     const employed = Math.min(pop, jobs);
     const income = employed * 3 + Math.min(pop, jobs * 2) * 0.5 + waterfront * 2;
     const upkeep = roads * 0.4 + parks * 2 + blds * 0.5;
-    let happy = 50 + Math.min(parks * 5, 25) + Math.min(trees * 0.1, 15) + Math.min(waterfront * 2, 10) - orphans * 6;
-    if (pop > 0) happy += (employed / pop - 0.6) * 30;
+    let happy = 48 + Math.min(parks * 5, 22) + Math.min(trees * 0.1, 12) + Math.min(waterfront * 2, 10) - orphans * 6;
+    if (pop > 0) {
+      happy += (employed / pop - 0.6) * 28;
+      happy += (coveredPop / pop) * 8 + (schooledPop / pop) * 8;
+    }
     if (jobs > pop * 1.5) happy -= 8;
     happy = Math.max(0, Math.min(100, Math.round(happy)));
     stats = { pop, jobs, roads, parks, orphans, waterfront, net: Math.round(income - upkeep), happy };
     render_stats();
     syncAgents();
+  }
+
+  function tryGrow() {
+    if (stats.happy < 65 || stats.pop === 0) return;
+    const candidates = [];
+    for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
+      const t = grid[x][y];
+      const d = t && TYPES[t];
+      if (!d || !d.grow || !connected(x, y)) continue;
+      const lv = levels[x][y] || 1;
+      if (lv >= 3) continue;
+      const idx = x * N + y;
+      const score = (parkCov[idx] ? 1 : 0) + (nearWater(x, y) ? 1 : 0) + (schoolCov[idx] ? 1 : 0) + (clinicCov[idx] ? 1 : 0);
+      if (lv === 1 && score >= 1) candidates.push([x, y, 2]);
+      else if (lv === 2 && stats.happy >= 78 && score >= 2) candidates.push([x, y, 3]);
+    }
+    if (!candidates.length) return;
+    const [gx, gy, nlv] = candidates[Math.floor(Math.random() * candidates.length)];
+    levels[gx][gy] = nlv;
+    animate(gx, gy, false);
+    markCol(gx, gy);
+    sfx('upgrade');
+    recompute();
+    scheduleSave();
   }
 
   const fmt = (n) => Math.round(n).toLocaleString('en-US');
@@ -328,6 +402,13 @@
     }
   }
 
+  function bldHeight(t, lv) {
+    const d = TYPES[t];
+    if (!d || !d.h) return 0;
+    if (!d.grow || lv <= 1) return d.h;
+    return Math.round(d.h * (lv === 2 ? 1.32 : 1.68));
+  }
+
   function drawTileNight(x, y, t) {
     if (!t) return;
     if (isRoad(t)) {
@@ -339,12 +420,12 @@
       }
       return;
     }
-    const d = TYPES[t];
-    if (!d || !d.h) return;
-    const i = d.inset;
+    const h = bldHeight(t, levels[x][y] || 1);
+    if (!h) return;
+    const i = TYPES[t].inset;
     const x0 = x + i, y0 = y + i, x1 = x + 1 - i, y1 = y + 1 - i;
     const seed = x * 11 + y * 5;
-    const rows = Math.max(1, Math.floor(d.h / 14));
+    const rows = Math.max(1, Math.floor(h / 14));
     const cols = Math.max(1, Math.round((x1 - x0) * 3));
     const dx = x1 - x0, dy = y1 - y0;
     for (let r = 0; r < rows; r++) {
@@ -362,13 +443,11 @@
 
   function drawWater(x, y, L) {
     quadZ(x, y, x + 1, y + 1, -5, shade((x + y) % 2 ? '#295b60' : '#26565b', 1, L));
-    // subtle reflection shimmer band
     if ((x * 3 + y * 5) % 4 === 0) {
       poly4(px(x + 0.2, y + 0.35), py(x + 0.2, y + 0.35, -5), px(x + 0.75, y + 0.35), py(x + 0.75, y + 0.35, -5),
         px(x + 0.85, y + 0.47), py(x + 0.85, y + 0.47, -5), px(x + 0.3, y + 0.47), py(x + 0.3, y + 0.47, -5),
         shade('#3c7b80', 1, L));
     }
-    // inner shore bank on top-left edges where neighbor is land
     if (inb(x - 1, y) && !isWater(grid[x - 1][y])) {
       poly4(px(x, y), py(x, y, 0), px(x, y + 1), py(x, y + 1, 0), px(x, y + 1), py(x, y + 1, -5), px(x, y), py(x, y, -5), shade('#5b4c39', 1, L));
     }
@@ -470,12 +549,22 @@
     }
     const d = TYPES[t];
     const i = d.inset;
+    const lv = levels[x][y] || 1;
     const seed = x * 11 + y * 5;
     const red = REDS[seed % REDS.length];
-    const wall = t === 'house' ? WALLS[seed % WALLS.length] : d.color;
-    const roof = t === 'house' ? red : t === 'apt' ? '#a2432f' : t === 'shop' ? red : '#5d7e9c';
-    const H = Math.max(1, d.h * hs);
+    const wall = t === 'house' ? WALLS[seed % WALLS.length]
+      : t === 'clinic' ? '#f2efe8'
+      : t === 'school' ? '#c87c5d'
+      : d.color;
+    const roof = t === 'house' ? red
+      : t === 'apt' ? '#a2432f'
+      : t === 'shop' ? red
+      : t === 'clinic' ? '#e5dfd3'
+      : t === 'school' ? '#4a6b68'
+      : '#5d7e9c';
+    const H = Math.max(1, bldHeight(t, lv) * hs);
     box(x + i, y + i, x + 1 - i, y + 1 - i, 0, H, wall, L, { roof, windows: hs > 0.6 ? seed : 0 });
+
     if (t === 'shop' && hs > 0.6) {
       poly4(
         px(x + i, y + 1 - i + 0.04), py(x + i, y + 1 - i + 0.04, 16),
@@ -490,6 +579,16 @@
       const r1x = px(x + 1 - i, y + 0.5), r1y = py(x + 1 - i, y + 0.5, H + 10 * hs);
       poly4(px(x + i, y + i), py(x + i, y + i, H), px(x + 1 - i, y + i), py(x + 1 - i, y + i, H), r1x, r1y, r0x, r0y, shade(red, 1.0, L));
       poly4(px(x + i, y + 1 - i), py(x + i, y + 1 - i, H), px(x + 1 - i, y + 1 - i), py(x + 1 - i, y + 1 - i, H), r1x, r1y, r0x, r0y, shade(red, 0.78, L));
+    }
+    if (t === 'clinic' && hs > 0.7) {
+      quadZ(x + 0.34, y + 0.44, x + 0.66, y + 0.56, H + 0.5, shade('#c8443d', 1, L));
+      quadZ(x + 0.44, y + 0.34, x + 0.56, y + 0.66, H + 0.5, shade('#c8443d', 1, L));
+    }
+    if (t === 'school' && hs > 0.7) {
+      box(x + 0.36, y + 0.36, x + 0.64, y + 0.64, H, H + 9 * hs, '#e9e3d5', L, { roof: '#3d5856' });
+    }
+    if ((t === 'apt' || t === 'office') && lv >= 3 && hs > 0.7) {
+      box(x + 0.28, y + 0.28, x + 0.72, y + 0.72, H, H + 10 * hs, wall, L, { roof });
     }
   }
 
@@ -522,8 +621,8 @@
     rctx.fillRect(sx - 1 * sz, sy - 7 * sz, 2 * sz, 2 * sz);
   }
 
-  // ---------- offscreen world & night light caches (baked at neutral daylight) ----------
-  const PAD_X = 64, OY = 176;
+  // ---------- offscreen world & night light caches ----------
+  const PAD_X = 64, OY = 210;
   const OX = N * (TW / 2) + PAD_X;
   const WW = N * TW + PAD_X * 2;
   const WH = OY + N * TH + 48;
@@ -617,7 +716,6 @@
     warm = savedW;
   }
 
-  // Pre-rendered night vignette
   const vigCanvas = document.createElement('canvas');
   vigCanvas.width = 256; vigCanvas.height = 256;
   (() => {
@@ -770,16 +868,32 @@
       }
     }
 
-    if (hover && tool !== 'pan') {
+    if (hover) {
       const [x, y] = hover;
-      const bad = !canApply(x, y);
-      const col = tool === 'bulldoze' ? '#b4513f' : bad ? '#b4513f' : '#0f766e';
-      quadZ(x, y, x + 1, y + 1, 0, col + '88');
-      ctx.strokeStyle = col; ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(px(x,y), py(x,y)); ctx.lineTo(px(x+1,y), py(x+1,y));
-      ctx.lineTo(px(x+1,y+1), py(x+1,y+1)); ctx.lineTo(px(x,y+1), py(x,y+1));
-      ctx.closePath(); ctx.stroke();
+      const ht = grid[x][y];
+      const covType = TYPES[tool].radius ? tool : (ht && TYPES[ht].radius ? ht : null);
+      if (covType) {
+        const r = TYPES[covType].radius;
+        const ccol = TYPES[covType].color + '38';
+        for (let dx = -r; dx <= r; dx++) {
+          const tx = x + dx; if (tx < 0 || tx >= N) continue;
+          for (let dy = -r; dy <= r; dy++) {
+            if (Math.abs(dx) + Math.abs(dy) > r + 1) continue;
+            const ty = y + dy; if (ty < 0 || ty >= N) continue;
+            quadZ(tx, ty, tx + 1, ty + 1, 0, ccol);
+          }
+        }
+      }
+      if (tool !== 'pan') {
+        const bad = !canApply(x, y);
+        const col = tool === 'bulldoze' ? '#b4513f' : bad ? '#b4513f' : '#0f766e';
+        quadZ(x, y, x + 1, y + 1, 0, col + '88');
+        ctx.strokeStyle = col; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(px(x,y), py(x,y)); ctx.lineTo(px(x+1,y), py(x+1,y));
+        ctx.lineTo(px(x+1,y+1), py(x+1,y+1)); ctx.lineTo(px(x,y+1), py(x,y+1));
+        ctx.closePath(); ctx.stroke();
+      }
     }
 
     if (L < 0.6) {
@@ -826,9 +940,11 @@
     if (tool === 'bulldoze') {
       if (!cur) return;
       const nxt = nextTile(cur, 'bulldoze');
-      history.push({ x, y, prev: cur, next: nxt, cost: 0, stroke: strokeId });
+      const prevLv = levels[x][y] || 1;
+      history.push({ x, y, prev: cur, next: nxt, prevLv, nextLv: 1, cost: 0, stroke: strokeId });
       redoStack.length = 0;
       grid[x][y] = nxt;
+      levels[x][y] = 1;
       animate(x, y, true, cur);
       sfx('bulldoze');
     } else {
@@ -836,9 +952,11 @@
       if (!nxt) return;
       const cost = tileCost(cur, tool);
       if (cost > money) return flash('Not enough funds');
-      history.push({ x, y, prev: cur, next: nxt, cost, stroke: strokeId });
+      const prevLv = levels[x][y] || 1;
+      history.push({ x, y, prev: cur, next: nxt, prevLv, nextLv: 1, cost, stroke: strokeId });
       redoStack.length = 0;
       grid[x][y] = nxt; money -= cost;
+      levels[x][y] = 1;
       animate(x, y, false);
       sfx(nxt === 'road' || nxt === 'bridge' || nxt === 'water' || nxt === 'forest' ? 'tap' : 'build');
     }
@@ -855,6 +973,7 @@
       const h = history.pop();
       const cur = grid[h.x][h.y];
       grid[h.x][h.y] = h.prev;
+      levels[h.x][h.y] = h.prevLv || 1;
       if (h.prev) animate(h.x, h.y, false);
       else animate(h.x, h.y, true, cur);
       money += h.cost;
@@ -876,6 +995,7 @@
       const h = redoStack.pop();
       const cur = grid[h.x][h.y];
       grid[h.x][h.y] = h.next;
+      levels[h.x][h.y] = h.nextLv || 1;
       if (h.next) animate(h.x, h.y, false);
       else animate(h.x, h.y, true, cur);
       money -= h.cost;
@@ -905,10 +1025,95 @@
     if (t === 'park') return 'Park. Raises happiness.' + (nearWater(x, y) ? ' Waterfront bonus.' : '');
     if (t === 'forest') return 'Forest. Clear it with the Bulldoze tool, or build over it.';
     const d = TYPES[t];
-    const info = d.pop ? `${d.pop} residents` : `${d.jobs} jobs`;
-    const wf = connected(x, y) && nearWater(x, y) ? ' Waterfront view.' : '';
-    return `${d.name}, ${info}.` + (connected(x, y) ? wf : ' No road access, so it does not count.');
+    const lv = levels[x][y] || 1;
+    const mult = LVL_MULT[lv] || 1;
+    if (!connected(x, y)) return `${d.name}. No road access, so it does not count.`;
+    if (t === 'clinic') return `Clinic, ${d.jobs} jobs. Boosts nearby health and happiness.`;
+    if (t === 'school') return `School, ${d.jobs} jobs. Helps nearby buildings grow.`;
+    const val = d.pop ? `${Math.round(d.pop * mult)} residents` : `${Math.round(d.jobs * mult)} jobs`;
+    const tags = [];
+    if (d.grow) tags.push(`Level ${lv}`);
+    if (nearWater(x, y)) tags.push('Waterfront');
+    const idx = x * N + y;
+    if (d.pop && clinicCov[idx]) tags.push('Clinic');
+    if (d.pop && schoolCov[idx]) tags.push('School');
+    return `${d.name} (${tags.join(', ')}), ${val}.`;
   }
+
+  // ---------- save slots & JSON export/import ----------
+  function renderSlots() {
+    const list = $('slotList');
+    list.innerHTML = '';
+    for (let i = 1; i <= 3; i++) {
+      let saved = null;
+      try { saved = JSON.parse(localStorage.getItem(SLOT_PREFIX + i)); } catch (e) {}
+      const row = document.createElement('div');
+      row.className = 'slot';
+      const meta = document.createElement('div');
+      meta.className = 'slot-meta';
+      const sub = saved ? `${fmt(saved.pop || 0)} residents, $${fmt(saved.money || 0)}` : 'Empty slot';
+      meta.innerHTML = `<span class="slot-title">Slot ${i}</span><span class="slot-sub">${sub}</span>`;
+      const saveBtn = document.createElement('button');
+      saveBtn.className = 'chip small'; saveBtn.type = 'button'; saveBtn.textContent = 'Save';
+      saveBtn.onclick = () => {
+        try {
+          localStorage.setItem(SLOT_PREFIX + i, JSON.stringify({ grid, levels, money, hour, pop: stats.pop }));
+          sfx('build');
+          renderSlots();
+        } catch (e) { flash('Storage full'); }
+      };
+      const loadBtn = document.createElement('button');
+      loadBtn.className = 'chip small'; loadBtn.type = 'button'; loadBtn.textContent = 'Load';
+      loadBtn.disabled = !saved;
+      loadBtn.onclick = () => {
+        if (!saved || !applySaveData(saved)) return;
+        history.length = 0; redoStack.length = 0; syncUndoUI();
+        worldDirty = true; recompute(); saveNow(); center();
+        sfx('undo');
+        setCitiesOpen(false);
+      };
+      row.append(meta, saveBtn, loadBtn);
+      list.appendChild(row);
+    }
+  }
+
+  function setCitiesOpen(open) {
+    const pop = $('citiesPop');
+    const btn = $('citiesBtn');
+    if (open) renderSlots();
+    pop.dataset.open = String(open);
+    btn.setAttribute('aria-expanded', String(open));
+  }
+  $('citiesBtn').onclick = (e) => {
+    e.stopPropagation();
+    setCitiesOpen($('citiesPop').dataset.open !== 'true');
+  };
+  addEventListener('pointerdown', (e) => {
+    const pop = $('citiesPop');
+    if (pop.dataset.open === 'true' && !pop.contains(e.target) && e.target !== $('citiesBtn')) setCitiesOpen(false);
+  });
+  $('exportBtn').onclick = () => {
+    const blob = new Blob([JSON.stringify({ grid, levels, money, hour }, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'isocity-save.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+  $('importBtn').onclick = () => $('importFile').click();
+  $('importFile').onchange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      if (!applySaveData(data)) return flash('Invalid city file');
+      history.length = 0; redoStack.length = 0; syncUndoUI();
+      worldDirty = true; recompute(); saveNow(); center();
+      sfx('build');
+      setCitiesOpen(false);
+    } catch (err) { flash('Could not read file'); }
+  };
 
   // ---------- input ----------
   let drag = null, lastTile = null, lastTipKey = '';
@@ -979,18 +1184,22 @@
     const b = document.createElement('button');
     b.className = 'tool'; b.type = 'button'; b.dataset.tool = id;
     b.setAttribute('aria-pressed', 'false');
-    const key = i < 9 ? i + 1 : 0;
-    b.setAttribute('aria-label', `${d.name}${d.cost ? ', costs ' + d.cost : ''}, shortcut ${key}`);
+    const key = i < 9 ? String(i + 1) : i === 11 ? 'B' : '';
+    b.setAttribute('aria-label', `${d.name}${d.cost ? ', costs ' + d.cost : ''}${key ? ', shortcut ' + key : ''}`);
     b.innerHTML = `<span class="swatch" style="background:${d.color}"></span><span class="name">${d.name}</span><span class="cost">${d.cost ? '$' + d.cost : ''}</span>`;
     b.onclick = () => setTool(id);
     toolsEl.appendChild(b);
     toolBtns.push(b);
   });
   addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') setCitiesOpen(false);
     if (e.target.matches('input')) return;
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); return e.shiftKey ? redo() : undo(); }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); return redo(); }
-    if (e.key === '0') return setTool(ORDER[9]);
+    const k = e.key.toLowerCase();
+    if (k === 'b' || k === '0') return setTool('bulldoze');
+    if (k === 'p') return setTool('pan');
+    if (k === 'r') return setTool('road');
     const n = Number(e.key);
     if (n >= 1 && n <= 9 && ORDER[n - 1]) setTool(ORDER[n - 1]);
     if (e.key === '+' || e.key === '=') zoomAt(1.2);
@@ -1030,7 +1239,7 @@
   }
   addEventListener('resize', resize);
 
-  let last = performance.now(), acc = 0, lastLabel = '';
+  let last = performance.now(), acc = 0, growTick = 0, lastLabel = '';
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
     if (auto) hour = (hour + dt * 0.35) % 24;
@@ -1044,7 +1253,14 @@
     stepList(cars, dt);
     stepList(walkers, dt);
     acc += dt;
-    if (acc >= 3) { acc = 0; money += stats.net; render_stats(); scheduleSave(); }
+    if (acc >= 3) {
+      acc = 0;
+      money += stats.net;
+      render_stats();
+      scheduleSave();
+      growTick++;
+      if (growTick % 2 === 0) tryGrow();
+    }
     draw(now, dt);
     requestAnimationFrame(frame);
   }
