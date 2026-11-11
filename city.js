@@ -1,7 +1,7 @@
 (() => {
   const N = 26;
   const TW = 64, TH = 32;
-  const SAVE_KEY = 'isocity-v2';
+  const SAVE_KEY = 'isocity-v3';
 
   const TYPES = {
     pan:    { name: 'Pan',      cost: 0,   color: '#9aa39d' },
@@ -12,9 +12,11 @@
     office: { name: 'Office',   cost: 600, color: '#7fa6c9', jobs: 16, h: 118, inset: 0.1 },
     park:   { name: 'Park',     cost: 150, color: '#8cbf5c' },
     forest: { name: 'Forest',   cost: 5,   color: '#d9a21f' },
+    water:  { name: 'Water',    cost: 15,  color: '#3b7378' },
+    bridge: { name: 'Bridge',   cost: 35,  color: '#8e8372' },
     bulldoze:{ name: 'Bulldoze',cost: 0,   color: '#b4513f' },
   };
-  const ORDER = ['pan', 'road', 'house', 'apt', 'shop', 'office', 'park', 'forest', 'bulldoze'];
+  const ORDER = ['pan', 'road', 'house', 'apt', 'shop', 'office', 'park', 'forest', 'water', 'bulldoze'];
 
   const canvas = document.getElementById('stage');
   const ctx = canvas.getContext('2d', { alpha: false });
@@ -22,11 +24,13 @@
 
   let grid, money, tool = 'road';
   let cam = { x: 0, y: 0, z: 1 };
-  let hover = null, cars = [], orphansList = [];
+  let hover = null, cars = [], walkers = [], orphansList = [];
   let hour = 17.4, auto = false, stats = {};
   let dpr = 1, W = 0, H = 0;
   const rnd = (a, b) => a + Math.random() * (b - a);
   const inb = (x, y) => x >= 0 && y >= 0 && x < N && y < N;
+  const isRoad = (t) => t === 'road' || t === 'bridge';
+  const isWater = (t) => t === 'water' || t === 'bridge';
 
   // Active render target (swapped between worldCanvas, nightCanvas, and main ctx)
   let rctx = ctx, rcam = cam;
@@ -42,21 +46,91 @@
     anims.set(x * 100 + y, { start: performance.now(), dur: out ? 180 : 280, out, type });
   };
 
+  // Drifting autumn leaves (tiny screen-space particles, skipped on reduced-motion)
+  const leaves = Array.from({ length: 14 }, (_, i) => ({
+    x: ((i * 197) % 1000) / 1000,
+    y: ((i * 353) % 1000) / 1000,
+    vx: rnd(0.008, 0.018),
+    vy: rnd(0.012, 0.025),
+    phase: rnd(0, 6.28),
+    col: ['#d9a21f', '#e08a2c', '#c9612f', '#e8b832'][i % 4],
+  }));
+
+  // ---------- sound ----------
+  let soundOn = true, audioCtx = null, lastSfx = 0;
+  function sfx(kind) {
+    if (!soundOn) return;
+    const now = performance.now();
+    if (now - lastSfx < 48) return;
+    lastSfx = now;
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const t = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      if (kind === 'build') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(300, t);
+        osc.frequency.exponentialRampToValueAtTime(440, t + 0.055);
+        gain.gain.setValueAtTime(0.05, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.065);
+        osc.start(t); osc.stop(t + 0.07);
+      } else if (kind === 'bulldoze') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(140, t);
+        osc.frequency.exponentialRampToValueAtTime(55, t + 0.07);
+        gain.gain.setValueAtTime(0.04, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.075);
+        osc.start(t); osc.stop(t + 0.08);
+      } else if (kind === 'undo') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(380, t);
+        osc.frequency.exponentialRampToValueAtTime(260, t + 0.055);
+        gain.gain.setValueAtTime(0.045, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+        osc.start(t); osc.stop(t + 0.065);
+      } else {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(210, t);
+        osc.frequency.exponentialRampToValueAtTime(140, t + 0.04);
+        gain.gain.setValueAtTime(0.04, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.045);
+        osc.start(t); osc.stop(t + 0.05);
+      }
+    } catch (e) { /* audio blocked */ }
+  }
+
   // ---------- state ----------
   function starter() {
     grid = Array.from({ length: N }, () => Array(N).fill('forest'));
     money = 5000;
     hour = 17.4;
-    const set = (x, y, t) => { grid[x][y] = t; };
+    const set = (x, y, t) => { if (inb(x, y)) grid[x][y] = t; };
+
+    // Winding river across the south-east side of the forest
+    let ry = 19;
+    for (let rx = 0; rx < N; rx++) {
+      set(rx, ry, 'water');
+      set(rx, ry + 1, 'water');
+      if (rx % 5 === 3 && ry > 12) {
+        ry--;
+        set(rx, ry, 'water');
+      }
+    }
+
+    // Winding main road, side street, and river-crossing loop with bridges
     let y = 4;
     for (let x = 3; x < 23; x++) { set(x, y, 'road'); if (x % 5 === 0) { y += x % 10 === 0 ? 1 : -1; set(x, y, 'road'); } }
-    for (let j = 4; j < 20; j++) set(11, j, 'road');
-    for (let i = 11; i <= 17; i++) set(i, 15, 'road');
-    for (let j = 9; j <= 15; j++) set(17, j, 'road');
+    for (let j = 4; j < 21; j++) set(11, j, grid[11][j] === 'water' ? 'bridge' : 'road');
+    for (let i = 11; i <= 17; i++) set(i, 14, grid[i][14] === 'water' ? 'bridge' : 'road');
+    for (let j = 9; j <= 19; j++) set(17, j, grid[17][j] === 'water' ? 'bridge' : 'road');
+
     const lots = [];
     for (let x = 0; x < N; x++) for (let j = 0; j < N; j++) {
       if (grid[x][j] !== 'forest') continue;
-      const near = [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy]) => inb(x+dx,j+dy) && grid[x+dx][j+dy] === 'road');
+      const near = [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy]) => inb(x+dx,j+dy) && isRoad(grid[x+dx][j+dy]));
       if (near) lots.push([x, j]);
     }
     let k = 0;
@@ -90,32 +164,34 @@
 
   // ---------- simulation ----------
   const NB = [[1,0],[-1,0],[0,1],[0,-1]];
-  const connected = (x, y) => NB.some(([dx,dy]) => inb(x+dx,y+dy) && grid[x+dx][y+dy] === 'road');
+  const connected = (x, y) => NB.some(([dx,dy]) => inb(x+dx,y+dy) && isRoad(grid[x+dx][y+dy]));
+  const nearWater = (x, y) => NB.some(([dx,dy]) => inb(x+dx,y+dy) && isWater(grid[x+dx][y+dy]));
 
   function recompute() {
-    let pop = 0, jobs = 0, parks = 0, roads = 0, orphans = 0, blds = 0, trees = 0;
+    let pop = 0, jobs = 0, parks = 0, roads = 0, orphans = 0, blds = 0, trees = 0, waterfront = 0;
     orphansList = [];
     for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
       const t = grid[x][y];
-      if (!t) continue;
+      if (!t || t === 'water') continue;
       if (t === 'forest') { trees++; continue; }
-      if (t === 'road') { roads++; continue; }
-      if (t === 'park') { parks++; continue; }
+      if (isRoad(t)) { roads++; continue; }
+      if (t === 'park') { parks++; if (nearWater(x, y)) waterfront++; continue; }
       blds++;
       if (!connected(x, y)) { orphans++; orphansList.push([x, y, TYPES[t].h]); continue; }
       pop += TYPES[t].pop || 0;
       jobs += TYPES[t].jobs || 0;
+      if (nearWater(x, y)) waterfront++;
     }
     const employed = Math.min(pop, jobs);
-    const income = employed * 3 + Math.min(pop, jobs * 2) * 0.5;
+    const income = employed * 3 + Math.min(pop, jobs * 2) * 0.5 + waterfront * 2;
     const upkeep = roads * 0.4 + parks * 2 + blds * 0.5;
-    let happy = 50 + Math.min(parks * 5, 25) + Math.min(trees * 0.1, 15) - orphans * 6;
+    let happy = 50 + Math.min(parks * 5, 25) + Math.min(trees * 0.1, 15) + Math.min(waterfront * 2, 10) - orphans * 6;
     if (pop > 0) happy += (employed / pop - 0.6) * 30;
     if (jobs > pop * 1.5) happy -= 8;
     happy = Math.max(0, Math.min(100, Math.round(happy)));
-    stats = { pop, jobs, roads, parks, orphans, net: Math.round(income - upkeep), happy };
+    stats = { pop, jobs, roads, parks, orphans, waterfront, net: Math.round(income - upkeep), happy };
     render_stats();
-    syncCars();
+    syncAgents();
   }
 
   const fmt = (n) => Math.round(n).toLocaleString('en-US');
@@ -132,28 +208,38 @@
     }
   }
 
-  // ---------- cars ----------
+  // ---------- cars & walkers ----------
   function roadTiles() {
     const r = [];
-    for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) if (grid[x][y] === 'road') r.push([x, y]);
+    for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) if (isRoad(grid[x][y])) r.push([x, y]);
     return r;
   }
-  function syncCars() {
-    cars = cars.filter((c) => grid[c.tx]?.[c.ty] === 'road' && grid[c.fx]?.[c.fy] === 'road');
+  function syncAgents() {
+    cars = cars.filter((c) => isRoad(grid[c.tx]?.[c.ty]) && isRoad(grid[c.fx]?.[c.fy]));
+    walkers = walkers.filter((w) => isRoad(grid[w.tx]?.[w.ty]) && isRoad(grid[w.fx]?.[w.fy]));
     const r = roadTiles();
-    const want = Math.min(48, Math.floor(r.length / 3));
-    while (cars.length < want) {
+    if (!r.length) { cars.length = 0; walkers.length = 0; return; }
+    const wantCars = Math.min(48, Math.floor(r.length / 3));
+    while (cars.length < wantCars) {
       const [x, y] = r[Math.floor(Math.random() * r.length)];
       cars.push({ fx: x, fy: y, tx: x, ty: y, t: 1, px: x, py: y, speed: rnd(0.9, 1.7),
         color: ['#c0463a', '#2f5d8a', '#e6e2d6', '#d89a2b', '#3d3f45', '#4f8f6a'][Math.floor(Math.random() * 6)] });
     }
-    if (cars.length > want) cars.length = want;
+    if (cars.length > wantCars) cars.length = wantCars;
+
+    const wantWalkers = Math.min(24, Math.floor(stats.pop / 8));
+    while (walkers.length < wantWalkers) {
+      const [x, y] = r[Math.floor(Math.random() * r.length)];
+      walkers.push({ fx: x, fy: y, tx: x, ty: y, t: 1, px: x, py: y, speed: rnd(0.28, 0.48),
+        color: ['#e6ded0', '#c95d43', '#3b6978', '#d4a23a', '#5b7a52'][Math.floor(Math.random() * 5)] });
+    }
+    if (walkers.length > wantWalkers) walkers.length = wantWalkers;
   }
-  function stepCars(dt) {
-    for (const c of cars) {
+  function stepList(list, dt) {
+    for (const c of list) {
       c.t += dt * c.speed;
       if (c.t >= 1) {
-        const opts = NB.map(([dx,dy]) => [c.tx+dx, c.ty+dy]).filter(([x,y]) => inb(x,y) && grid[x][y] === 'road');
+        const opts = NB.map(([dx,dy]) => [c.tx+dx, c.ty+dy]).filter(([x,y]) => inb(x,y) && isRoad(grid[x][y]));
         if (!opts.length) { c.t = 1; continue; }
         const fwd = opts.filter(([x,y]) => !(x === c.fx && y === c.fy));
         const pool = fwd.length ? fwd : opts;
@@ -242,12 +328,12 @@
     }
   }
 
-  // Lit-only pass baked into nightCanvas (drawn un-multiplied at night)
   function drawTileNight(x, y, t) {
     if (!t) return;
-    if (t === 'road') {
+    if (isRoad(t)) {
       if ((x + y) % 3 === 0) {
-        const ax = px(x + 0.5, y + 0.5), ay = py(x + 0.5, y + 0.5);
+        const z = t === 'bridge' ? 2 : 0;
+        const ax = px(x + 0.5, y + 0.5), ay = py(x + 0.5, y + 0.5, z);
         rctx.fillStyle = 'rgba(255,214,130,0.28)';
         rctx.beginPath(); rctx.arc(ax, ay, 18 * rcam.z, 0, 7); rctx.fill();
       }
@@ -274,27 +360,46 @@
     }
   }
 
-  function drawRoad(x, y, L) {
-    quadZ(x, y, x + 1, y + 1, 0, shade('#4a5159', 1, L));
+  function drawWater(x, y, L) {
+    quadZ(x, y, x + 1, y + 1, -5, shade((x + y) % 2 ? '#295b60' : '#26565b', 1, L));
+    // subtle reflection shimmer band
+    if ((x * 3 + y * 5) % 4 === 0) {
+      poly4(px(x + 0.2, y + 0.35), py(x + 0.2, y + 0.35, -5), px(x + 0.75, y + 0.35), py(x + 0.75, y + 0.35, -5),
+        px(x + 0.85, y + 0.47), py(x + 0.85, y + 0.47, -5), px(x + 0.3, y + 0.47), py(x + 0.3, y + 0.47, -5),
+        shade('#3c7b80', 1, L));
+    }
+    // inner shore bank on top-left edges where neighbor is land
+    if (inb(x - 1, y) && !isWater(grid[x - 1][y])) {
+      poly4(px(x, y), py(x, y, 0), px(x, y + 1), py(x, y + 1, 0), px(x, y + 1), py(x, y + 1, -5), px(x, y), py(x, y, -5), shade('#5b4c39', 1, L));
+    }
+    if (inb(x, y - 1) && !isWater(grid[x][y - 1])) {
+      poly4(px(x, y), py(x, y, 0), px(x + 1, y), py(x + 1, y, 0), px(x + 1, y), py(x + 1, y, -5), px(x, y), py(x, y, -5), shade('#6b5a44', 1, L));
+    }
+  }
+
+  function drawRoad(x, y, L, bridge = false) {
+    const z = bridge ? 2 : 0;
+    if (bridge) {
+      drawWater(x, y, L);
+      box(x + 0.05, y + 0.05, x + 0.95, y + 0.95, -5, z, '#8c806e', L, { roof: '#525961' });
+    } else {
+      quadZ(x, y, x + 1, y + 1, 0, shade('#4a5159', 1, L));
+    }
     const mx = x + 0.5, my = y + 0.5;
     rctx.strokeStyle = shade('#e9e4cf', 1, L);
     rctx.lineWidth = Math.max(1, 1.4 * rcam.z);
     rctx.setLineDash([5 * rcam.z, 5 * rcam.z]);
     rctx.beginPath();
-    const ax = px(mx, my), ay = py(mx, my);
+    const ax = px(mx, my), ay = py(mx, my, z);
     for (let i = 0; i < 4; i++) {
       const dx = NB[i][0], dy = NB[i][1];
-      if (inb(x + dx, y + dy) && grid[x + dx][y + dy] === 'road') {
+      if (inb(x + dx, y + dy) && isRoad(grid[x + dx][y + dy])) {
         rctx.moveTo(ax, ay);
-        rctx.lineTo(px(mx + dx * 0.5, my + dy * 0.5), py(mx + dx * 0.5, my + dy * 0.5));
+        rctx.lineTo(px(mx + dx * 0.5, my + dy * 0.5), py(mx + dx * 0.5, my + dy * 0.5, z));
       }
     }
     rctx.stroke();
     rctx.setLineDash([]);
-    if (L < 0.5 && (x + y) % 3 === 0) {
-      rctx.fillStyle = `rgba(255,214,130,${(0.5 - L) * 0.5})`;
-      rctx.beginPath(); rctx.arc(ax, ay, 18 * rcam.z, 0, 7); rctx.fill();
-    }
   }
 
   // ---------- cached daylight tree crown sprites ----------
@@ -318,23 +423,12 @@
     return c;
   });
 
-  function tree(x, y, s, L, seed = 0, useSprite = true) {
+  function tree(x, y, s, L, seed = 0) {
     if (!seed) box(x - 0.025, y - 0.025, x + 0.025, y + 0.025, 0, 8 * s, '#4a3624', L);
     const cx = px(x, y), cy = py(x, y, 19 * s);
-    if (useSprite) {
-      const k = s * rcam.z;
-      const spr = crownSprites[Math.abs(seed) % crownSprites.length];
-      rctx.drawImage(spr, cx - SPR_CX * k, cy - SPR_CY * k, SPR_W * k, SPR_H * k);
-      return;
-    }
-    const [dark, light] = CROWNS[Math.abs(seed) % CROWNS.length];
-    const R = 10 * s * rcam.z;
-    rctx.fillStyle = shade('#16301a', 1, L);
-    rctx.beginPath(); rctx.ellipse(cx + 3 * rcam.z, cy + 14 * s * rcam.z, R * 0.95, R * 0.45, 0, 0, 7); rctx.fill();
-    rctx.fillStyle = shade(dark, 1, L);
-    rctx.beginPath(); rctx.arc(cx, cy, R, 0, 7); rctx.fill();
-    rctx.fillStyle = shade(light, 1, L);
-    rctx.beginPath(); rctx.arc(cx - R * 0.25, cy - R * 0.3, R * 0.68, 0, 7); rctx.fill();
+    const k = s * rcam.z;
+    const spr = crownSprites[Math.abs(seed) % crownSprites.length];
+    rctx.drawImage(spr, cx - SPR_CX * k, cy - SPR_CY * k, SPR_W * k, SPR_H * k);
   }
 
   const FOREST_SPOTS = [[0.28, 0.25], [0.74, 0.3], [0.5, 0.52], [0.25, 0.78], [0.76, 0.76]];
@@ -342,35 +436,36 @@
   const REDS = ['#b0412e', '#bd5530', '#923a2c', '#c9612f'];
 
   function drawGround(x, y, t, L) {
+    if (t === 'water' || t === 'bridge') return drawWater(x, y, L);
     const base = t === 'forest' ? ((x + y) % 2 ? '#2a4a28' : '#274524')
       : t === 'park' ? '#86b65f' : ((x + y) % 2 ? '#7da663' : '#74a05a');
     quadZ(x, y, x + 1, y + 1, 0, shade(base, 1, L));
   }
 
-  function drawTile(x, y, t, L, hs = 1, skipGround = false, useSprite = true) {
-    if (!skipGround && t !== 'road') drawGround(x, y, t, L);
-    if (!t) return;
+  function drawTile(x, y, t, L, hs = 1, skipGround = false) {
+    if (!skipGround && t !== 'road' && t !== 'bridge') drawGround(x, y, t, L);
+    if (!t || t === 'water') return;
     if (t === 'forest') {
       const sd = x * 17 + y * 31;
       for (let i = 0; i < 5; i++) {
         const [a, b] = FOREST_SPOTS[i];
         const sc = (0.8 + ((Math.imul(sd + i * 331, 2246822519) >>> 24) % 4) * 0.1) * hs;
         const cs = Math.imul(sd + i * 977, 2654435761) >>> 20;
-        tree(x + a, y + b, sc, L, cs, useSprite);
+        tree(x + a, y + b, sc, L, cs);
       }
       return;
     }
-    if (t === 'road') {
+    if (t === 'road' || t === 'bridge') {
       if (hs < 1) rctx.globalAlpha = hs;
-      drawRoad(x, y, L);
+      drawRoad(x, y, L, t === 'bridge');
       if (hs < 1) rctx.globalAlpha = 1;
       return;
     }
     if (t === 'park') {
       const sd = x * 7 + y * 3;
-      tree(x + 0.3, y + 0.3, hs, L, 0, useSprite);
-      tree(x + 0.7, y + 0.55, 0.85 * hs, L, 1, useSprite);
-      if (sd % 2) tree(x + 0.35, y + 0.78, 0.7 * hs, L, 0, useSprite);
+      tree(x + 0.3, y + 0.3, hs, L, 0);
+      tree(x + 0.7, y + 0.55, 0.85 * hs, L, 1);
+      if (sd % 2) tree(x + 0.35, y + 0.78, 0.7 * hs, L, 0);
       return;
     }
     const d = TYPES[t];
@@ -403,14 +498,28 @@
     const dx = c.tx - c.fx, dy = c.ty - c.fy;
     const ox = -dy * 0.16, oy = dx * 0.16;
     const x = c.px + 0.5 + ox, y = c.py + 0.5 + oy;
+    const z0 = grid[Math.round(c.px)]?.[Math.round(c.py)] === 'bridge' ? 2 : 0;
     if (!headlightsOnly) {
       const lx = dx ? 0.16 : s, ly = dy ? 0.16 : s;
-      box(x - lx, y - ly, x + lx, y + ly, 0, 7, c.color, L);
+      box(x - lx, y - ly, x + lx, y + ly, z0, z0 + 7, c.color, L);
     } else if (L < 0.5) {
-      const hx = px(x + dx * 0.2, y + dy * 0.2), hy = py(x + dx * 0.2, y + dy * 0.2, 4);
+      const hx = px(x + dx * 0.2, y + dy * 0.2), hy = py(x + dx * 0.2, y + dy * 0.2, z0 + 4);
       rctx.fillStyle = 'rgba(255,230,160,0.55)';
       rctx.beginPath(); rctx.arc(hx, hy, 7 * rcam.z, 0, 7); rctx.fill();
     }
+  }
+
+  function drawWalker(w) {
+    const dx = w.tx - w.fx, dy = w.ty - w.fy;
+    const ox = -dy * 0.34, oy = dx * 0.34;
+    const x = w.px + 0.5 + ox, y = w.py + 0.5 + oy;
+    const z0 = grid[Math.round(w.px)]?.[Math.round(w.py)] === 'bridge' ? 2 : 0;
+    const sx = px(x, y), sy = py(x, y, z0);
+    const sz = rcam.z;
+    rctx.fillStyle = w.color;
+    rctx.fillRect(sx - 1.5 * sz, sy - 5 * sz, 3 * sz, 5 * sz);
+    rctx.fillStyle = '#e7c6a5';
+    rctx.fillRect(sx - 1 * sz, sy - 7 * sz, 2 * sz, 2 * sz);
   }
 
   // ---------- offscreen world & night light caches (baked at neutral daylight) ----------
@@ -459,7 +568,7 @@
         rctx = wctx;
         if (anims.has(key)) drawGround(x, y, grid[x][y], 1);
         else {
-          drawTile(x, y, grid[x][y], 1, 1, false, true);
+          drawTile(x, y, grid[x][y], 1, 1, false);
           rctx = nctx;
           drawTileNight(x, y, grid[x][y]);
         }
@@ -497,7 +606,7 @@
         rctx = wctx;
         if (anims.has(key)) drawGround(x, y, grid[x][y], 1);
         else {
-          drawTile(x, y, grid[x][y], 1, 1, false, true);
+          drawTile(x, y, grid[x][y], 1, 1, false);
           rctx = nctx;
           drawTileNight(x, y, grid[x][y]);
         }
@@ -522,7 +631,27 @@
   const seen = new Uint8Array(N * N);
   const ov = [];
 
-  function draw(now) {
+  function addOccluders(rx, ry) {
+    for (let dx = 0; dx <= 3; dx++) {
+      const tx = rx + dx;
+      if (tx < 0 || tx >= N) continue;
+      for (let dy = 0; dy <= 3; dy++) {
+        if (dx === 0 && dy === 0) continue;
+        if (Math.abs(dx - dy) > 2) continue;
+        const ty = ry + dy;
+        if (ty < 0 || ty >= N) continue;
+        const idx = tx * N + ty;
+        if (seen[idx]) continue;
+        const t = grid[tx][ty];
+        if (!t || isRoad(t) || t === 'water') continue;
+        if ((dx > 1 || dy > 1) && t !== 'office' && t !== 'apt') continue;
+        seen[idx] = 1;
+        ov.push({ k: 0, s: tx + ty, x: tx, y: ty, t, hs: 1 });
+      }
+    }
+  }
+
+  function draw(now, dt) {
     const L = daylight(hour);
     warm = Math.max(0, 1 - Math.abs(hour - 17.6) / 2.2, 1 - Math.abs(hour - 6.4) / 1.6);
 
@@ -541,11 +670,9 @@
     ctx.fillStyle = mix('#07110c', '#1f3b2a', L);
     ctx.fillRect(0, 0, W, H);
 
-    // 1 single drawImage for the entire static island
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(worldCanvas, cam.x - OX * cam.z, cam.y - OY * cam.z, WW * cam.z, WH * cam.z);
 
-    // Collect animating tiles, cars, and foreground occluders
     seen.fill(0);
     ov.length = 0;
 
@@ -570,39 +697,29 @@
       const cx0 = px(c.px + 0.5, c.py + 0.5), cy0 = py(c.px + 0.5, c.py + 0.5);
       if (cx0 < -40 || cx0 > W + 40 || cy0 < -40 || cy0 > H + 40) continue;
       ov.push({ k: 1, s: c.px + c.py, c });
-      const rx = Math.floor(c.px), ry = Math.floor(c.py);
-      for (let dx = 0; dx <= 3; dx++) {
-        const tx = rx + dx;
-        if (tx < 0 || tx >= N) continue;
-        for (let dy = 0; dy <= 3; dy++) {
-          if (dx === 0 && dy === 0) continue;
-          if (Math.abs(dx - dy) > 2) continue;
-          const ty = ry + dy;
-          if (ty < 0 || ty >= N) continue;
-          const idx = tx * N + ty;
-          if (seen[idx]) continue;
-          const t = grid[tx][ty];
-          if (!t || t === 'road') continue;
-          if ((dx > 1 || dy > 1) && t !== 'office' && t !== 'apt') continue;
-          seen[idx] = 1;
-          ov.push({ k: 0, s: tx + ty, x: tx, y: ty, t, hs: 1 });
-        }
-      }
+      addOccluders(Math.floor(c.px), Math.floor(c.py));
     }
 
-    // Draw animating tiles, cars, and occluding tiles at daylight (1, warm=0) so they match worldCanvas seamlessly
+    for (let i = 0; i < walkers.length; i++) {
+      const w = walkers[i];
+      const wx0 = px(w.px + 0.5, w.py + 0.5), wy0 = py(w.px + 0.5, w.py + 0.5);
+      if (wx0 < -30 || wx0 > W + 30 || wy0 < -30 || wy0 > H + 30) continue;
+      ov.push({ k: 2, s: w.px + w.py, w });
+      addOccluders(Math.floor(w.px), Math.floor(w.py));
+    }
+
     if (ov.length) {
       const savedW = warm; warm = 0;
       if (ov.length > 1) ov.sort((a, b) => a.s - b.s || a.k - b.k);
       for (let i = 0; i < ov.length; i++) {
         const it = ov[i];
         if (it.k === 1) drawCar(it.c, 1, false);
-        else drawTile(it.x, it.y, it.t, 1, it.hs, true, true);
+        else if (it.k === 2) drawWalker(it.w);
+        else drawTile(it.x, it.y, it.t, 1, it.hs, true);
       }
       warm = savedW;
     }
 
-    // One combined source-over time-of-day tint across worldCanvas + overlay
     if (warm > 0.02 || L < 0.98) {
       const wa = warm * 0.14;
       const na = (1 - L) * 0.68;
@@ -616,7 +733,6 @@
       }
     }
 
-    // Lit windows, streetlights, and car headlights (un-darkened)
     if (L < 0.65) {
       ctx.globalAlpha = Math.min(1, (0.65 - L) * 2.4);
       ctx.drawImage(nightCanvas, cam.x - OX * cam.z, cam.y - OY * cam.z, WW * cam.z, WH * cam.z);
@@ -624,6 +740,18 @@
     }
     if (L < 0.5 && cars.length) {
       for (let i = 0; i < ov.length; i++) if (ov[i].k === 1) drawCar(ov[i].c, L, true);
+    }
+
+    if (!reduceMotion && L > 0.25) {
+      ctx.globalAlpha = Math.min(0.85, L);
+      for (let i = 0; i < leaves.length; i++) {
+        const lf = leaves[i];
+        lf.x = (lf.x + lf.vx * dt + Math.sin(now * 0.0015 + lf.phase) * 0.003 * dt) % 1;
+        lf.y = (lf.y + lf.vy * dt) % 1;
+        ctx.fillStyle = lf.col;
+        ctx.fillRect(lf.x * W, lf.y * H, 3, 2);
+      }
+      ctx.globalAlpha = 1;
     }
 
     if (orphansList.length) {
@@ -644,10 +772,7 @@
 
     if (hover && tool !== 'pan') {
       const [x, y] = hover;
-      const T = TYPES[tool];
-      const cur = grid[x][y];
-      const bad = tool === 'bulldoze' ? !cur
-        : (T.cost > money || (tool === 'forest' ? !!cur : (cur && cur !== 'forest')));
+      const bad = !canApply(x, y);
       const col = tool === 'bulldoze' ? '#b4513f' : bad ? '#b4513f' : '#0f766e';
       quadZ(x, y, x + 1, y + 1, 0, col + '88');
       ctx.strokeStyle = col; ctx.lineWidth = 2;
@@ -665,25 +790,50 @@
   }
 
   // ---------- actions ----------
+  function nextTile(cur, t) {
+    if (t === 'bulldoze') return cur === 'bridge' ? 'water' : null;
+    if (t === 'road' && cur === 'water') return 'bridge';
+    if (t === 'water') return (!cur || cur === 'forest') ? 'water' : null;
+    if (t === 'forest') return !cur ? 'forest' : null;
+    return (!cur || cur === 'forest') ? t : null;
+  }
+  function tileCost(cur, t) {
+    if (t === 'road' && cur === 'water') return TYPES.bridge.cost;
+    return TYPES[t].cost;
+  }
+  function canApply(x, y) {
+    const cur = grid[x][y];
+    if (tool === 'pan') return false;
+    if (tool === 'bulldoze') return !!cur;
+    const nxt = nextTile(cur, tool);
+    return !!nxt && tileCost(cur, tool) <= money;
+  }
+
   const history = [];
   function apply(x, y) {
     const cur = grid[x][y];
     if (tool === 'pan') return;
     if (tool === 'bulldoze') {
       if (!cur) return;
+      const nxt = nextTile(cur, 'bulldoze');
       history.push({ x, y, prev: cur, cost: 0 });
-      grid[x][y] = null;
+      grid[x][y] = nxt;
       animate(x, y, true, cur);
+      sfx('bulldoze');
     } else {
-      const cost = TYPES[tool].cost;
-      const blocked = tool === 'forest' ? !!cur : (cur && cur !== 'forest');
-      if (blocked || cur === tool || cost > money) { if (!blocked && cost > money) flash('Not enough funds'); return; }
+      const nxt = nextTile(cur, tool);
+      if (!nxt) return;
+      const cost = tileCost(cur, tool);
+      if (cost > money) return flash('Not enough funds');
       history.push({ x, y, prev: cur, cost });
-      grid[x][y] = tool; money -= cost;
+      grid[x][y] = nxt; money -= cost;
       animate(x, y, false);
+      sfx(nxt === 'road' || nxt === 'bridge' || nxt === 'water' || nxt === 'forest' ? 'tap' : 'build');
     }
     if (history.length > 200) history.shift();
     dirtyCols.add(x - y);
+    dirtyCols.add(x - y + 1);
+    dirtyCols.add(x - y - 1);
     recompute(); scheduleSave();
   }
 
@@ -693,7 +843,10 @@
     if (h.prev) { grid[h.x][h.y] = h.prev; animate(h.x, h.y, false); }
     else { animate(h.x, h.y, true, grid[h.x][h.y]); grid[h.x][h.y] = null; }
     money += h.cost;
+    sfx('undo');
     dirtyCols.add(h.x - h.y);
+    dirtyCols.add(h.x - h.y + 1);
+    dirtyCols.add(h.x - h.y - 1);
     recompute(); scheduleSave();
   }
 
@@ -710,11 +863,14 @@
     const t = grid[x][y];
     if (!t) return null;
     if (t === 'road') return 'Road';
-    if (t === 'park') return 'Park. Raises happiness.';
+    if (t === 'bridge') return 'Bridge. Connects roads across water.';
+    if (t === 'water') return 'Water. Build roads across it for bridges, or place homes beside it for a waterfront bonus.';
+    if (t === 'park') return 'Park. Raises happiness.' + (nearWater(x, y) ? ' Waterfront bonus.' : '');
     if (t === 'forest') return 'Forest. Clear it with the Bulldoze tool, or build over it.';
     const d = TYPES[t];
     const info = d.pop ? `${d.pop} residents` : `${d.jobs} jobs`;
-    return `${d.name}, ${info}.` + (connected(x, y) ? '' : ' No road access, so it does not count.');
+    const wf = connected(x, y) && nearWater(x, y) ? ' Waterfront view.' : '';
+    return `${d.name}, ${info}.` + (connected(x, y) ? wf : ' No road access, so it does not count.');
   }
 
   // ---------- input ----------
@@ -785,7 +941,8 @@
     const b = document.createElement('button');
     b.className = 'tool'; b.type = 'button'; b.dataset.tool = id;
     b.setAttribute('aria-pressed', 'false');
-    b.setAttribute('aria-label', `${d.name}${d.cost ? ', costs ' + d.cost : ''}, shortcut ${i + 1}`);
+    const key = i < 9 ? i + 1 : 0;
+    b.setAttribute('aria-label', `${d.name}${d.cost ? ', costs ' + d.cost : ''}, shortcut ${key}`);
     b.innerHTML = `<span class="swatch" style="background:${d.color}"></span><span class="name">${d.name}</span><span class="cost">${d.cost ? '$' + d.cost : ''}</span>`;
     b.onclick = () => setTool(id);
     toolsEl.appendChild(b);
@@ -794,14 +951,20 @@
   addEventListener('keydown', (e) => {
     if (e.target.matches('input')) return;
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); return undo(); }
+    if (e.key === '0') return setTool(ORDER[9]);
     const n = Number(e.key);
-    if (n >= 1 && n <= ORDER.length) setTool(ORDER[n - 1]);
+    if (n >= 1 && n <= 9 && ORDER[n - 1]) setTool(ORDER[n - 1]);
     if (e.key === '+' || e.key === '=') zoomAt(1.2);
     if (e.key === '-') zoomAt(1 / 1.2);
   });
 
   $('clock').addEventListener('input', (e) => { hour = Number(e.target.value); auto = false; $('autoBtn').setAttribute('aria-pressed', 'false'); });
   $('autoBtn').onclick = () => { auto = !auto; $('autoBtn').setAttribute('aria-pressed', String(auto)); };
+  $('soundBtn').onclick = () => {
+    soundOn = !soundOn;
+    $('soundBtn').setAttribute('aria-pressed', String(soundOn));
+    if (soundOn) sfx('tap');
+  };
   let resetArmed = 0;
   $('resetBtn').onclick = () => {
     const b = $('resetBtn');
@@ -838,10 +1001,11 @@
       $('clockText').textContent = label;
       if (document.activeElement !== $('clock')) $('clock').value = hour;
     }
-    stepCars(dt);
+    stepList(cars, dt);
+    stepList(walkers, dt);
     acc += dt;
     if (acc >= 3) { acc = 0; money += stats.net; render_stats(); scheduleSave(); }
-    draw(now);
+    draw(now, dt);
     requestAnimationFrame(frame);
   }
 

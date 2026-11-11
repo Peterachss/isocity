@@ -6,7 +6,8 @@ Live demo: https://peterachss.github.io/isocity/
 
 ## Play
 
-- Pick a tool on the left (or press 1 to 9) and click or drag on the map.
+- Pick a tool on the left (or press 1 to 9, and 0 for Bulldoze) and click or drag on the map.
+- Lay roads over water to build bridges. Homes and parks beside water earn a waterfront bonus.
 - Forest tiles clear with Bulldoze or get built over.
 - Buildings only count when they touch a road. Unconnected ones show a red marker.
 - Residents need jobs. Parks raise happiness. Roads, parks and buildings cost upkeep.

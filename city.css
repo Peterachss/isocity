@@ -169,15 +169,16 @@ html, body { height: 100%; overflow: hidden; background: #162b1f; }
 
 @media (max-width: 760px) {
   .hint { display: none; }
-  .tools { top: auto; bottom: 72px; left: 12px; right: 12px; transform: none; grid-auto-flow: column; overflow-x: auto; overflow-y: hidden; max-height: none; }
-  .tool { min-width: 0; grid-template-columns: 18px auto; }
+  .tools { top: auto; bottom: 68px; left: 12px; right: 12px; transform: none; grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; overflow-y: hidden; max-height: none; }
+  .tool { min-width: max-content; white-space: nowrap; grid-template-columns: 18px auto; padding: 8px 10px; gap: 7px; }
   .tool .cost { display: none; }
-  .time { right: auto; padding-right: 8px; }
-  .time input[type="range"] { width: 80px; }
+  .time { right: auto; padding: 6px 8px; gap: 6px; }
+  .time label { gap: 5px; }
+  .time input[type="range"] { width: 56px; }
   .time .chip { display: none; }
-  .actions { gap: 2px; }
-  .actions .chip { padding: 9px 10px; }
-  .actions .chip.icon { width: 34px; padding: 9px 0; }
+  .actions { gap: 3px; padding: 5px; }
+  .actions .chip { padding: 8px 9px; font-size: 12px; }
+  .actions .chip.icon { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
