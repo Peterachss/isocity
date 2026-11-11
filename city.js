@@ -422,9 +422,12 @@
     bots = bots.filter((b) => isRoad(grid[b.tx]?.[b.ty]) && isRoad(grid[b.fx]?.[b.fy]));
     boats = boats.filter((b) => isWater(grid[b.tx]?.[b.ty]) && isWater(grid[b.fx]?.[b.fy]));
 
+    bots.length = 0; drones.length = 0; dogs.length = 0;
+    if (cars.length > 14) cars.length = 14;
+    if (walkers.length > 12) walkers.length = 12;
     const r = roadTiles();
     if (r.length) {
-      const wantCars = 26;
+      const wantCars = 14;
       while (cars.length < wantCars) {
         const [x, y] = r[Math.floor(Math.random() * r.length)];
         const idx = cars.length;
@@ -437,7 +440,7 @@
       }
       if (cars.length > wantCars) cars.length = wantCars;
 
-      const wantWalkers = 22;
+      const wantWalkers = 12;
       while (walkers.length < wantWalkers) {
         const [x, y] = r[Math.floor(Math.random() * r.length)];
         const [cname, crole] = D.CITIZEN_NAMES[walkers.length % D.CITIZEN_NAMES.length];
@@ -446,7 +449,7 @@
           color: ['#e6ded0', '#c95d43', '#3b6978', '#d4a23a', '#5b7a52'][walkers.length % 5] });
       }
 
-      const wantBots = 16;
+      const wantBots = 0;
       while (bots.length < wantBots) {
         const [x, y] = r[Math.floor(Math.random() * r.length)];
         bots.push({ fx: x, fy: y, tx: x, ty: y, t: 1, px: x, py: y, speed: rnd(0.45, 0.78),
@@ -454,7 +457,7 @@
           color: BOT_COLORS[bots.length % BOT_COLORS.length] });
       }
 
-      while (dogs.length < 4) {
+      while (dogs.length < 0) {
         const [x, y] = r[Math.floor(Math.random() * r.length)];
         dogs.push({ fx: x, fy: y, tx: x, ty: y, t: 1, px: x, py: y, speed: 0.44 });
       }
@@ -467,7 +470,7 @@
         color: ['#b35a38', '#d8cbb5', '#3d6e70', '#c48f36'][boats.length % 4] });
     }
 
-    while (drones.length < 4) {
+    while (drones.length < 0) {
       drones.push({ x: rnd(5, 25), y: rnd(5, 27), vx: rnd(-1.1, 1.1) || 0.7, vy: rnd(-1.1, 1.1) || 0.6, phase: rnd(0, 6.28) });
     }
   }
@@ -1465,7 +1468,7 @@
       const st = grid[sx]?.[sy];
       if (isBuilding(st)) {
         if (!seen[sx * N + sy]) { seen[sx * N + sy] = 1; ov.push({ k: 0, s: sx + sy, x: sx, y: sy, t: st }); }
-        if (showAgents) {
+        if (false) {
           for (let i = 0; i < 3; i++) {
             const ang = (reduceMotion ? 0.6 : now * 0.0022) + i * 2.0944;
             const bx = sx + 0.5 + Math.cos(ang) * 0.58, by = sy + 0.5 + Math.sin(ang) * 0.58;
@@ -2694,7 +2697,7 @@
   }
 
   function resize() {
-    dpr = Math.min(2, devicePixelRatio || 1);
+    dpr = Math.min(1.5, devicePixelRatio || 1);
     W = innerWidth; H = innerHeight;
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
   }
