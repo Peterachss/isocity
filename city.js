@@ -679,6 +679,12 @@
         const a = (c + (glass ? 0.14 : 0.25)) / cols, b = (c + (glass ? 0.86 : 0.75)) / cols;
         const lx0 = x0 + dx * a, lx1 = x0 + dx * b;
         poly4(px(lx0, y1), py(lx0, y1, zz0), px(lx1, y1), py(lx1, y1, zz0), px(lx1, y1), py(lx1, y1, zz1), px(lx0, y1), py(lx0, y1, zz1), '#ffd98a');
+        if (((seed + r * 5 + c * 3) % 3) === 0) {
+          const mxw = px((lx0 + lx1) / 2, y1), myw = py((lx0 + lx1) / 2, y1, zz0);
+          rctx.fillStyle = 'rgba(52,36,22,0.85)';
+          rctx.fillRect(mxw - 1.6, myw - 3.2, 3.2, 3.2);
+          rctx.beginPath(); rctx.arc(mxw, myw - 4.4, 1.4, 0, 7); rctx.fill();
+        }
         const ry0 = y0 + dy * a, ry1 = y0 + dy * b;
         poly4(px(x1, ry0), py(x1, ry0, zz0), px(x1, ry1), py(x1, ry1, zz0), px(x1, ry1), py(x1, ry1, zz1), px(x1, ry0), py(x1, ry0, zz1), '#f0b862');
       }
@@ -2476,7 +2482,7 @@
     ...cars.map((a) => [a, 'car', 6]), ...walkers.map((a) => [a, 'walker', 8]), ...bots.map((a) => [a, 'bot', 9]),
     ...crew.map((a) => [a, 'walker', 8]),
   ];
-  const agentScreen = (a, z = 6) => [px(a.px + 0.5, a.py + 0.5), py(a.px + 0.5, a.py + 0.5, z)];
+  const agentScreen = (a, z = 6) => [px(a.px + 0.5, a.py + 0.5), py(a.px + 0.5, a.py + 0.5, z + (a.z0 || 0))];
   function nearestAgent(mx, my) {
     let best = null, bd = Math.max(16, 14 * cam.z) ** 2;
     for (const [a, kind, z] of agentList()) {
@@ -2535,18 +2541,48 @@
 
   // --- crew working at the selected building ---
   const CREW_SPOTS = [[1.0, 0.3], [0.35, 1.0], [1.1, 0.85], [0.75, 1.15], [1.15, 0.05]];
+  const SLOTS = [[0.3, 0.3], [0.72, 0.3], [0.3, 0.72], [0.72, 0.72], [0.5, 0.5]];
+  const SHIRTS = ['#e6ded0', '#c95d43', '#3b6978', '#d4a23a', '#5b7a52', '#8a6fb0', '#2f7a8a'];
+  function cutawayGeom() {
+    if (!selectedTile) return null;
+    const [x, y] = selectedTile;
+    const t = grid[x][y];
+    if (!isBuilding(t) || t === 'windmill' || t === 'wheel') return null;
+    const d = TYPES[t];
+    if (!d || !d.h) return null;
+    const i = d.inset || 0.12;
+    const H = Math.max(1, bldHeight(t, levels[x][y] || 1));
+    return { x, y, t, i, H, x0: x + i, y0: y + i, x1: x + 1 - i, y1: y + 1 - i, F: Math.max(1, Math.min(5, Math.floor(H / 26))) };
+  }
   function buildCrew() {
     crew = [];
     if (!selectedTile) return;
     const [x, y] = selectedTile;
     const item = getItem(pins[x][y]);
-    const n = item.kind === 'google' ? 3 : 4;
-    const colors = ['#e6ded0', '#c95d43', '#3b6978', '#d4a23a', '#5b7a52'];
-    for (let k = 0; k < n; k++) {
-      const role = item.kind === 'google' ? pickOne(['Student', 'Student', 'Manager']) : ['Developer', 'QA tester', 'DevOps', 'Designer', 'Manager'][k % 5];
-      const [ox, oy] = CREW_SPOTS[k];
-      crew.push({ px: x + ox - 0.5, py: y + oy - 0.5, ox: x + ox - 0.5, oy: y + oy - 0.5, color: colors[k % 5], phase: Math.random() * 6, speed: 0.4, crew: true,
-        info: { kind: 'walker', name: `${pickOne(FIRST)} ${initial()}.`, role, task: pickOne(ROLE_TASKS[role]), energy: rnd(60, 95), mood: 'focused', dest: item.name, nextTask: 0 } });
+    const g = cutawayGeom();
+    const rolesFor = (k) => item.kind === 'google' ? ['Student', 'Student', 'Manager', 'Designer'][k % 4] : ['Developer', 'QA tester', 'DevOps', 'Designer', 'Manager'][k % 5];
+    const mk = (px0, py0, z0, k, extra = {}) => {
+      const role = rolesFor(k);
+      return Object.assign({ px: px0 - 0.5, py: py0 - 0.5, ox: px0 - 0.5, oy: py0 - 0.5, z0, color: SHIRTS[k % SHIRTS.length], phase: Math.random() * 6, speed: 0.4, crew: true,
+        info: { kind: 'walker', name: `${pickOne(FIRST)} ${initial()}.`, role, task: pickOne(ROLE_TASKS[role]), energy: rnd(60, 95), mood: 'focused', dest: item.name, nextTask: 0 } }, extra);
+    };
+    if (g) {
+      const fh = g.H / g.F;
+      let k = 0;
+      for (let f = 0; f < g.F && crew.length < 9; f++) {
+        const per = g.F >= 4 ? 2 : 3;
+        for (let j = 0; j < per; j++) {
+          const [u, v] = SLOTS[(j + f) % SLOTS.length];
+          const desk = j % 2 === 0;
+          crew.push(mk(g.x0 + (g.x1 - g.x0) * u, g.y0 + (g.y1 - g.y0) * v, f * fh, k++, { inside: true, floor: f, fh, desk, sc: Math.min(1, (fh - 4) / 19), bubble: j === 0 }));
+        }
+      }
+    } else {
+      const n = 4;
+      for (let k = 0; k < n; k++) {
+        const [ox, oy] = CREW_SPOTS[k];
+        crew.push(mk(x + ox, y + oy, 0, k, { sc: 1, bubble: true }));
+      }
     }
   }
 
@@ -2622,12 +2658,13 @@
     const key = selectedTile ? selectedTile.join(',') : '';
     if (key !== lastSelKey) {
       lastSelKey = key;
-      if (selectedTile) { showAgent(null); buildCrew(); flyToTile(selectedTile[0], selectedTile[1], Math.max(cam.z, W >= 760 ? 1.9 : 1.6), false); }
+      if (selectedTile) { showAgent(null); buildCrew(); flyToTile(selectedTile[0], selectedTile[1], Math.max(cam.z, cutawayGeom() ? 2.0 : (W >= 760 ? 1.9 : 1.6)), true); }
       else crew = [];
     }
     for (const a of crew) {
-      a.px = a.ox + Math.sin(now * 0.0006 + a.phase) * 0.12;
-      a.py = a.oy + Math.cos(now * 0.0005 + a.phase * 1.7) * 0.1;
+      const amp = a.inside ? (a.desk ? 0.01 : 0.05) : 0.12;
+      a.px = a.ox + Math.sin(now * 0.0006 + a.phase) * amp;
+      a.py = a.oy + Math.cos(now * 0.0005 + a.phase * 1.7) * amp * 0.85;
       refreshInfo(a, now);
     }
     // gentle sway while a building is selected, so the crew is seen from slightly different angles.
@@ -2645,28 +2682,88 @@
   }
 
   function drawPerson(a, now) {
-    const z = rcam.z;
-    const x = px(a.px + 0.5, a.py + 0.5), y = py(a.px + 0.5, a.py + 0.5);
-    const bob = Math.sin(now * 0.008 + a.phase) * 1.2 * z;
-    ctx.fillStyle = 'rgba(8,16,18,0.28)'; ctx.beginPath(); ctx.ellipse(x, y, 5 * z, 2.4 * z, 0, 0, 7); ctx.fill();
-    ctx.fillStyle = a.color; ctx.fillRect(x - 3.4 * z, y - 12 * z + bob, 6.8 * z, 9 * z);
-    ctx.fillStyle = '#e7c6a5'; ctx.beginPath(); ctx.arc(x, y - 15 * z + bob, 3.1 * z, 0, 7); ctx.fill();
-    ctx.fillStyle = '#2a2f33'; ctx.fillRect(x - 2.5 * z, y - 3 * z, 2 * z, 3 * z); ctx.fillRect(x + 0.5 * z, y - 3 * z, 2 * z, 3 * z);
-    ctx.fillStyle = '#5ef2d6'; ctx.fillRect(x + 3 * z, y - 9 * z + bob, 4 * z, 3 * z);
-    ctx.fillStyle = '#26323a'; ctx.fillRect(x + 3 * z, y - 6 * z + bob, 5 * z, 1.5 * z);
-    ctx.strokeStyle = a.color; ctx.lineWidth = 1.6 * z; ctx.beginPath(); ctx.moveTo(x + 3 * z, y - 9 * z + bob); ctx.lineTo(x + 5.5 * z, y - 7 * z + Math.sin(now * 0.03 + a.phase) * 1.1 * z); ctx.stroke();
-    const i = a.info;
-    const txt = `${i.name} · ${i.task}`;
-    ctx.font = `600 ${Math.max(9, 10 * Math.min(z, 1.4))}px system-ui, sans-serif`;
-    const w = ctx.measureText(txt).width + 14, h = 17;
-    const bx = Math.round(x - w / 2), by = Math.round(y - 33 * z - h);
-    ctx.fillStyle = 'rgba(244,241,234,0.96)'; ctx.beginPath(); ctx.roundRect(bx, by, w, h, 8); ctx.fill();
-    ctx.strokeStyle = 'rgba(29,35,32,0.18)'; ctx.lineWidth = 1; ctx.stroke();
-    ctx.fillStyle = '#1d2320'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(txt, bx + 7, by + h / 2 + 0.5);
+    const z = rcam.z * (a.sc || 1);
+    const z0 = a.z0 || 0;
+    const x = px(a.px + 0.5, a.py + 0.5), y = py(a.px + 0.5, a.py + 0.5, z0);
+    const seated = a.desk;
+    const bob = Math.sin(now * 0.008 + a.phase) * (seated ? 0.4 : 1.2) * z;
+    ctx.fillStyle = 'rgba(8,16,18,0.25)'; ctx.beginPath(); ctx.ellipse(x, y, 5 * z, 2.4 * z, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#2a2f33'; ctx.fillRect(x - 2.6 * z, y - 5 * z, 2.2 * z, 5 * z); ctx.fillRect(x + 0.4 * z, y - 5 * z, 2.2 * z, 5 * z);
+    ctx.fillStyle = a.color; ctx.beginPath(); ctx.roundRect(x - 3.6 * z, y - 14 * z + bob, 7.2 * z, 9.5 * z, 2 * z); ctx.fill();
+    ctx.fillStyle = '#e7c6a5'; ctx.beginPath(); ctx.arc(x, y - 17.5 * z + bob, 3.3 * z, 0, 7); ctx.fill();
+    ctx.fillStyle = '#3a2a1c'; ctx.beginPath(); ctx.arc(x, y - 18.6 * z + bob, 3.3 * z, Math.PI, 0); ctx.fill();
+    ctx.strokeStyle = a.color; ctx.lineWidth = 1.8 * z; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x + 3.4 * z, y - 12 * z + bob); ctx.lineTo(x + 6 * z, y - 8.5 * z + (seated ? Math.sin(now * 0.03 + a.phase) * 1.2 * z : Math.sin(now * 0.004 + a.phase) * 2 * z)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x - 3.4 * z, y - 12 * z + bob); ctx.lineTo(x - 5.8 * z, y - 8 * z); ctx.stroke();
+    if (!a.inside) { ctx.fillStyle = '#5ef2d6'; ctx.fillRect(x + 4 * z, y - 9 * z + bob, 4 * z, 3 * z); }
+    const spot = crew.length ? Math.floor(now / 2600) % crew.length : 0;
+    if (crew[spot] === a || (!a.inside && a.bubble && crew.length <= 4 && false)) {
+      const i = a.info;
+      const txt = `${i.name} · ${i.task}`;
+      ctx.font = `600 ${Math.max(9, 10 * Math.min(rcam.z, 1.4))}px system-ui, sans-serif`;
+      const w = ctx.measureText(txt).width + 14, h = 17;
+      const bx = Math.round(x - w / 2), by = Math.round(y - 25 * z - h);
+      ctx.fillStyle = 'rgba(244,241,234,0.96)'; ctx.beginPath(); ctx.roundRect(bx, by, w, h, 8); ctx.fill();
+      ctx.strokeStyle = 'rgba(29,35,32,0.18)'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = '#1d2320'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(txt, bx + 7, by + h / 2 + 0.5);
+    }
+  }
+
+  // Cutaway of the selected building: front walls removed so each floor, desk and worker is visible.
+  function drawCutaway(now) {
+    const g = cutawayGeom();
+    if (!g) return;
+    const { x0, y0, x1, y1, H, F } = g;
+    const fh = H / F;
+    const P = (xx, yy, zz) => [px(xx, yy), py(xx, yy, zz)];
+    const poly = (pts, fill) => { ctx.beginPath(); pts.forEach(([a, b], i) => (i ? ctx.lineTo(a, b) : ctx.moveTo(a, b))); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); };
+    const edge = (pts, col, w) => { ctx.beginPath(); pts.forEach(([a, b], i) => (i ? ctx.lineTo(a, b) : ctx.moveTo(a, b))); ctx.strokeStyle = col; ctx.lineWidth = w; ctx.lineJoin = 'round'; ctx.stroke(); };
+    const lw = Math.max(1.2, 2 * rcam.z);
+    // opaque hollow shell over the original facade
+    poly([P(x0, y0, H), P(x1, y0, H), P(x1, y1, H), P(x1, y1, 0), P(x0, y1, 0), P(x0, y0, 0)], '#26313a');
+    for (let f = 0; f < F; f++) {
+      const z0 = f * fh, z1 = (f + 1) * fh;
+      // back walls (x0 plane and y0 plane) with windows
+      poly([P(x0, y0, z0), P(x0, y1, z0), P(x0, y1, z1), P(x0, y0, z1)], f % 2 ? '#51636d' : '#5a6d78');
+      poly([P(x0, y0, z0), P(x1, y0, z0), P(x1, y0, z1), P(x0, y0, z1)], f % 2 ? '#3f505a' : '#46585f');
+      const wz0 = z0 + fh * 0.38, wz1 = z1 - fh * 0.14;
+      for (let c = 0; c < 2; c++) {
+        const a = 0.12 + c * 0.46, b = a + 0.34;
+        const lx0 = x0 + (x1 - x0) * a, lx1 = x0 + (x1 - x0) * b;
+        poly([P(lx0, y0, wz0), P(lx1, y0, wz0), P(lx1, y0, wz1), P(lx0, y0, wz1)], 'rgba(170,215,235,0.55)');
+        const ly0 = y0 + (y1 - y0) * a, ly1 = y0 + (y1 - y0) * b;
+        poly([P(x0, ly0, wz0), P(x0, ly1, wz0), P(x0, ly1, wz1), P(x0, ly0, wz1)], 'rgba(150,200,225,0.5)');
+      }
+      // whiteboard on one wall
+      poly([P(x0, y0 + (y1 - y0) * 0.55, z0 + fh * 0.32), P(x0, y0 + (y1 - y0) * 0.85, z0 + fh * 0.32), P(x0, y0 + (y1 - y0) * 0.85, z0 + fh * 0.72), P(x0, y0 + (y1 - y0) * 0.55, z0 + fh * 0.72)], '#eef1ee');
+      // floor slab
+      poly([P(x0, y0, z0), P(x1, y0, z0), P(x1, y1, z0), P(x0, y1, z0)], f % 2 ? '#cdbb9c' : '#d8c7aa');
+      poly([P(x0, y1, z0), P(x1, y1, z0), P(x1, y1, z0 - 3), P(x0, y1, z0 - 3)], '#8f7f66');
+      poly([P(x1, y0, z0), P(x1, y1, z0), P(x1, y1, z0 - 3), P(x1, y0, z0 - 3)], '#78694f');
+      // objects on this floor, back to front
+      const here = crew.filter((c) => c.inside && c.floor === f).sort((p, q) => (p.px + p.py) - (q.px + q.py));
+      for (const c of here) {
+        drawPerson(c, now);
+        if (c.desk) {
+          const dxp = c.px + 0.5 + 0.05, dyp = c.py + 0.5 + 0.05;
+          const dh = 6 * (c.sc || 1);
+          box(dxp - 0.07, dyp - 0.04, dxp + 0.14, dyp + 0.14, z0, z0 + dh, '#8a6a4a', 1, { roof: '#b08a62' });
+          // monitor glow
+          const mx = px(dxp + 0.03, dyp + 0.02), my = py(dxp + 0.03, dyp + 0.02, z0 + dh + 3 * (c.sc || 1));
+          ctx.fillStyle = '#7ef2de'; ctx.fillRect(mx - 3 * rcam.z * (c.sc || 1), my - 2 * rcam.z * (c.sc || 1), 6 * rcam.z * (c.sc || 1), 4 * rcam.z * (c.sc || 1));
+        }
+      }
+    }
+    // frame: corner columns and roof outline
+    edge([P(x1, y1, 0), P(x1, y1, H)], '#1a232a', lw * 1.4);
+    edge([P(x0, y1, 0), P(x0, y1, H)], '#1a232a', lw * 1.2);
+    edge([P(x1, y0, 0), P(x1, y0, H)], '#1a232a', lw * 1.2);
+    edge([P(x0, y0, H), P(x1, y0, H), P(x1, y1, H), P(x0, y1, H), P(x0, y0, H)], '#1a232a', lw * 1.4);
   }
 
   function drawExtras(now, dt) {
-    if (crew.length) for (const a of crew.slice().sort((p, q) => (p.py + p.px) - (q.py + q.px))) drawPerson(a, now);
+    drawCutaway(now);
+    for (const a of crew.slice().sort((p, q) => (p.py + p.px) - (q.py + q.px))) if (!a.inside) drawPerson(a, now);
     if (shownAgent) {
       const [sx, sy] = agentScreen(shownAgent[0]);
       ctx.strokeStyle = '#5ef2d6'; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.ellipse(sx, sy + 8 * cam.z, 12 * cam.z, 6 * cam.z, 0, 0, 7); ctx.stroke();
