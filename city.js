@@ -1,8 +1,27 @@
 (() => {
   const N = 26;
   const TW = 64, TH = 32;
-  const SAVE_KEY = 'isocity-v5';
+  const SAVE_KEY = 'isocity-v6';
   const SLOT_PREFIX = 'isocity-slot-';
+  const GITHUB_OWNER = 'Peterachss';
+
+  const REPOS = [
+    { name: 'isocity', lang: 'JavaScript', desc: 'Interactive isometric city builder in the browser.', web: 'https://isocity-mu.vercel.app', git: 'https://github.com/Peterachss/isocity' },
+    { name: '3d-shirt-and-hoodie', lang: 'Python', desc: 'Interactive 3D Blender crewneck T-shirt and pullover hoodie studio.', web: 'https://peterachss.github.io/3d-shirt-and-hoodie/', git: 'https://github.com/Peterachss/3d-shirt-and-hoodie' },
+    { name: 'finance-tracker-template', lang: 'TypeScript', desc: 'Spreadsheet-first personal finance tracker built with Next.js and Supabase.', web: 'https://finance-tracker-template.vercel.app', git: 'https://github.com/Peterachss/finance-tracker-template' },
+    { name: 'finance-tracker', lang: 'JavaScript', desc: 'Personal finance tracker with a spreadsheet-first workflow.', web: 'https://finance-tracker-phi-ashen.vercel.app', git: 'https://github.com/Peterachss/finance-tracker', isPrivate: true },
+    { name: 'maths-ia-explorer', lang: 'TypeScript', desc: 'Interactive explorer for an IB Maths AA SL IA on income and life expectancy.', web: 'https://peterachss.github.io/maths-ia-explorer/', git: 'https://github.com/Peterachss/maths-ia-explorer' },
+    { name: 'greenkeep', lang: 'HTML', desc: 'Greenkeep notes web app.', web: 'https://peterachss.github.io/greenkeep/', git: 'https://github.com/Peterachss/greenkeep' },
+    { name: 'cham-hq', lang: 'JavaScript', desc: 'CHAM headquarters project hub.', web: 'https://peterachss.github.io/cham-hq/', git: 'https://github.com/Peterachss/cham-hq' },
+    { name: 'cham-bracelet-plan', lang: 'HTML', desc: 'Fundraiser plan for friendship bracelet booth and lucky draw.', web: 'https://peterachss.github.io/cham-bracelet-plan/', git: 'https://github.com/Peterachss/cham-bracelet-plan' },
+    { name: 'cham-merch-designs', lang: 'HTML', desc: 'Hoodie and T-shirt design gallery.', web: 'https://peterachss.github.io/cham-merch-designs/', git: 'https://github.com/Peterachss/cham-merch-designs' },
+    { name: 'co-bo-u', lang: 'HTML', desc: 'Co Bo U web project.', web: 'https://peterachss.github.io/co-bo-u/', git: 'https://github.com/Peterachss/co-bo-u' },
+    { name: 'claude', lang: 'HTML', desc: 'Claude web notes and experiments.', web: 'https://peterachss.github.io/claude/', git: 'https://github.com/Peterachss/claude' },
+  ];
+  const repoMap = new Map(REPOS.map((r) => [r.name, r]));
+  const repoCache = new Map();
+  const BOT_COLORS = ['#0f766e', '#0284c7', '#d97706'];
+  const getRepo = (name) => repoMap.get(name) || REPOS[0];
 
   const TYPES = {
     pan:      { name: 'Pan',          cost: 0,   color: '#9aa39d' },
@@ -51,17 +70,32 @@
   const ctx = canvas.getContext('2d', { alpha: false });
   const $ = (id) => document.getElementById(id);
 
-  let grid, levels, money, tool = 'road', taxRate = 1, milestoneReached = 0;
+  let grid, levels, repos, money, tool = 'road', taxRate = 1, milestoneReached = 0;
   let cam = { x: 0, y: 0, z: 1 };
   let hover = null, selectedTile = null;
-  let cars = [], walkers = [], boats = [], orphansList = [], wheelsList = [], millsList = [], beaconsList = [], housesList = [], waterCells = [];
+  let cars = [], walkers = [], boats = [], bots = [], orphansList = [], wheelsList = [], millsList = [], beaconsList = [], housesList = [], waterCells = [];
   let hour = 17.4, auto = false, simSpeed = 1, stats = {};
   let dpr = 1, W = 0, H = 0;
   const rnd = (a, b) => a + Math.random() * (b - a);
   const inb = (x, y) => x >= 0 && y >= 0 && x < N && y < N;
   const isRoad = (t) => t === 'road' || t === 'bridge';
   const isWater = (t) => t === 'water' || t === 'bridge';
+  const isBuilding = (t) => !!t && t !== 'road' && t !== 'bridge' && t !== 'water' && t !== 'forest';
   const makeLevels = () => Array.from({ length: N }, () => Array(N).fill(1));
+  const makeRepos = () => Array.from({ length: N }, () => Array(N).fill(null));
+  function defaultRepoFor(t, x, y) {
+    if (!isBuilding(t)) return null;
+    if (t === 'office') return 'isocity';
+    if (t === 'wheel') return '3d-shirt-and-hoodie';
+    if (t === 'windmill') return 'finance-tracker-template';
+    if (t === 'school') return 'maths-ia-explorer';
+    if (t === 'clinic') return 'greenkeep';
+    if (t === 'plaza') return 'cham-hq';
+    if (t === 'apt') return (x + y) % 2 === 0 ? 'finance-tracker' : 'finance-tracker-template';
+    if (t === 'shop') return ['cham-merch-designs', '3d-shirt-and-hoodie', 'cham-bracelet-plan'][(x + y) % 3];
+    if (t === 'park') return ['greenkeep', 'cham-bracelet-plan', 'co-bo-u', 'claude'][(x + y) % 4];
+    return REPOS[(x * 5 + y * 9) % REPOS.length].name;
+  }
 
   const clinicCov = new Uint8Array(N * N);
   const schoolCov = new Uint8Array(N * N);
@@ -159,12 +193,15 @@
   function starter() {
     grid = Array.from({ length: N }, () => Array(N).fill('forest'));
     levels = makeLevels();
+    repos = makeRepos();
     money = 5000;
     hour = 17.4;
     taxRate = 1;
     milestoneReached = 0;
     selectedTile = null;
-    const set = (x, y, t, lv = 1) => { if (inb(x, y)) { grid[x][y] = t; levels[x][y] = lv; } };
+    const set = (x, y, t, lv = 1) => {
+      if (inb(x, y)) { grid[x][y] = t; levels[x][y] = lv; repos[x][y] = defaultRepoFor(t, x, y); }
+    };
 
     let ry = 19;
     for (let rx = 0; rx < N; rx++) {
@@ -203,7 +240,7 @@
   let saveTimer = 0;
   function saveNow() {
     clearTimeout(saveTimer); saveTimer = 0;
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ grid, levels, money, hour, taxRate, milestoneReached })); } catch (e) { /* storage unavailable */ }
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ grid, levels, repos, money, hour, taxRate, milestoneReached })); } catch (e) { /* storage unavailable */ }
   }
   function scheduleSave() {
     if (saveTimer) return;
@@ -218,6 +255,11 @@
     levels = (Array.isArray(d.levels) && d.levels.length === N)
       ? d.levels.map((row) => row.map((v) => Math.max(1, Math.min(3, Number(v) || 1))))
       : makeLevels();
+    repos = (Array.isArray(d.repos) && d.repos.length === N)
+      ? d.repos.map((row, x) => Array.isArray(row)
+        ? row.map((r, y) => isBuilding(grid[x][y]) ? (r && repoMap.has(r) ? r : defaultRepoFor(grid[x][y], x, y)) : null)
+        : grid[x].map((t, y) => defaultRepoFor(t, x, y)))
+      : grid.map((row, x) => row.map((t, y) => defaultRepoFor(t, x, y)));
     money = Number.isFinite(d.money) ? d.money : 5000;
     hour = Number.isFinite(d.hour) ? d.hour : 17.4;
     taxRate = Number.isFinite(d.taxRate) ? d.taxRate : 1;
@@ -436,10 +478,11 @@
   function syncAgents() {
     cars = cars.filter((c) => isRoad(grid[c.tx]?.[c.ty]) && isRoad(grid[c.fx]?.[c.fy]));
     walkers = walkers.filter((w) => isRoad(grid[w.tx]?.[w.ty]) && isRoad(grid[w.fx]?.[w.fy]));
+    bots = bots.filter((b) => isRoad(grid[b.tx]?.[b.ty]) && isRoad(grid[b.fx]?.[b.fy]));
     boats = boats.filter((b) => isWater(grid[b.tx]?.[b.ty]) && isWater(grid[b.fx]?.[b.fy]));
 
     const r = roadTiles();
-    if (!r.length) { cars.length = 0; walkers.length = 0; }
+    if (!r.length) { cars.length = 0; walkers.length = 0; bots.length = 0; }
     else {
       const wantCars = Math.min(48, Math.floor(r.length / 3));
       while (cars.length < wantCars) {
@@ -456,6 +499,17 @@
           color: ['#e6ded0', '#c95d43', '#3b6978', '#d4a23a', '#5b7a52'][Math.floor(Math.random() * 5)] });
       }
       if (walkers.length > wantWalkers) walkers.length = wantWalkers;
+
+      let bldCount = 0;
+      for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) if (isBuilding(grid[x][y])) bldCount++;
+      const wantBots = Math.min(18, Math.max(bldCount ? 6 : 0, Math.floor(bldCount / 3)));
+      while (bots.length < wantBots) {
+        const [x, y] = r[Math.floor(Math.random() * r.length)];
+        bots.push({ fx: x, fy: y, tx: x, ty: y, t: 1, px: x, py: y, speed: rnd(0.45, 0.78),
+          phase: Math.random() * 6.28,
+          color: BOT_COLORS[bots.length % BOT_COLORS.length] });
+      }
+      if (bots.length > wantBots) bots.length = wantBots;
     }
 
     const w = waterTiles();
@@ -905,6 +959,35 @@
     rctx.fillRect(sx - 1 * sz, sy - 7 * sz, 2 * sz, 2 * sz);
   }
 
+  function drawBot(b, now, orbit = false) {
+    let x, y, z0 = 0;
+    if (orbit) {
+      x = b.px; y = b.py;
+    } else {
+      const dx = b.tx - b.fx, dy = b.ty - b.fy;
+      x = b.px + 0.5 + dy * 0.34;
+      y = b.py + 0.5 - dx * 0.34;
+      z0 = grid[Math.round(b.px)]?.[Math.round(b.py)] === 'bridge' ? 2 : 0;
+    }
+    const hoverZ = reduceMotion ? 1.5 : 2 + Math.sin(now * 0.008 + (b.phase || 0)) * 1.4;
+    const sx = px(x, y), sy = py(x, y, z0 + hoverZ);
+    const sz = rcam.z * (orbit ? 1.25 : 1);
+    rctx.fillStyle = 'rgba(8, 16, 18, 0.25)';
+    rctx.beginPath();
+    rctx.ellipse(sx, py(x, y, z0), 2.4 * sz, 1.2 * sz, 0, 0, Math.PI * 2);
+    rctx.fill();
+    rctx.fillStyle = b.color;
+    rctx.fillRect(sx - 2 * sz, sy - 5 * sz, 4 * sz, 4.4 * sz);
+    rctx.fillStyle = '#18242b';
+    rctx.fillRect(sx - 1.6 * sz, sy - 7.8 * sz, 3.2 * sz, 2.8 * sz);
+    rctx.fillStyle = Math.sin(now * 0.006 + (b.phase || 0)) > 0 ? '#5ef2d6' : '#38bdf8';
+    rctx.fillRect(sx - 1.1 * sz, sy - 7 * sz, 2.2 * sz, 1.1 * sz);
+    rctx.fillStyle = b.color;
+    rctx.fillRect(sx - 0.4 * sz, sy - 10 * sz, 0.8 * sz, 2.2 * sz);
+    rctx.fillStyle = orbit ? '#fbbf24' : '#5ef2d6';
+    rctx.fillRect(sx - 0.9 * sz, sy - 10.8 * sz, 1.8 * sz, 1.4 * sz);
+  }
+
   function drawBoat(b, L) {
     const dx = b.tx - b.fx, dy = b.ty - b.fy;
     const x = b.px + 0.5, y = b.py + 0.5;
@@ -1130,6 +1213,32 @@
       addOccluders(Math.floor(w.px), Math.floor(w.py));
     }
 
+    for (let i = 0; i < bots.length; i++) {
+      const b = bots[i];
+      const bx0 = px(b.px + 0.5, b.py + 0.5), by0 = py(b.px + 0.5, b.py + 0.5);
+      if (bx0 < -30 || bx0 > W + 30 || by0 < -30 || by0 > H + 30) continue;
+      ov.push({ k: 6, s: b.px + b.py, b });
+      addOccluders(Math.floor(b.px), Math.floor(b.py));
+    }
+
+    if (selectedTile) {
+      const [sx, sy] = selectedTile;
+      const st = grid[sx]?.[sy];
+      if (isBuilding(st)) {
+        if (!seen[sx * N + sy] && !anims.has(sx * 100 + sy)) {
+          seen[sx * N + sy] = 1;
+          ov.push({ k: 0, s: sx + sy, x: sx, y: sy, t: st, hs: 1 });
+        }
+        for (let i = 0; i < 3; i++) {
+          const ang = (reduceMotion ? 0.6 : now * 0.0022) + i * 2.0944;
+          const bx = sx + 0.5 + Math.cos(ang) * 0.58;
+          const by = sy + 0.5 + Math.sin(ang) * 0.58;
+          ov.push({ k: 7, s: bx + by, b: { px: bx, py: by, phase: i * 2.1, color: BOT_COLORS[i] } });
+        }
+        addOccluders(sx, sy);
+      }
+    }
+
     for (let i = 0; i < boats.length; i++) {
       const b = boats[i];
       const bx0 = px(b.px + 0.5, b.py + 0.5), by0 = py(b.px + 0.5, b.py + 0.5);
@@ -1153,6 +1262,8 @@
         else if (it.k === 3) drawBoat(it.b, 1);
         else if (it.k === 4) drawWheelSpin(it.x, it.y, now, 1);
         else if (it.k === 5) drawMillSpin(it.x, it.y, now, 1);
+        else if (it.k === 6) drawBot(it.b, now, false);
+        else if (it.k === 7) drawBot(it.b, now, true);
         else drawTile(it.x, it.y, it.t, 1, it.hs, it.t !== 'bridge');
       }
       warm = savedW;
@@ -1285,12 +1396,24 @@
       ctx.moveTo(px(x,y), py(x,y)); ctx.lineTo(px(x+1,y), py(x+1,y));
       ctx.lineTo(px(x+1,y+1), py(x+1,y+1)); ctx.lineTo(px(x,y+1), py(x,y+1));
       ctx.closePath(); ctx.stroke();
-    } else if (selectedTile) {
+    }
+    if (selectedTile) {
       const [x, y] = selectedTile;
-      ctx.strokeStyle = '#0f766e'; ctx.lineWidth = 2;
+      const pulse = reduceMotion ? 0.5 : 0.5 + 0.5 * Math.sin(now * 0.006);
+      const pad = 0.06 + pulse * 0.06;
+      quadZ(x, y, x + 1, y + 1, 0, 'rgba(15, 118, 110, 0.16)');
+      ctx.strokeStyle = '#0f766e'; ctx.lineWidth = 2.2;
       ctx.beginPath();
       ctx.moveTo(px(x,y), py(x,y)); ctx.lineTo(px(x+1,y), py(x+1,y));
       ctx.lineTo(px(x+1,y+1), py(x+1,y+1)); ctx.lineTo(px(x,y+1), py(x,y+1));
+      ctx.closePath(); ctx.stroke();
+      ctx.strokeStyle = `rgba(94, 242, 214, ${(0.35 + pulse * 0.45).toFixed(2)})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(px(x - pad, y - pad), py(x - pad, y - pad));
+      ctx.lineTo(px(x + 1 + pad, y - pad), py(x + 1 + pad, y - pad));
+      ctx.lineTo(px(x + 1 + pad, y + 1 + pad), py(x + 1 + pad, y + 1 + pad));
+      ctx.lineTo(px(x - pad, y + 1 + pad), py(x - pad, y + 1 + pad));
       ctx.closePath(); ctx.stroke();
     }
 
@@ -1338,15 +1461,18 @@
   }
   function apply(x, y, forceTool = tool) {
     const cur = grid[x][y];
+    const prevRepo = repos[x][y] || null;
     if (forceTool === 'pan') return;
     if (forceTool === 'bulldoze') {
       if (!cur) return;
       const nxt = nextTile(cur, 'bulldoze');
       const prevLv = levels[x][y] || 1;
-      history.push({ x, y, prev: cur, next: nxt, prevLv, nextLv: 1, cost: 0, stroke: strokeId });
+      const nextRepo = defaultRepoFor(nxt, x, y);
+      history.push({ x, y, prev: cur, next: nxt, prevLv, nextLv: 1, prevRepo, nextRepo, cost: 0, stroke: strokeId });
       redoStack.length = 0;
       grid[x][y] = nxt;
       levels[x][y] = 1;
+      repos[x][y] = nextRepo;
       animate(x, y, true, cur);
       sfx('bulldoze');
     } else if (forceTool === 'upgrade') {
@@ -1356,7 +1482,7 @@
       const cost = upgradeCost(cur);
       if (cost > money) return flash('Not enough funds');
       const nextLv = prevLv + 1;
-      history.push({ x, y, prev: cur, next: cur, prevLv, nextLv, cost, stroke: strokeId });
+      history.push({ x, y, prev: cur, next: cur, prevLv, nextLv, prevRepo, nextRepo: prevRepo, cost, stroke: strokeId });
       redoStack.length = 0;
       levels[x][y] = nextLv;
       money -= cost;
@@ -1369,10 +1495,12 @@
       const cost = tileCost(cur, forceTool);
       if (cost > money) return flash('Not enough funds');
       const prevLv = levels[x][y] || 1;
-      history.push({ x, y, prev: cur, next: nxt, prevLv, nextLv: 1, cost, stroke: strokeId });
+      const nextRepo = defaultRepoFor(nxt, x, y);
+      history.push({ x, y, prev: cur, next: nxt, prevLv, nextLv: 1, prevRepo, nextRepo, cost, stroke: strokeId });
       redoStack.length = 0;
       grid[x][y] = nxt; money -= cost;
       levels[x][y] = 1;
+      repos[x][y] = nextRepo;
       animate(x, y, false);
       sfx(nxt === 'road' || nxt === 'bridge' || nxt === 'water' || nxt === 'forest' ? 'tap' : 'build');
     }
@@ -1390,6 +1518,7 @@
       const cur = grid[h.x][h.y];
       grid[h.x][h.y] = h.prev;
       levels[h.x][h.y] = h.prevLv || 1;
+      repos[h.x][h.y] = h.prevRepo !== undefined ? h.prevRepo : defaultRepoFor(h.prev, h.x, h.y);
       if (h.prev) animate(h.x, h.y, false);
       else animate(h.x, h.y, true, cur);
       money += h.cost;
@@ -1412,6 +1541,7 @@
       const cur = grid[h.x][h.y];
       grid[h.x][h.y] = h.next;
       levels[h.x][h.y] = h.nextLv || 1;
+      repos[h.x][h.y] = h.nextRepo !== undefined ? h.nextRepo : defaultRepoFor(h.next, h.x, h.y);
       if (h.next) animate(h.x, h.y, false);
       else animate(h.x, h.y, true, cur);
       money -= h.cost;
@@ -1426,15 +1556,17 @@
   function rotateCity(cw = true) {
     const ng = Array.from({ length: N }, () => Array(N).fill(null));
     const nl = makeLevels();
+    const nr = makeRepos();
     const rx = (x, y) => cw ? N - 1 - y : y;
     const ry = (x, y) => cw ? x : N - 1 - x;
     for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
       const nx = rx(x, y), ny = ry(x, y);
       ng[nx][ny] = grid[x][y];
       nl[nx][ny] = levels[x][y];
+      nr[nx][ny] = repos[x][y];
     }
-    grid = ng; levels = nl;
-    for (const list of [cars, walkers, boats]) {
+    grid = ng; levels = nl; repos = nr;
+    for (const list of [cars, walkers, boats, bots]) {
       for (const c of list) {
         const fx = rx(c.fx, c.fy), fy = ry(c.fx, c.fy);
         const tx = rx(c.tx, c.ty), ty = ry(c.tx, c.ty);
@@ -1486,11 +1618,157 @@
     const idx = x * N + y;
     if (d.pop && clinicCov[idx]) tags.push('Clinic');
     if (d.pop && schoolCov[idx]) tags.push('School');
-    return `${d.name} (${tags.join(', ')}), ${val}.` + (tool === 'upgrade' && lv < 3 ? ` Click to upgrade ($${upgradeCost(t)}).` : '');
+    const rp = isBuilding(t) && repos[x][y] ? ` [${repos[x][y]}]` : '';
+    return `${d.name}${tags.length ? ' (' + tags.join(', ') + ')' : ''}, ${val}.${rp}` + (tool === 'upgrade' && lv < 3 ? ` Click to upgrade ($${upgradeCost(t)}).` : '');
+  }
+
+  // ---------- GitHub repo bots & live status ----------
+  function timeAgo(iso) {
+    if (!iso) return 'recently';
+    const sec = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 1000));
+    if (sec < 60) return 'just now';
+    if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+    if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+    return `${Math.floor(sec / 86400)}d ago`;
+  }
+
+  function buildFallbackBots(repo, stateNote) {
+    const lang = repo.lang || 'Web';
+    const host = repo.web ? repo.web.replace(/^https?:\/\//, '').replace(/\/$/, '') : 'GitHub';
+    return [
+      { name: 'CommitBot', state: 'ok', task: `${stateNote || 'Tracking main branch'} on ${GITHUB_OWNER}/${repo.name}` },
+      { name: 'DeployBot', state: 'ok', task: `Serving ${host} live build` },
+      { name: 'ReviewBot', state: 'busy', task: `Scanning ${lang} modules and UI telemetry` },
+    ];
+  }
+
+  function buildLiveBots(repo, commits, runs) {
+    const c0 = Array.isArray(commits) && commits[0];
+    const sha = c0?.sha ? c0.sha.slice(0, 7) : 'main';
+    const msg = c0?.commit?.message ? c0.commit.message.split('\n')[0].slice(0, 48) : 'Latest production commit';
+    const when = c0?.commit?.author?.date ? timeAgo(c0.commit.author.date) : 'active';
+    const host = repo.web ? repo.web.replace(/^https?:\/\//, '').replace(/\/$/, '') : 'GitHub';
+    const run0 = Array.isArray(runs) && runs[0];
+    let deployTask = `Live on ${host} and ready`;
+    let deployState = 'ok';
+    if (run0) {
+      const ok = run0.conclusion === 'success';
+      const active = run0.status === 'in_progress' || run0.status === 'queued';
+      deployState = active ? 'busy' : ok ? 'ok' : 'err';
+      deployTask = `${run0.name || 'CI deploy'}: ${active ? run0.status.replace('_', ' ') : (run0.conclusion || run0.status)} (${timeAgo(run0.updated_at)})`;
+    }
+    return [
+      { name: 'CommitBot', state: 'ok', task: `${sha} (${when}): ${msg}` },
+      { name: 'DeployBot', state: deployState, task: deployTask },
+      { name: 'ReviewBot', state: 'busy', task: `Watching ${repo.lang || 'Web'} files (${Array.isArray(commits) ? commits.length : 1} recent commits)` },
+    ];
+  }
+
+  async function fetchJsonTimed(url, ms = 5000) {
+    const ac = new AbortController();
+    const tid = setTimeout(() => ac.abort(), ms);
+    try {
+      const res = await fetch(url, { signal: ac.signal, headers: { Accept: 'application/vnd.github+json' } });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (e) {
+      return null;
+    } finally {
+      clearTimeout(tid);
+    }
+  }
+
+  async function fetchUserRepos() {
+    const list = await fetchJsonTimed(`https://api.github.com/users/${GITHUB_OWNER}/repos?per_page=30&sort=updated`);
+    if (!Array.isArray(list)) return;
+    let changed = false;
+    for (const r of list) {
+      if (!r || !r.name) continue;
+      const existing = repoMap.get(r.name);
+      const webUrl = r.homepage && r.homepage.startsWith('http')
+        ? r.homepage
+        : (r.has_pages ? `https://${GITHUB_OWNER.toLowerCase()}.github.io/${r.name}/` : existing?.web || '');
+      if (existing) {
+        if (r.description) existing.desc = r.description;
+        if (r.language) existing.lang = r.language;
+        if (webUrl) existing.web = webUrl;
+      } else {
+        const entry = {
+          name: r.name,
+          lang: r.language || 'Web',
+          desc: r.description || `${r.name} repository by ${GITHUB_OWNER}.`,
+          web: webUrl,
+          git: r.html_url || `https://github.com/${GITHUB_OWNER}/${r.name}`,
+        };
+        REPOS.push(entry);
+        repoMap.set(entry.name, entry);
+        changed = true;
+      }
+    }
+    if (changed && selectedTile) renderInspect(false);
+  }
+
+  async function fetchRepoActivity(repoName) {
+    const repo = getRepo(repoName);
+    const prev = repoCache.get(repo.name);
+    const now = Date.now();
+    if (prev && (prev.loading || now - prev.at < 120000)) return prev;
+
+    const entry = { at: now, loading: true, live: false, bots: buildFallbackBots(repo, 'Syncing repo status') };
+    repoCache.set(repo.name, entry);
+
+    if (repo.isPrivate) {
+      entry.loading = false;
+      entry.bots = buildFallbackBots(repo, 'Private repo mirror synced');
+      if (selectedTile && repos[selectedTile[0]][selectedTile[1]] === repo.name) renderBotsUI(repo.name);
+      return entry;
+    }
+
+    const [commits, runs] = await Promise.all([
+      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.name}/commits?per_page=3`),
+      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.name}/actions/runs?per_page=2`),
+    ]);
+    entry.at = Date.now();
+    entry.loading = false;
+    if (Array.isArray(commits) && commits.length) {
+      entry.live = true;
+      entry.bots = buildLiveBots(repo, commits, runs?.workflow_runs);
+    } else {
+      entry.live = false;
+      entry.bots = buildFallbackBots(repo, 'Cached branch snapshot');
+    }
+    if (selectedTile && repos[selectedTile[0]][selectedTile[1]] === repo.name) renderBotsUI(repo.name);
+    return entry;
+  }
+
+  function renderBotsUI(repoName) {
+    const repo = getRepo(repoName);
+    const cached = repoCache.get(repo.name);
+    const botsData = cached?.bots || buildFallbackBots(repo);
+    const liveEl = $('botsLive');
+    liveEl.textContent = cached?.loading ? 'Syncing' : cached?.live ? 'Live GitHub' : repo.isPrivate ? 'Private app' : 'Active';
+    const listEl = $('inspBots');
+    listEl.innerHTML = '';
+    for (const bot of botsData) {
+      const item = document.createElement('div');
+      item.className = 'bot-item';
+      const dot = document.createElement('span');
+      dot.className = 'bot-dot' + (bot.state === 'busy' ? ' busy' : bot.state === 'err' ? ' err' : '');
+      const body = document.createElement('div');
+      const nameEl = document.createElement('div');
+      nameEl.className = 'bot-name';
+      nameEl.textContent = bot.name;
+      const taskEl = document.createElement('div');
+      taskEl.className = 'bot-task';
+      taskEl.textContent = bot.task;
+      body.append(nameEl, taskEl);
+      item.append(dot, body);
+      listEl.appendChild(item);
+    }
   }
 
   // ---------- tile inspector & popovers ----------
-  function renderInspect() {
+  function renderInspect(triggerFetch = true) {
     const card = $('inspectCard');
     if (!selectedTile) { card.dataset.open = 'false'; return; }
     const [x, y] = selectedTile;
@@ -1498,8 +1776,48 @@
     if (!t) { selectedTile = null; card.dataset.open = 'false'; return; }
     const d = TYPES[t];
     const lv = levels[x][y] || 1;
+    const isBld = isBuilding(t);
     $('inspTitle').textContent = d.grow ? `${d.name} (Level ${lv}/3)` : d.name;
-    $('inspBody').textContent = describe(x, y) || '';
+    $('inspSub').textContent = describe(x, y) || '';
+
+    const repoBox = card.querySelector('.repo-box');
+    const botsBox = card.querySelector('.bots-box');
+    if (isBld) {
+      repoBox.style.display = '';
+      botsBox.style.display = '';
+      const assigned = repos[x][y] || defaultRepoFor(t, x, y);
+      repos[x][y] = assigned;
+      const repo = getRepo(assigned);
+      const sel = $('inspRepo');
+      if (sel.options.length !== REPOS.length) {
+        sel.innerHTML = '';
+        for (const r of REPOS) {
+          const opt = document.createElement('option');
+          opt.value = r.name;
+          opt.textContent = `${r.name} (${r.lang})`;
+          sel.appendChild(opt);
+        }
+      }
+      sel.value = repo.name;
+      $('inspDesc').textContent = repo.desc;
+      const webLink = $('inspWeb');
+      if (repo.web) {
+        webLink.href = repo.web;
+        webLink.style.display = '';
+        webLink.textContent = 'Open live web';
+      } else {
+        webLink.style.display = 'none';
+      }
+      const gitLink = $('inspGit');
+      gitLink.href = repo.git;
+      gitLink.textContent = 'GitHub repo';
+      if (triggerFetch) fetchRepoActivity(repo.name);
+      renderBotsUI(repo.name);
+    } else {
+      repoBox.style.display = 'none';
+      botsBox.style.display = 'none';
+    }
+
     const up = $('inspUpgrade');
     if (d.grow && lv < 3) {
       const uc = upgradeCost(t);
@@ -1512,6 +1830,14 @@
     $('inspDemolish').textContent = t === 'bridge' ? 'Remove bridge' : 'Demolish';
     card.dataset.open = 'true';
   }
+  $('inspRepo').onchange = (e) => {
+    if (!selectedTile) return;
+    const [x, y] = selectedTile;
+    repos[x][y] = e.target.value;
+    scheduleSave();
+    sfx('tap');
+    renderInspect();
+  };
   $('inspClose').onclick = () => { selectedTile = null; renderInspect(); };
   $('inspUpgrade').onclick = () => {
     if (!selectedTile) return;
@@ -1565,7 +1891,7 @@
       saveBtn.className = 'chip small'; saveBtn.type = 'button'; saveBtn.textContent = 'Save';
       saveBtn.onclick = () => {
         try {
-          localStorage.setItem(SLOT_PREFIX + i, JSON.stringify({ grid, levels, money, hour, taxRate, milestoneReached, pop: stats.pop }));
+          localStorage.setItem(SLOT_PREFIX + i, JSON.stringify({ grid, levels, repos, money, hour, taxRate, milestoneReached, pop: stats.pop }));
           sfx('build');
           renderSlots();
         } catch (e) { flash('Storage full'); }
@@ -1592,7 +1918,7 @@
   });
 
   $('exportBtn').onclick = () => {
-    const blob = new Blob([JSON.stringify({ grid, levels, money, hour, taxRate, milestoneReached }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ grid, levels, repos, money, hour, taxRate, milestoneReached }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'isocity-save.json';
@@ -1637,10 +1963,10 @@
     if (ptrs.size === 2) { drag = { pinch: true, d: dist() }; return; }
     const panning = e.button === 2 || e.button === 1 || e.shiftKey || tool === 'pan';
     if (panning) { drag = { pan: true, moved: false, sx: e.clientX, sy: e.clientY, cx: cam.x, cy: cam.y }; canvas.style.cursor = 'grabbing'; return; }
-    strokeId++;
-    drag = { pan: false };
     const t = pick(e.clientX, e.clientY);
-    if (t) { apply(t[0], t[1]); lastTile = t.join(); }
+    const canStart = !!(t && (tool === 'bulldoze' || tool === 'upgrade' || nextTile(grid[t[0]][t[1]], tool)));
+    drag = { pan: false, moved: false, sx: e.clientX, sy: e.clientY, applied: canStart };
+    if (canStart) { strokeId++; apply(t[0], t[1]); lastTile = t.join(); }
   });
   canvas.addEventListener('pointermove', (e) => {
     if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -1649,14 +1975,18 @@
       zoomAt(nd / drag.d, (a.x + b.x) / 2, (a.y + b.y) / 2); drag.d = nd; return;
     }
     if (drag?.pinch) return;
-    if (drag?.pan) {
+    if (drag) {
       const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
       if (Math.hypot(dx, dy) > 4) drag.moved = true;
-      cam.x = drag.cx + dx; cam.y = drag.cy + dy;
+      if (drag.pan) { cam.x = drag.cx + dx; cam.y = drag.cy + dy; }
     }
     const t = pick(e.clientX, e.clientY);
     hover = t;
-    if (drag && !drag.pan && t && t.join() !== lastTile) { apply(t[0], t[1]); lastTile = t.join(); }
+    if (drag && !drag.pan && t && t.join() !== lastTile) {
+      if (!drag.applied) { strokeId++; drag.applied = true; }
+      apply(t[0], t[1]);
+      lastTile = t.join();
+    }
     if (!flashTimer) {
       const tip = $('tip');
       const txt = t && !drag ? describe(t[0], t[1]) : null;
@@ -1678,6 +2008,10 @@
       const t = pick(e.clientX, e.clientY);
       selectedTile = t && grid[t[0]][t[1]] ? t : null;
       renderInspect();
+    } else if (drag && !drag.pan && !drag.moved && !drag.applied) {
+      const t = pick(e.clientX, e.clientY);
+      selectedTile = t && isBuilding(grid[t[0]][t[1]]) ? t : null;
+      renderInspect();
     }
     drag = null; lastTile = null;
     canvas.style.cursor = tool === 'pan' ? 'grab' : 'crosshair';
@@ -1698,7 +2032,7 @@
 
   function setTool(t) {
     tool = t;
-    if (t !== 'pan' && selectedTile) { selectedTile = null; renderInspect(); }
+    if (t === 'bulldoze' && selectedTile) { selectedTile = null; renderInspect(); }
     for (const b of toolBtns) b.setAttribute('aria-pressed', String(b.dataset.tool === t));
     canvas.style.cursor = t === 'pan' ? 'grab' : 'crosshair';
   }
@@ -1736,7 +2070,7 @@
       setPop('budgetPop', 'budgetBtn', false);
       if (selectedTile) { selectedTile = null; renderInspect(); }
     }
-    if (e.target.matches('input')) return;
+    if (e.target.matches('input, select')) return;
     if (e.code === 'Space') { e.preventDefault(); setSpeed(simSpeed === 0 ? 1 : 0); return; }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); return e.shiftKey ? redo() : undo(); }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); return redo(); }
@@ -1800,6 +2134,7 @@
     if (simSpeed > 0) {
       stepList(cars, dt, isRoad);
       stepList(walkers, dt, isRoad);
+      stepList(bots, dt, isRoad);
       stepList(boats, dt, isWater);
       acc += dt;
       if (acc >= 3) {
@@ -1821,5 +2156,6 @@
   center();
   recompute();
   setTool('road');
+  fetchUserRepos();
   requestAnimationFrame(frame);
 })();

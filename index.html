@@ -8,7 +8,7 @@
   <meta property="og:title" content="Isocity, build your own city" />
   <meta property="og:description" content="Lay roads, place buildings and manage a living autumn forest city through day and night." />
   <meta property="og:type" content="website" />
-  <link rel="stylesheet" href="city.css?v=11" />
+  <link rel="stylesheet" href="city.css?v=12" />
 </head>
 <body>
   <main class="app">
@@ -82,12 +82,35 @@
       <div id="slotList" class="slot-list"></div>
     </div>
 
-    <aside id="inspectCard" class="pop inspect-card" role="dialog" aria-label="Selected building" data-open="false">
+    <aside id="inspectCard" class="pop inspect-card" role="dialog" aria-label="Building repository and bots" data-open="false">
       <div class="inspect-head">
-        <h2 id="inspTitle">Building</h2>
+        <div>
+          <h2 id="inspTitle">Building</h2>
+          <p id="inspSub" class="insp-sub"></p>
+        </div>
         <button id="inspClose" class="chip small" type="button" aria-label="Close inspector">Close</button>
       </div>
-      <p id="inspBody" class="insp-body"></p>
+
+      <div class="repo-box">
+        <div class="repo-row">
+          <label for="inspRepo" class="stat-label">GitHub repo</label>
+          <select id="inspRepo" class="repo-select"></select>
+        </div>
+        <p id="inspDesc" class="insp-body"></p>
+        <div class="insp-links">
+          <a id="inspWeb" class="chip small primary link-btn" href="#" target="_blank" rel="noopener noreferrer">Open live site</a>
+          <a id="inspGit" class="chip small link-btn" href="#" target="_blank" rel="noopener noreferrer">GitHub repo</a>
+        </div>
+      </div>
+
+      <div class="bots-box">
+        <div class="bots-head">
+          <span class="stat-label">Bots working</span>
+          <span id="botsLive" class="bots-live">Live</span>
+        </div>
+        <div id="inspBots" class="bots-list"></div>
+      </div>
+
       <div class="insp-actions">
         <button id="inspUpgrade" class="chip small primary" type="button">Upgrade</button>
         <button id="inspDemolish" class="chip small danger" type="button">Demolish</button>
@@ -95,8 +118,8 @@
     </aside>
 
     <div id="tip" class="tip" role="status" hidden></div>
-    <p class="hint" id="hint">Click or drag to build. In Pan mode, click any building to inspect or upgrade it. R rotates, Space pauses.</p>
+    <p class="hint" id="hint">Click any building to see bots working on its GitHub repo and open its live site. Drag land to build.</p>
   </main>
-  <script src="city.js?v=11"></script>
+  <script src="city.js?v=12"></script>
 </body>
 </html>
