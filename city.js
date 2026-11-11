@@ -1644,10 +1644,10 @@
     return `${Math.floor(sec / 86400)}d ago`;
   }
 
-  // GitHub allows only 60 anonymous requests per hour, so responses are cached for 30 minutes and
-  // requests pause (serving cached data) after a rate-limit response.
-  const GH_TTL = 30 * 60 * 1000;
-  let ghBlockedUntil = 0;
+  // GitHub allows only 60 anonymous requests per hour, so responses are cached for 3 hours and
+  // requests pause (serving cached data) after a rate-limit response, with one notice per pause.
+  const GH_TTL = 3 * 60 * 60 * 1000; // repo data rarely changes, so keep it 3 hours (saved across visits)
+  let ghBlockedUntil = 0, ghToastFor = 0;
   function ghCacheGet(url) { try { const v = JSON.parse(localStorage.getItem('ghc:' + url)); return v && v.d !== undefined ? v : null; } catch (e) { return null; } }
   function ghCacheSet(url, d) { try { localStorage.setItem('ghc:' + url, JSON.stringify({ t: Date.now(), d })); } catch (e) { /* quota */ } }
   async function fetchJsonTimed(url, ms = 5000) {
@@ -1663,7 +1663,7 @@
         if (isGh && (res.status === 403 || res.status === 429)) {
           const reset = Number(res.headers.get('x-ratelimit-reset'));
           ghBlockedUntil = reset ? reset * 1000 + 2000 : Date.now() + 10 * 60 * 1000;
-          const n = $('carToast'); if (n) { n.textContent = 'GitHub rate limit reached. Showing saved data until it resets.'; n.hidden = false; setTimeout(() => { n.hidden = true; }, 3500); }
+          const n = $('carToast'); if (n && ghToastFor !== ghBlockedUntil) { ghToastFor = ghBlockedUntil; n.textContent = 'GitHub rate limit reached. Showing saved data until it resets.'; n.hidden = false; setTimeout(() => { n.hidden = true; }, 3500); }
         }
         return cached ? cached.d : null;
       }
