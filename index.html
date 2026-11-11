@@ -40,6 +40,7 @@
     <section class="map-controls" aria-label="Map view and customization">
       <button id="customBtn" class="chip" type="button" aria-expanded="false" aria-controls="customPop">Customize</button>
       <button id="labelsBtn" class="chip" type="button" aria-pressed="true" aria-label="Toggle map labels">Labels</button>
+      <button id="heatBtn" class="chip" type="button" aria-pressed="true" aria-label="Toggle repo activity heat">Heat</button>
       <button id="lightBtn" class="chip" type="button" aria-label="Cycle lighting mode">Dusk</button>
       <button id="centerBtn" class="chip icon" type="button" aria-label="Recenter map" title="Recenter map">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
@@ -114,6 +115,21 @@
         <button id="importBtn" class="chip small" type="button">Import JSON</button>
         <button id="resetBtn" class="chip small" type="button">Reset city</button>
         <input id="importFile" type="file" accept=".json,application/json" hidden />
+      </div>
+      <div class="acct">
+        <p class="acct-title">Account</p>
+        <div class="acct-switch" role="group" aria-label="Choose account type">
+          <button id="acctPersonal" class="chip small" type="button" aria-pressed="true">Personal</button>
+          <button id="acctSchool" class="chip small" type="button" aria-pressed="false">School</button>
+        </div>
+        <div class="more-grid">
+          <a id="lnkSlides" class="chip small link-btn" target="_blank" rel="noopener noreferrer">Slides</a>
+          <a id="lnkDocs" class="chip small link-btn" target="_blank" rel="noopener noreferrer">Docs</a>
+          <a id="lnkGmail" class="chip small link-btn" target="_blank" rel="noopener noreferrer">Gmail</a>
+          <a id="lnkCal" class="chip small link-btn" target="_blank" rel="noopener noreferrer">Calendar</a>
+          <a id="lnkSeqta" class="chip small link-btn" href="https://learn.ishcmc.edu.vn/#?page=/timetable" target="_blank" rel="noopener noreferrer">SEQTA</a>
+        </div>
+        <p id="acctNote" class="acct-note">Calendar is personal only.</p>
       </div>
     </div>
 

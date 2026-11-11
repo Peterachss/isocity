@@ -202,6 +202,7 @@
   let cam = { x: 0, y: 0, z: 1 };
   let camAnim = null;
   let hover = null, hoveredLabel = null, selectedTile = null;
+  let showHeat = true;
   let activeTab = 'overview';
   let activeFilter = 'all';
   let cars = [], walkers = [], boats = [], bots = [], wheelsList = [], millsList = [], beaconsList = [], housesList = [], waterCells = [];
@@ -1070,6 +1071,41 @@
     return z;
   }
 
+  // Activity heat: glow under each building based on how recently it was pushed to.
+  function heatOf(repo) {
+    const iso = repo.meta && repo.meta.pushedAt || repo.commits?.[0]?.commit?.author?.date;
+    if (!iso) return 0;
+    const days = (Date.now() - new Date(iso).getTime()) / 864e5;
+    if (days < 1) return 1;
+    if (days < 7) return 0.7;
+    if (days < 30) return 0.4;
+    if (days < 90) return 0.2;
+    return 0;
+  }
+
+  function drawHeat(now) {
+    if (!showHeat) return;
+    for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
+      const rp = repos[x][y];
+      if (!rp || !isBuilding(grid[x][y])) continue;
+      const h = heatOf(getRepo(rp));
+      if (h <= 0) continue;
+      const cx = px(x + 0.5, y + 0.5), cy = py(x + 0.5, y + 0.5);
+      if (cx < -120 || cx > W + 120 || cy < -80 || cy > H + 80) continue;
+      const pulse = 0.85 + 0.15 * Math.sin(now * 0.003 + x * 1.7 + y);
+      const rad = (TW * 0.75 + h * TW * 0.5) * rcam.z * pulse;
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
+      const col = h >= 0.7 ? '255,140,40' : h >= 0.4 ? '240,200,70' : '94,242,214';
+      g.addColorStop(0, `rgba(${col},${(0.5 * h + 0.1).toFixed(2)})`);
+      g.addColorStop(1, `rgba(${col},0)`);
+      ctx.save();
+      ctx.translate(cx, cy); ctx.scale(1, 0.5); ctx.translate(-cx, -cy);
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+  }
+
   function drawMapLabels() {
     labelHits.length = 0;
     if (!showLabels) return;
@@ -1377,6 +1413,7 @@
       ctx.globalAlpha = 1;
     }
 
+    drawHeat(now);
     drawMapLabels();
   }
 
@@ -2132,6 +2169,11 @@
     scheduleSave();
     sfx('tap');
   };
+  $('heatBtn').onclick = () => {
+    showHeat = !showHeat;
+    $('heatBtn').setAttribute('aria-pressed', String(showHeat));
+    sfx('tap');
+  };
   $('lightBtn').onclick = () => {
     lightIdx = (lightIdx + 1) % LIGHT_MODES.length;
     hour = LIGHT_MODES[lightIdx].hour;
@@ -2346,4 +2388,32 @@
   center(false);
   fetchUserRepos(false);
   requestAnimationFrame(frame);
+})();
+
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const KEY = 'isocity-account';
+  // u/0 = first signed-in Google account (personal), u/1 = second (school).
+  const urls = (u) => ({
+    lnkSlides: `https://docs.google.com/presentation/u/${u}/`,
+    lnkDocs: `https://docs.google.com/document/u/${u}/`,
+    lnkGmail: `https://mail.google.com/mail/u/${u}/`,
+  });
+  function apply(kind) {
+    const school = kind === 'school';
+    const u = urls(school ? 1 : 0);
+    for (const id in u) $(id).href = u[id];
+    $('lnkCal').href = 'https://calendar.google.com/calendar/u/0/r';
+    $('acctPersonal').setAttribute('aria-pressed', String(!school));
+    $('acctSchool').setAttribute('aria-pressed', String(school));
+    $('acctNote').textContent = school
+      ? 'School account opens as your second signed-in Google account. Calendar stays personal.'
+      : 'Calendar is personal only.';
+    try { localStorage.setItem(KEY, kind); } catch (e) { /* storage unavailable */ }
+  }
+  let saved = 'personal';
+  try { saved = localStorage.getItem(KEY) === 'school' ? 'school' : 'personal'; } catch (e) { /* ignore */ }
+  $('acctPersonal').onclick = () => apply('personal');
+  $('acctSchool').onclick = () => apply('school');
+  apply(saved);
 })();
