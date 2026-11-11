@@ -38,7 +38,7 @@
   let timeMode = 'auto'; // 'auto' | 'realtime' | 'paused'
   let simSpeed = 1;
   let weather = 'clear'; // 'clear' | 'rain' | 'fog' | 'overcast'
-  let darkMode = false;
+  let darkMode = true;
   let cbMode = false;
   let largeText = false;
   let ghostMode = false;
@@ -312,7 +312,7 @@
     timeMode = d.timeMode || 'auto';
     simSpeed = Number.isFinite(d.simSpeed) ? d.simSpeed : 1;
     weather = d.weather || 'clear';
-    darkMode = !!d.darkMode; cbMode = !!d.cbMode; largeText = !!d.largeText; ghostMode = !!d.ghostMode;
+    darkMode = d.darkMode !== false; cbMode = !!d.cbMode; largeText = !!d.largeText; ghostMode = !!d.ghostMode;
     showAgents = d.showAgents !== false; showLabels = d.showLabels !== false; showHeatmap = d.showHeatmap !== false;
     money = Number.isFinite(d.money) ? d.money : 5000;
     dayCount = Number.isFinite(d.dayCount) ? d.dayCount : 1;
@@ -2843,6 +2843,13 @@
 
   resize();
   if (!load()) starter();
+  // One-time switch to the all-black look for returning visitors.
+  try {
+    if (!localStorage.getItem('isocity-black-ui-v1')) {
+      localStorage.setItem('isocity-black-ui-v1', '1');
+      darkMode = true; themeId = 'dark';
+    }
+  } catch (e) { /* storage unavailable */ }
   syncBodyPrefs();
   recompute();
   updateCountUI();
