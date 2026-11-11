@@ -2445,3 +2445,26 @@
   new MutationObserver(sync).observe(web, { attributes: true, attributeFilter: ['href', 'hidden'] });
   sync();
 })();
+
+(function () {
+  const btn = document.getElementById('autoRotBtn');
+  const KEY = 'isocity-autorotate';
+  const EVERY = 8000;
+  let timer = null;
+  const card = () => document.getElementById('inspectCard');
+  function tick() {
+    // Skip while a building card is open or the tab is hidden so it never rotates under the user.
+    if (document.hidden || (card() && card().dataset.open === 'true')) return;
+    document.getElementById('rotBtn').click();
+  }
+  function set(on) {
+    btn.setAttribute('aria-pressed', String(on));
+    clearInterval(timer);
+    timer = on ? setInterval(tick, EVERY) : null;
+    try { localStorage.setItem(KEY, on ? '1' : '0'); } catch (e) { /* storage unavailable */ }
+  }
+  btn.onclick = () => set(btn.getAttribute('aria-pressed') !== 'true');
+  let saved = false;
+  try { saved = localStorage.getItem(KEY) === '1'; } catch (e) { /* ignore */ }
+  if (saved) set(true);
+})();
