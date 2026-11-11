@@ -647,19 +647,22 @@
     }
     if (t === 'plaza') {
       const ax = px(x + 0.5, y + 0.5), ay = py(x + 0.5, y + 0.5, 11);
-      rctx.fillStyle = 'rgba(255,214,130,0.45)';
-      rctx.beginPath(); rctx.arc(ax, ay, 24 * rcam.z, 0, 7); rctx.fill();
+      const pr = 24 * rcam.z, pg = rctx.createRadialGradient(ax, ay, 0, ax, ay, pr);
+      pg.addColorStop(0, 'rgba(255,214,130,0.55)'); pg.addColorStop(1, 'rgba(255,214,130,0)');
+      rctx.fillStyle = pg; rctx.beginPath(); rctx.arc(ax, ay, pr, 0, 7); rctx.fill();
       return;
     }
     if (t === 'clinic') {
       const ax = px(x + 0.5, y + 0.5), ay = py(x + 0.5, y + 0.5, 31);
-      rctx.fillStyle = 'rgba(235, 95, 85, 0.35)';
-      rctx.beginPath(); rctx.arc(ax, ay, 14 * rcam.z, 0, 7); rctx.fill();
+      const cr = 14 * rcam.z, cg = rctx.createRadialGradient(ax, ay, 0, ax, ay, cr);
+      cg.addColorStop(0, 'rgba(235, 95, 85, 0.5)'); cg.addColorStop(1, 'rgba(235, 95, 85, 0)');
+      rctx.fillStyle = cg; rctx.beginPath(); rctx.arc(ax, ay, cr, 0, 7); rctx.fill();
     }
     if (t === 'wheel') {
       const ax = px(x + 0.5, y + 0.5), ay = py(x + 0.5, y + 0.5, 42);
-      rctx.fillStyle = 'rgba(255, 200, 115, 0.25)';
-      rctx.beginPath(); rctx.arc(ax, ay, 34 * rcam.z, 0, 7); rctx.fill();
+      const wr = 34 * rcam.z, wg = rctx.createRadialGradient(ax, ay, 0, ax, ay, wr);
+      wg.addColorStop(0, 'rgba(255, 200, 115, 0.35)'); wg.addColorStop(1, 'rgba(255, 200, 115, 0)');
+      rctx.fillStyle = wg; rctx.beginPath(); rctx.arc(ax, ay, wr, 0, 7); rctx.fill();
       return;
     }
     if (t === 'windmill') return;
@@ -929,8 +932,9 @@
       box(x - lx, y - ly, x + lx, y + ly, z0, z0 + 7, c.color, L);
     } else if (L < 0.5) {
       const hx = px(x + dx * 0.2, y + dy * 0.2), hy = py(x + dx * 0.2, y + dy * 0.2, z0 + 4);
-      rctx.fillStyle = 'rgba(255,230,160,0.55)';
-      rctx.beginPath(); rctx.arc(hx, hy, 7 * rcam.z, 0, 7); rctx.fill();
+      const hr = 9 * rcam.z, hg = rctx.createRadialGradient(hx, hy, 0, hx, hy, hr);
+      hg.addColorStop(0, 'rgba(255,230,160,0.6)'); hg.addColorStop(1, 'rgba(255,230,160,0)');
+      rctx.fillStyle = hg; rctx.beginPath(); rctx.arc(hx, hy, hr, 0, 7); rctx.fill();
     }
   }
 
@@ -997,8 +1001,8 @@
   const wctx = worldCanvas.getContext('2d');
 
   const nightCanvas = document.createElement('canvas');
-  nightCanvas.width = WW;
-  nightCanvas.height = WH;
+  nightCanvas.width = Math.round(WW * 1.5);
+  nightCanvas.height = Math.round(WH * 1.5);
   const nctx = nightCanvas.getContext('2d');
 
   function drawSlab(L) {
@@ -1020,7 +1024,9 @@
     drawSlab(1);
 
     rctx = nctx;
-    nctx.setTransform(1, 0, 0, 1, 0, 0);
+    const NS = Math.min(WS, 2);
+    if (nightCanvas.width !== Math.round(WW * NS)) { nightCanvas.width = Math.round(WW * NS); nightCanvas.height = Math.round(WH * NS); }
+    nctx.setTransform(NS, 0, 0, NS, 0, 0);
     nctx.clearRect(0, 0, WW, WH);
 
     for (let s = 0; s <= 2 * N - 2; s++) {
