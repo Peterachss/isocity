@@ -8,12 +8,16 @@
   <meta property="og:title" content="Isocity, build your own city" />
   <meta property="og:description" content="Lay roads, place buildings and watch the city grow through day and night." />
   <meta property="og:type" content="website" />
-  <link rel="stylesheet" href="city.css?v=5" />
+  <link rel="stylesheet" href="city.css?v=6" />
 </head>
 <body>
   <main class="app">
     <canvas id="stage" aria-label="Isometric city map. Click or drag to build."></canvas>
 
+    <div class="brand" aria-label="Isocity">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="m16 3 13 7v12l-13 7L3 22V10Zm0 14L3 10m13 7 13-7M16 17v12"/></svg>
+      <span>Isocity</span>
+    </div>
     <header class="stats" aria-label="City statistics">
       <div class="stat"><span class="stat-label">Funds</span><span class="stat-value" id="sMoney">0</span></div>
       <div class="stat"><span class="stat-label">Residents</span><span class="stat-value" id="sPop">0</span></div>
@@ -27,19 +31,22 @@
     <section class="time" aria-label="Time of day">
       <label for="clock" class="stat-label">Time <span id="clockText" class="tnum">12:00</span></label>
       <input id="clock" type="range" min="0" max="24" step="0.05" value="12" />
+      <button id="pauseBtn" class="chip" type="button" aria-pressed="false" title="Pause simulation (Space)">Pause</button>
       <button id="autoBtn" class="chip" type="button" aria-pressed="false">Auto cycle</button>
     </section>
 
     <section class="actions" aria-label="City actions">
       <button id="zoomIn" class="chip icon" type="button" aria-label="Zoom in">+</button>
       <button id="zoomOut" class="chip icon" type="button" aria-label="Zoom out">&minus;</button>
-      <button id="undoBtn" class="chip" type="button" aria-label="Undo last change">Undo</button>
+      <button id="fitBtn" class="chip" type="button" aria-label="Fit city in view">Fit</button>
+      <button id="undoBtn" class="chip" disabled type="button" aria-label="Undo last change">Undo</button>
+      <button id="redoBtn" class="chip" type="button" disabled title="Redo (Ctrl+Shift+Z)">Redo</button>
       <button id="resetBtn" class="chip" type="button">New city</button>
     </section>
 
     <div id="tip" class="tip" role="status" hidden></div>
-    <p class="hint" id="hint">Click or drag to build. Right drag, or the Pan tool, moves the map. Scroll to zoom. Ctrl+Z undoes.</p>
+    <p class="hint" id="hint">Click or drag to build. Right drag, or the Pan tool, moves the map. Scroll to zoom. F fits the city. Arrow keys pan. Ctrl+Z undoes a stroke.</p>
   </main>
-  <script src="city.js?v=5"></script>
+  <script src="city.js?v=6"></script>
 </body>
 </html>

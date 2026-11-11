@@ -22,8 +22,10 @@
 
   let grid, money, tool = 'road';
   let cam = { x: 0, y: 0, z: 1 };
+  let zoomTarget = null;
+  let zoomAnchorX = 0, zoomAnchorY = 0;
   let hover = null, cars = [], orphansList = [];
-  let hour = 17.4, auto = false, stats = {};
+  let hour = 17.4, auto = false, paused = false, stats = {};
   let dpr = 1, W = 0, H = 0;
   const rnd = (a, b) => a + Math.random() * (b - a);
   const inb = (x, y) => x >= 0 && y >= 0 && x < N && y < N;
@@ -83,7 +85,12 @@
   function load() {
     try {
       const d = JSON.parse(localStorage.getItem(SAVE_KEY));
-      if (d && d.grid && d.grid.length === N) { grid = d.grid; money = d.money; hour = d.hour ?? 17.4; return true; }
+      const tiles = new Set([null, 'forest', 'road', 'house', 'apt', 'shop', 'office', 'park']);
+      if (d && Array.isArray(d.grid) && d.grid.length === N &&
+          d.grid.every(row => Array.isArray(row) && row.length === N && row.every(t => tiles.has(t))) &&
+          Number.isFinite(d.money) && (d.hour == null || (Number.isFinite(d.hour) && d.hour >= 0 && d.hour <= 24))) {
+        grid = d.grid; money = d.money; hour = d.hour ?? 17.4; return true;
+      }
     } catch (e) { /* ignore */ }
     return false;
   }
@@ -126,10 +133,9 @@
     $('sJobs').textContent = fmt(stats.jobs);
     $('sHappy').textContent = stats.happy + '%';
     $('sNet').textContent = (stats.net >= 0 ? '+' : '') + fmt(stats.net);
-    for (const b of toolBtns) {
-      const op = TYPES[b.dataset.tool].cost > money ? '0.45' : '1';
-      if (b.style.opacity !== op) b.style.opacity = op;
-    }
+    $('undoBtn').disabled = history.length === 0;
+    $('redoBtn').disabled = redoHistory.length === 0;
+    for (const b of toolBtns) b.dataset.unaffordable = String(TYPES[b.dataset.tool].cost > money);
   }
 
   // ---------- cars ----------
@@ -665,35 +671,76 @@
   }
 
   // ---------- actions ----------
-  const history = [];
-  function apply(x, y) {
+  const history = [], redoHistory = [];
+  let activeStroke = null;
+  function apply(x, y, defer = false) {
     const cur = grid[x][y];
-    if (tool === 'pan') return;
+    if (tool === 'pan') return false;
+    const cost = tool === 'bulldoze' ? 0 : TYPES[tool].cost;
     if (tool === 'bulldoze') {
-      if (!cur) return;
-      history.push({ x, y, prev: cur, cost: 0 });
-      grid[x][y] = null;
-      animate(x, y, true, cur);
+      if (!cur) return false;
     } else {
-      const cost = TYPES[tool].cost;
       const blocked = tool === 'forest' ? !!cur : (cur && cur !== 'forest');
-      if (blocked || cur === tool || cost > money) { if (!blocked && cost > money) flash('Not enough funds'); return; }
-      history.push({ x, y, prev: cur, cost });
-      grid[x][y] = tool; money -= cost;
-      animate(x, y, false);
+      if (blocked || cur === tool || cost > money) {
+        if (!blocked && cost > money) flash('Not enough funds');
+        return false;
+      }
     }
-    if (history.length > 200) history.shift();
+    const next = tool === 'bulldoze' ? null : tool;
+    const group = activeStroke || [];
+    if (!group.length) {
+      history.push(group);
+      if (history.length > 200) history.shift();
+    }
+    group.push({ x, y, prev: cur, next, cost });
+    redoHistory.length = 0;
+    grid[x][y] = next; money -= cost;
+    animate(x, y, !next, cur);
     dirtyCols.add(x - y);
-    recompute(); scheduleSave();
+    if (!defer) { recompute(); scheduleSave(); }
+    return true;
+  }
+
+  // Fill skipped pointer samples with a connected staircase, including diagonal drags.
+  function applyLine(from, to) {
+    let [x, y] = from;
+    const dx = Math.abs(to[0] - x), dy = Math.abs(to[1] - y);
+    const sx = x < to[0] ? 1 : -1, sy = y < to[1] ? 1 : -1;
+    let error = dx - dy, changed = apply(x, y, true);
+    while (x !== to[0] || y !== to[1]) {
+      const twice = error * 2;
+      if (twice > -dy) { error -= dy; x += sx; changed = apply(x, y, true) || changed; }
+      if (twice < dx) { error += dx; y += sy; changed = apply(x, y, true) || changed; }
+    }
+    if (changed) { recompute(); scheduleSave(); }
   }
 
   function undo() {
-    const h = history.pop();
-    if (!h) return flash('Nothing to undo');
-    if (h.prev) { grid[h.x][h.y] = h.prev; animate(h.x, h.y, false); }
-    else { animate(h.x, h.y, true, grid[h.x][h.y]); grid[h.x][h.y] = null; }
-    money += h.cost;
-    dirtyCols.add(h.x - h.y);
+    activeStroke = null;
+    const group = history.pop();
+    if (!group) return flash('Nothing to undo');
+    for (let i = group.length - 1; i >= 0; i--) {
+      const h = group[i];
+      grid[h.x][h.y] = h.prev; money += h.cost;
+      animate(h.x, h.y, !h.prev, h.next);
+      dirtyCols.add(h.x - h.y);
+    }
+    redoHistory.push(group);
+    recompute(); scheduleSave();
+  }
+
+  function redo() {
+    activeStroke = null;
+    const group = redoHistory.at(-1);
+    if (!group) return flash('Nothing to redo');
+    const cost = group.reduce((total, h) => total + h.cost, 0);
+    if (cost > 0 && cost > money) return flash('Not enough funds to redo');
+    redoHistory.pop(); history.push(group);
+    for (const h of group) {
+      grid[h.x][h.y] = h.next; money -= h.cost;
+      animate(h.x, h.y, !h.next, h.prev);
+      dirtyCols.add(h.x - h.y);
+    }
     recompute(); scheduleSave();
   }
 
@@ -723,29 +770,50 @@
   const dist = () => { const [a, b] = [...ptrs.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   canvas.addEventListener('pointerdown', (e) => {
+    zoomTarget = null;
     canvas.setPointerCapture(e.pointerId);
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     $('hint').dataset.hidden = 'true';
-    if (ptrs.size === 2) { drag = { pinch: true, d: dist() }; return; }
+    if (ptrs.size === 2) {
+      const [a, b] = [...ptrs.values()];
+      drag = { pinch: true, d: dist(), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+      activeStroke = null; hover = null;
+      return;
+    }
     const panning = e.button === 2 || e.button === 1 || e.shiftKey || tool === 'pan';
     if (panning) { drag = { pan: true, sx: e.clientX, sy: e.clientY, cx: cam.x, cy: cam.y }; canvas.style.cursor = 'grabbing'; return; }
-    drag = { pan: false };
+    drag = { pan: false, pendingTouch: e.pointerType === 'touch', sx: e.clientX, sy: e.clientY };
+    activeStroke = [];
     const t = pick(e.clientX, e.clientY);
-    if (t) { apply(t[0], t[1]); lastTile = t.join(); }
+    if (t) { if (!drag.pendingTouch) apply(t[0], t[1]); lastTile = t; }
   });
   canvas.addEventListener('pointermove', (e) => {
     if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (drag?.pinch && ptrs.size === 2) {
       const [a, b] = [...ptrs.values()], nd = dist();
-      zoomAt(nd / drag.d, (a.x + b.x) / 2, (a.y + b.y) / 2); drag.d = nd; return;
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      cam.x += mx - drag.mx; cam.y += my - drag.my;
+      if (drag.d > 0 && nd > 0) zoomAt(nd / drag.d, mx, my);
+      drag.d = nd; drag.mx = mx; drag.my = my; return;
     }
     if (drag?.pinch) return;
+    if (drag?.pendingTouch) {
+      if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 8) return;
+      drag.pendingTouch = false;
+      if (lastTile) apply(lastTile[0], lastTile[1]);
+    }
     if (drag?.pan) {
       cam.x = drag.cx + e.clientX - drag.sx; cam.y = drag.cy + e.clientY - drag.sy;
+      hover = null;
+      if (!flashTimer) $('tip').hidden = true;
+      return;
     }
     const t = pick(e.clientX, e.clientY);
     hover = t;
-    if (drag && !drag.pan && t && t.join() !== lastTile) { apply(t[0], t[1]); lastTile = t.join(); }
+    if (drag && !drag.pan && t && (!lastTile || t[0] !== lastTile[0] || t[1] !== lastTile[1])) {
+      applyLine(lastTile || t, t); lastTile = t;
+    }
+    if (!t) lastTile = null;
     if (!flashTimer) {
       const tip = $('tip');
       const txt = t && !drag ? describe(t[0], t[1]) : null;
@@ -760,25 +828,65 @@
       }
     }
   });
-  const end = (e) => { ptrs.delete(e.pointerId); if (ptrs.size) return; drag = null; lastTile = null; canvas.style.cursor = tool === 'pan' ? 'grab' : 'crosshair'; };
+  const end = (e) => {
+    ptrs.delete(e.pointerId);
+    if (ptrs.size) return;
+    if (e.type !== 'pointercancel' && drag?.pendingTouch && lastTile) apply(lastTile[0], lastTile[1]);
+    drag = null; lastTile = null; activeStroke = null;
+    canvas.style.cursor = tool === 'pan' ? 'grab' : 'crosshair';
+  };
   canvas.addEventListener('pointerup', end);
   canvas.addEventListener('pointercancel', end);
   canvas.addEventListener('pointerleave', () => { hover = null; if (!flashTimer) { $('tip').hidden = true; lastTipKey = ''; } });
 
   function zoomAt(f, mx = W / 2, my = H / 2) {
-    const nz = Math.max(0.5, Math.min(2.4, cam.z * f));
+    const nz = Math.max(0.15, Math.min(2.4, cam.z * f));
     const k = nz / cam.z;
     cam.x = mx - (mx - cam.x) * k; cam.y = my - (my - cam.y) * k; cam.z = nz;
   }
-  canvas.addEventListener('wheel', (e) => { e.preventDefault(); zoomAt(e.deltaY < 0 ? 1.1 : 1 / 1.1, e.clientX, e.clientY); }, { passive: false });
-  $('zoomIn').onclick = () => zoomAt(1.2);
-  $('zoomOut').onclick = () => zoomAt(1 / 1.2);
+  function requestZoom(f, mx = W / 2, my = H / 2) {
+    if (reduceMotion) return zoomAt(f, mx, my);
+    zoomTarget = Math.max(0.15, Math.min(2.4, (zoomTarget ?? cam.z) * f));
+    zoomAnchorX = mx; zoomAnchorY = my;
+    hover = null;
+    if (!flashTimer) $('tip').hidden = true;
+  }
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? H : 1;
+    // Trackpads send many tiny deltas; one event is not one wheel notch.
+    // Horizontal scrolling moves the map and must never trigger zoom-out.
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY) && !e.ctrlKey) {
+      zoomTarget = null;
+      cam.x -= e.deltaX * unit;
+      cam.y -= e.deltaY * unit;
+      hover = null;
+      if (!flashTimer) $('tip').hidden = true;
+      return;
+    }
+    if (!e.deltaY) return;
+    const pixels = Math.max(-240, Math.min(240, e.deltaY * unit));
+    requestZoom(Math.exp(-pixels * 0.0015), e.clientX, e.clientY);
+  }, { passive: false });
+  $('zoomIn').onclick = () => requestZoom(1.2);
+  $('zoomOut').onclick = () => requestZoom(1 / 1.2);
 
   function setTool(t) {
     tool = t;
     for (const b of toolBtns) b.setAttribute('aria-pressed', String(b.dataset.tool === t));
     canvas.style.cursor = t === 'pan' ? 'grab' : 'crosshair';
   }
+  const toolIcons = {
+    pan: '<path d="M12 3v18M3 12h18m-12-6 3-3 3 3m-6 12 3 3 3-3M6 9l-3 3 3 3m12-6 3 3-3 3"/>',
+    road: '<path d="m7 3-3 18M17 3l3 18M12 3v3m0 4v4m0 4v3"/>',
+    house: '<path d="m3 11 9-8 9 8M5 10v11h14V10M10 21v-7h4v7"/>',
+    apt: '<path d="M5 21V3h14v18ZM9 7h1m4 0h1m-6 4h1m4 0h1m-6 4h1m4 0h1M10 21v-3h4v3"/>',
+    shop: '<path d="M4 10v11h16V10M3 10l2-7h14l2 7ZM9 21v-7h6v7M8 3l-1 7m9-7 1 7"/>',
+    office: '<path d="M6 21V3h12v18ZM10 7h4m-4 4h4m-4 4h4m-4 6v-3h4v3"/>',
+    park: '<path d="M7 14V9m-3 5h16M5 18h14m-12-4v7m10-7v7"/><path d="M7 9a3 3 0 1 1 0-6 3 3 0 0 1 0 6Z"/>',
+    forest: '<path d="m12 2-6 8h3l-5 7h16l-5-7h3ZM12 17v5"/>',
+    bulldoze: '<path d="m4 14 8-10 8 7-8 10H7Zm4 3 8-10M12 21h9"/>'
+  };
   const toolsEl = $('tools');
   ORDER.forEach((id, i) => {
     const d = TYPES[id];
@@ -786,21 +894,35 @@
     b.className = 'tool'; b.type = 'button'; b.dataset.tool = id;
     b.setAttribute('aria-pressed', 'false');
     b.setAttribute('aria-label', `${d.name}${d.cost ? ', costs ' + d.cost : ''}, shortcut ${i + 1}`);
-    b.innerHTML = `<span class="swatch" style="background:${d.color}"></span><span class="name">${d.name}</span><span class="cost">${d.cost ? '$' + d.cost : ''}</span>`;
+    b.innerHTML = `<svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true">${toolIcons[id]}</svg><span class="name">${d.name}</span><span class="cost">${d.cost ? '$' + d.cost : ''}</span><kbd aria-hidden="true">${i + 1}</kbd>`;
     b.onclick = () => setTool(id);
     toolsEl.appendChild(b);
     toolBtns.push(b);
   });
   addEventListener('keydown', (e) => {
-    if (e.target.matches('input')) return;
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); return undo(); }
+    if (e.target.matches('input, textarea, select, [contenteditable]')) return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); return e.shiftKey ? redo() : undo(); }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); return redo(); }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key.toLowerCase() === 'f') { e.preventDefault(); center(); }
+    const move = { ArrowLeft: [48, 0], ArrowRight: [-48, 0], ArrowUp: [0, 48], ArrowDown: [0, -48] }[e.key];
+    if (move) { e.preventDefault(); zoomTarget = null; cam.x += move[0]; cam.y += move[1]; hover = null; }
+    if (e.code === 'Space' && !e.target.matches('button')) { e.preventDefault(); if (!e.repeat) togglePause(); }
     const n = Number(e.key);
     if (n >= 1 && n <= ORDER.length) setTool(ORDER[n - 1]);
-    if (e.key === '+' || e.key === '=') zoomAt(1.2);
-    if (e.key === '-') zoomAt(1 / 1.2);
+    if (e.key === '+' || e.key === '=') requestZoom(1.2);
+    if (e.key === '-') requestZoom(1 / 1.2);
   });
 
-  $('clock').addEventListener('input', (e) => { hour = Number(e.target.value); auto = false; $('autoBtn').setAttribute('aria-pressed', 'false'); });
+  $('clock').addEventListener('input', (e) => { hour = Number(e.target.value); scheduleSave(); auto = false; $('autoBtn').setAttribute('aria-pressed', 'false'); });
+  function togglePause() {
+    paused = !paused;
+    $('pauseBtn').textContent = paused ? 'Resume' : 'Pause';
+    $('pauseBtn').setAttribute('aria-pressed', String(paused));
+  }
+  $('pauseBtn').onclick = togglePause;
+  $('fitBtn').onclick = center;
+  $('redoBtn').onclick = redo;
   $('autoBtn').onclick = () => { auto = !auto; $('autoBtn').setAttribute('aria-pressed', String(auto)); };
   let resetArmed = 0;
   $('resetBtn').onclick = () => {
@@ -811,26 +933,38 @@
       return;
     }
     clearTimeout(resetArmed); resetArmed = 0; b.textContent = 'New city';
-    history.length = 0; starter(); worldDirty = true; recompute(); saveNow(); center();
+    history.length = 0; redoHistory.length = 0; activeStroke = null; anims.clear(); dirtyCols.clear(); starter(); worldDirty = true; recompute(); saveNow(); center();
   };
   $('undoBtn').onclick = undo;
 
   // ---------- loop ----------
   function resize() {
     dpr = Math.min(1.5, devicePixelRatio || 1);
+    cam.x += (innerWidth - W) / 2; cam.y += (innerHeight - H) / 2;
     W = innerWidth; H = innerHeight;
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
   }
   function center() {
-    cam.z = Math.max(0.55, Math.min(1.1, W / (N * TW) * 1.15, H / (N * TH + 120) * 1.15));
-    cam.x = W / 2; cam.y = H / 2 - (N * TH / 2) * cam.z;
+    zoomTarget = null;
+    const mobile = W <= 640;
+    const viewW = W - (mobile ? 24 : 260), viewH = H - (mobile ? 390 : 160);
+    cam.z = Math.max(0.15, Math.min(1.1, viewW / (N * TW), viewH / (N * TH + 120)));
+    cam.x = W / 2 + (mobile ? 0 : 110);
+    cam.y = 100 + viewH / 2 - (N * TH / 2) * cam.z;
   }
   addEventListener('resize', resize);
 
+  let frameId = 0;
   let last = performance.now(), acc = 0, lastLabel = '';
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
-    if (auto) hour = (hour + dt * 0.35) % 24;
+    if (zoomTarget !== null) {
+      const next = cam.z + (zoomTarget - cam.z) * (1 - Math.exp(-22 * dt));
+      const settled = Math.abs(zoomTarget - next) < 0.00001;
+      zoomAt((settled ? zoomTarget : next) / cam.z, zoomAnchorX, zoomAnchorY);
+      if (settled) zoomTarget = null;
+    }
+    if (auto && !paused) hour = (hour + dt * 0.35) % 24;
     const hh = Math.floor(hour), mm = Math.floor((hour % 1) * 60);
     const label = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
     if (label !== lastLabel) {
@@ -838,17 +972,21 @@
       $('clockText').textContent = label;
       if (document.activeElement !== $('clock')) $('clock').value = hour;
     }
-    stepCars(dt);
-    acc += dt;
+    if (!paused) { stepCars(dt); acc += dt; }
     if (acc >= 3) { acc = 0; money += stats.net; render_stats(); scheduleSave(); }
     draw(now);
-    requestAnimationFrame(frame);
+    frameId = requestAnimationFrame(frame);
   }
+
+  addEventListener('visibilitychange', () => {
+    if (document.hidden) { cancelAnimationFrame(frameId); zoomTarget = null; }
+    else { last = performance.now(); frameId = requestAnimationFrame(frame); }
+  });
 
   resize();
   if (!load()) starter();
   center();
   recompute();
   setTool('road');
-  requestAnimationFrame(frame);
+  frameId = requestAnimationFrame(frame);
 })();
