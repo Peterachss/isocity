@@ -27,8 +27,6 @@
 
   const canvas = document.getElementById('stage');
   const ctx = canvas.getContext('2d', { alpha: false });
-  const mCanvas = document.getElementById('minimap');
-  const mCtx = mCanvas.getContext('2d');
   const $ = (id) => document.getElementById(id);
 
   const audio = new D.CityAudio();
@@ -47,7 +45,7 @@
   let showHeatmap = true;
   let photoMode = false;
   let orbitActive = false;
-  let cutawayActive = false;
+  let cutawayActive = true;
   let activeFilter = 'all';
   let activeTab = 'overview';
 
@@ -1042,7 +1040,7 @@
         box(x + 0.25, y + 0.92, x + 0.55, y + 0.98, 0, 4, '#38bdf8', L);
       }
       // Interior cutaway desks & glowing screens when toggled or zoomed in on selected building
-      if (selectedTile && selectedTile[0] === x && selectedTile[1] === y && (cutawayActive || cam.z >= 1.55)) {
+      if (selectedTile && selectedTile[0] === x && selectedTile[1] === y && false) {
         const cx0 = px(x + i + 0.1, y + 1 - i), cy0 = py(x + i + 0.1, y + 1 - i, 6);
         const cw = (px(x + 1 - i - 0.1, y + 1 - i) - cx0);
         const ch = 14 * rcam.z;
@@ -1355,31 +1353,6 @@
     }
   }
 
-  function drawMinimap() {
-    const mw = mCanvas.width, mh = mCanvas.height;
-    mCtx.fillStyle = darkMode ? '#101714' : '#1d3225';
-    mCtx.fillRect(0, 0, mw, mh);
-    const ox = mw / 2, oy = 10, sx = 2, sy = 1.05;
-    for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
-      const t = grid[x][y];
-      if (!t || t === 'forest') continue;
-      const mx = ox + (x - y) * sx, my = oy + (x + y) * sy;
-      mCtx.fillStyle = isWater(t) ? '#3b8291' : isRoad(t) ? '#6e7378' : pins[x][y]
-        ? (getItem(pins[x][y]).kind === 'google' ? '#38bdf8' : '#34d399')
-        : '#8cbf5c';
-      mCtx.fillRect(mx, my, 2.5, 2.2);
-    }
-    // Viewport box on minimap
-    const topL = pick(0, 0) || [0, 0];
-    const botR = pick(W, H) || [N - 1, N - 1];
-    const x0 = ox + (topL[0] - topL[1]) * sx;
-    const y0 = oy + (topL[0] + topL[1]) * sy;
-    const x1 = ox + (botR[0] - botR[1]) * sx;
-    const y1 = oy + (botR[0] + botR[1]) * sy;
-    mCtx.strokeStyle = '#fbbf24';
-    mCtx.lineWidth = 1.3;
-    mCtx.strokeRect(Math.min(x0, x1), Math.min(y0, y1), Math.max(10, Math.abs(x1 - x0)), Math.max(8, Math.abs(y1 - y0)));
-  }
 
   function draw(now, dt, transparentBg = false) {
     const L = daylight(hour);
@@ -1647,7 +1620,7 @@
     }
 
     if (!transparentBg) drawMapLabels(now);
-    drawMinimap();
+    drawExtras(now, transparentBg);
   }
 
   // ---------- rotate ----------
@@ -2597,19 +2570,7 @@
     setPop('citiesPop', 'citiesBtn', false);
   };
 
-  // Minimap click pan
-  let miniDrag = false;
-  const panFromMini = (e) => {
-    const r = mCanvas.getBoundingClientRect();
-    const mx = (e.clientX - r.left) * (mCanvas.width / r.width) - mCanvas.width / 2;
-    const my = (e.clientY - r.top) * (mCanvas.height / r.height) - 10;
-    const tx = Math.max(0, Math.min(N - 1, Math.round((my / 1.05 + mx / 2) / 2)));
-    const ty = Math.max(0, Math.min(N - 1, Math.round((my / 1.05 - mx / 2) / 2)));
-    flyToTile(tx, ty, cam.z, false);
-  };
-  mCanvas.addEventListener('pointerdown', (e) => { miniDrag = true; panFromMini(e); });
-  addEventListener('pointermove', (e) => { if (miniDrag) panFromMini(e); });
-  addEventListener('pointerup', () => { miniDrag = false; });
+
 
   // Outside click closes dropdowns/popovers
   addEventListener('pointerdown', (e) => {
@@ -2769,7 +2730,8 @@
 
   function frame(now) {
     const rawDt = Math.min(0.1, (now - last) / 1000); last = now;
-    const simDt = rawDt * simSpeed;
+    const effSpeed = isSim() ? simSpeed : 1;
+    const simDt = rawDt * effSpeed;
     simClock += simDt;
 
     // Smooth continuous day/night cycle even when simSpeed === 0 if timeMode === 'auto', or frozen cleanly in 'paused'
@@ -2780,7 +2742,7 @@
       if (dtStr !== lastDateTxt) { lastDateTxt = dtStr; $('dateText').textContent = dtStr; }
     } else {
       if (timeMode === 'auto') {
-        const rate = simSpeed > 0 ? 0.14 * simSpeed : 0.12;
+        const rate = effSpeed > 0 ? 0.14 * effSpeed : 0.12;
         const prevH = hour;
         hour = (hour + rawDt * rate) % 24;
         if (hour < prevH) {
@@ -2829,11 +2791,269 @@
     }
     if (simDt > 0) {
       acc += simDt;
-      if (acc >= 3) { acc = 0; stepSimTick(); }
+      if (acc >= 3) { acc = 0; if (isSim()) stepSimTick(); }
     }
 
+    tickCrew(now);
     draw(now, rawDt, false);
     requestAnimationFrame(frame);
+  }
+
+  // =====================================================================
+  // Access / Simulator modes, building tools, and building cutaway with workers
+  // =====================================================================
+  let appMode = 'access';
+  try { appMode = localStorage.getItem('isocity-mode') === 'sim' ? 'sim' : 'access'; } catch (e) { /* ignore */ }
+  const isSim = () => appMode === 'sim';
+
+  function setMode(m) {
+    appMode = m === 'sim' ? 'sim' : 'access';
+    document.documentElement.dataset.mode = appMode;
+    document.querySelectorAll('.mode-btn').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === appMode)));
+    try { localStorage.setItem('isocity-mode', appMode); } catch (e) { /* ignore */ }
+    if (appMode !== 'sim') { activeDisaster = null; setBuildTool('select'); }
+    syncBodyPrefs();
+    audio.sfx('tap');
+  }
+  document.querySelectorAll('.mode-btn').forEach((b) => { b.onclick = () => setMode(b.dataset.mode); });
+
+  // ---------- building tools (Simulator mode) ----------
+  const TOOLS = {
+    select:  { label: 'Select' },
+    road:    { label: 'Road',      cost: 20,  type: 'road' },
+    house:   { label: 'Villa',     cost: 120, type: 'house' },
+    shop:    { label: 'Studio',    cost: 200, type: 'shop' },
+    apt:     { label: 'Apartments', cost: 400, type: 'apt' },
+    office:  { label: 'Tower',     cost: 800, type: 'office' },
+    park:    { label: 'Park',      cost: 60,  type: 'park' },
+    forest:  { label: 'Trees',     cost: 15,  type: 'forest' },
+    upgrade: { label: 'Upgrade' },
+    bulldoze: { label: 'Bulldoze' },
+  };
+  let buildTool = 'select';
+  function setBuildTool(t) {
+    buildTool = TOOLS[t] ? t : 'select';
+    document.querySelectorAll('.tool-btn').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tool === buildTool)));
+    canvas.style.cursor = buildTool === 'select' ? 'grab' : 'crosshair';
+    $('buildHint').textContent = buildTool === 'select' ? 'Pick a tool, then click or drag on the map.' : buildTool === 'bulldoze' ? 'Bulldoze: removes your own buildings (repos and apps are protected).' : buildTool === 'upgrade' ? 'Upgrade a building one level.' : `${TOOLS[buildTool].label}: $${TOOLS[buildTool].cost} each`;
+  }
+  document.querySelectorAll('.tool-btn').forEach((b) => { b.onclick = () => setBuildTool(b.dataset.tool); });
+
+  function toast(msg) {
+    const t = $('carToast'); t.textContent = msg; t.hidden = false;
+    clearTimeout(toast.h); toast.h = setTimeout(() => { t.hidden = true; }, 2200);
+  }
+  function applyTool(x, y) {
+    if (!inb(x, y) || buildTool === 'select') return false;
+    const cur = grid[x][y];
+    if (cur === 'water' || cur === 'bridge') return false;
+    if (buildTool === 'bulldoze') {
+      if (pins[x][y]) { toast('Repos and apps are protected'); return false; }
+      if (!cur) return false;
+      const refund = Math.round((({ road: 20, house: 120, shop: 200, apt: 400, office: 800, park: 60, forest: 15 })[cur] || 0) * 0.4);
+      grid[x][y] = null; levels[x][y] = 1; money += refund;
+    } else if (buildTool === 'upgrade') {
+      const d = TYPES[cur];
+      if (!cur || !d || !d.grow) return false;
+      const lv = levels[x][y] || 1;
+      if (lv >= 3) { toast('Already max level'); return false; }
+      const price = Math.round((TOOLS[cur] ? TOOLS[cur].cost : 300) * 0.8 * lv) || 300;
+      if (money < price) { toast(`Need $${fmt(price)} to upgrade`); return false; }
+      money -= price; levels[x][y] = lv + 1;
+    } else {
+      const tool = TOOLS[buildTool];
+      if (pins[x][y]) { toast('That plot holds a repo or app'); return false; }
+      if (cur === tool.type) return false;
+      if (cur && cur !== 'forest' && cur !== 'park') { toast('Bulldoze that tile first'); return false; }
+      if (money < tool.cost) { toast(`Need $${fmt(tool.cost)}`); return false; }
+      money -= tool.cost; grid[x][y] = tool.type; levels[x][y] = 1;
+    }
+    worldDirty = true; recompute(); scheduleSave(); audio.sfx('tap');
+    return true;
+  }
+  let paintLast = '';
+  const paintAt = (e) => {
+    const t = pick(e.clientX, e.clientY);
+    if (!t) return;
+    const k = t.join(',');
+    if (k === paintLast) return;
+    paintLast = k; applyTool(t[0], t[1]);
+  };
+  const toolsActive = () => isSim() && buildTool !== 'select';
+  canvas.addEventListener('pointerdown', (e) => {
+    if (!toolsActive() || e.button === 2) return;
+    e.stopImmediatePropagation(); e.preventDefault();
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* synthetic pointer */ }
+    paintLast = ''; canvas.__paint = true; paintAt(e);
+  }, true);
+  canvas.addEventListener('pointermove', (e) => {
+    if (!toolsActive()) return;
+    hover = pick(e.clientX, e.clientY);
+    if (canvas.__paint) { e.stopImmediatePropagation(); paintAt(e); }
+  }, true);
+  const endPaint = (e) => { if (canvas.__paint) { canvas.__paint = false; paintLast = ''; e.stopImmediatePropagation(); } };
+  canvas.addEventListener('pointerup', endPaint, true);
+  canvas.addEventListener('pointercancel', endPaint, true);
+
+  function drawBuildPreview() {
+    if (!toolsActive() || !hover) return;
+    const [x, y] = hover;
+    const z = rcam.z;
+    ctx.beginPath();
+    ctx.moveTo(px(x, y), py(x, y)); ctx.lineTo(px(x + 1, y), py(x + 1, y)); ctx.lineTo(px(x + 1, y + 1), py(x + 1, y + 1)); ctx.lineTo(px(x, y + 1), py(x, y + 1)); ctx.closePath();
+    ctx.fillStyle = buildTool === 'bulldoze' ? 'rgba(224,113,95,0.35)' : 'rgba(94,242,214,0.28)'; ctx.fill();
+    ctx.strokeStyle = buildTool === 'bulldoze' ? '#e0715f' : '#5ef2d6'; ctx.lineWidth = 2 * Math.max(1, z * 0.8); ctx.stroke();
+  }
+
+  // ---------- workers ----------
+  const FIRST = ['Mai', 'Linh', 'Tuan', 'Hana', 'Minh', 'Kai', 'Sora', 'An', 'Bao', 'Lan', 'Noah', 'Eli', 'Mia', 'Leo', 'Zoe', 'Ken', 'Yuki', 'Ravi', 'Nina', 'Omar'];
+  const ROLE_TASKS = {
+    Developer: ['writing a feature', 'fixing a bug', 'refactoring a module', 'merging main', 'pairing on a PR'],
+    Designer: ['sketching a screen', 'tuning colours', 'exporting icons', 'reviewing spacing'],
+    'QA tester': ['running test suite', 'reproducing a bug', 'writing a test plan', 'checking mobile layout'],
+    DevOps: ['watching deploys', 'rotating keys', 'scaling servers', 'reading build logs'],
+    Manager: ['planning the sprint', 'answering messages', 'triaging issues', 'booking a demo'],
+    Student: ['revising notes', 'writing an essay', 'making slides', 'checking the timetable'],
+  };
+  const pickOne = (a) => a[Math.floor(Math.random() * a.length)];
+  const initial = () => String.fromCharCode(65 + Math.floor(Math.random() * 26));
+  const SLOTS = [[0.3, 0.3], [0.72, 0.3], [0.3, 0.72], [0.72, 0.72], [0.5, 0.5]];
+  const SHIRTS = ['#e6ded0', '#c95d43', '#3b6978', '#d4a23a', '#5b7a52', '#8a6fb0', '#2f7a8a'];
+  const CREW_SPOTS = [[1.0, 0.3], [0.35, 1.0], [1.1, 0.85], [0.75, 1.15], [1.15, 0.05]];
+  let crew = [], lastSelKey = '';
+
+  function cutawayGeom() {
+    if (!selectedTile || !cutawayActive) return null;
+    const [x, y] = selectedTile;
+    const t = grid[x][y];
+    if (!isBuilding(t) || t === 'windmill' || t === 'wheel') return null;
+    const d = TYPES[t];
+    if (!d || !d.h) return null;
+    const i = d.inset || 0.12;
+    const H = Math.max(1, bldHeight(t, levels[x][y] || 1));
+    return { x, y, t, i, H, x0: x + i, y0: y + i, x1: x + 1 - i, y1: y + 1 - i, F: Math.max(1, Math.min(5, Math.floor(H / 26))) };
+  }
+  function buildCrew() {
+    crew = [];
+    if (!selectedTile) return;
+    const [x, y] = selectedTile;
+    const id = pins[x][y];
+    const item = id ? getItem(id) : { kind: 'github', name: 'Building' };
+    const g = cutawayGeom();
+    const rolesFor = (k) => item.kind === 'google' ? ['Student', 'Student', 'Manager', 'Designer'][k % 4] : ['Developer', 'QA tester', 'DevOps', 'Designer', 'Manager'][k % 5];
+    const mk = (px0, py0, z0, k, extra = {}) => {
+      const role = rolesFor(k);
+      return Object.assign({ px: px0 - 0.5, py: py0 - 0.5, ox: px0 - 0.5, oy: py0 - 0.5, z0, color: SHIRTS[k % SHIRTS.length], phase: Math.random() * 6, crew: true,
+        info: { name: `${pickOne(FIRST)} ${initial()}.`, role, task: pickOne(ROLE_TASKS[role]), nextTask: 0 } }, extra);
+    };
+    if (g) {
+      const fh = g.H / g.F;
+      let k = 0;
+      for (let f = 0; f < g.F && crew.length < 9; f++) {
+        const per = g.F >= 4 ? 2 : 3;
+        for (let j = 0; j < per; j++) {
+          const [u, v] = SLOTS[(j + f) % SLOTS.length];
+          crew.push(mk(g.x0 + (g.x1 - g.x0) * u, g.y0 + (g.y1 - g.y0) * v, f * fh, k++, { inside: true, floor: f, fh, desk: j % 2 === 0, sc: Math.min(1, (fh - 4) / 19) }));
+        }
+      }
+    } else {
+      for (let k = 0; k < 4; k++) { const [ox, oy] = CREW_SPOTS[k]; crew.push(mk(x + ox, y + oy, 0, k, { sc: 1 })); }
+    }
+  }
+
+  function drawPerson(a, now) {
+    const z = rcam.z * (a.sc || 1);
+    const z0 = a.z0 || 0;
+    const x = px(a.px + 0.5, a.py + 0.5), y = py(a.px + 0.5, a.py + 0.5, z0);
+    const seated = a.desk;
+    const bob = Math.sin(now * 0.008 + a.phase) * (seated ? 0.4 : 1.2) * z;
+    ctx.fillStyle = 'rgba(8,16,18,0.25)'; ctx.beginPath(); ctx.ellipse(x, y, 5 * z, 2.4 * z, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#2a2f33'; ctx.fillRect(x - 2.6 * z, y - 5 * z, 2.2 * z, 5 * z); ctx.fillRect(x + 0.4 * z, y - 5 * z, 2.2 * z, 5 * z);
+    ctx.fillStyle = a.color; ctx.beginPath(); ctx.roundRect(x - 3.6 * z, y - 14 * z + bob, 7.2 * z, 9.5 * z, 2 * z); ctx.fill();
+    ctx.fillStyle = '#e7c6a5'; ctx.beginPath(); ctx.arc(x, y - 17.5 * z + bob, 3.3 * z, 0, 7); ctx.fill();
+    ctx.fillStyle = '#3a2a1c'; ctx.beginPath(); ctx.arc(x, y - 18.6 * z + bob, 3.3 * z, Math.PI, 0); ctx.fill();
+    ctx.strokeStyle = a.color; ctx.lineWidth = 1.8 * z; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x + 3.4 * z, y - 12 * z + bob); ctx.lineTo(x + 6 * z, y - 8.5 * z + (seated ? Math.sin(now * 0.03 + a.phase) * 1.2 * z : Math.sin(now * 0.004 + a.phase) * 2 * z)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x - 3.4 * z, y - 12 * z + bob); ctx.lineTo(x - 5.8 * z, y - 8 * z); ctx.stroke();
+    if (!a.inside) { ctx.fillStyle = '#5ef2d6'; ctx.fillRect(x + 4 * z, y - 9 * z + bob, 4 * z, 3 * z); }
+    const spot = crew.length ? Math.floor(now / 2600) % crew.length : 0;
+    if (crew[spot] === a) {
+      if (now > a.info.nextTask) { a.info.nextTask = now + 2600; }
+      const txt = `${a.info.name} · ${a.info.task}`;
+      ctx.font = `600 ${Math.max(9, 10 * Math.min(rcam.z, 1.4))}px system-ui, sans-serif`;
+      const w = ctx.measureText(txt).width + 14, h = 17;
+      const bx = Math.round(x - w / 2), by = Math.round(y - 25 * z - h);
+      ctx.fillStyle = 'rgba(244,241,234,0.96)'; ctx.beginPath(); ctx.roundRect(bx, by, w, h, 8); ctx.fill();
+      ctx.fillStyle = '#1d2320'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(txt, bx + 7, by + h / 2 + 0.5);
+    }
+  }
+
+  function drawCutaway(now) {
+    const g = cutawayGeom();
+    if (!g) return;
+    const { x0, y0, x1, y1, H, F } = g;
+    const fh = H / F;
+    const P = (xx, yy, zz) => [px(xx, yy), py(xx, yy, zz)];
+    const poly = (pts, fill) => { ctx.beginPath(); pts.forEach(([a, b], i) => (i ? ctx.lineTo(a, b) : ctx.moveTo(a, b))); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); };
+    const edge = (pts, c, w) => { ctx.beginPath(); pts.forEach(([a, b], i) => (i ? ctx.lineTo(a, b) : ctx.moveTo(a, b))); ctx.strokeStyle = c; ctx.lineWidth = w; ctx.lineJoin = 'round'; ctx.stroke(); };
+    const lw = Math.max(1.2, 2 * rcam.z);
+    poly([P(x0, y0, H), P(x1, y0, H), P(x1, y1, H), P(x1, y1, 0), P(x0, y1, 0), P(x0, y0, 0)], '#26313a');
+    for (let f = 0; f < F; f++) {
+      const z0 = f * fh, z1 = (f + 1) * fh;
+      poly([P(x0, y0, z0), P(x0, y1, z0), P(x0, y1, z1), P(x0, y0, z1)], f % 2 ? '#51636d' : '#5a6d78');
+      poly([P(x0, y0, z0), P(x1, y0, z0), P(x1, y0, z1), P(x0, y0, z1)], f % 2 ? '#3f505a' : '#46585f');
+      const wz0 = z0 + fh * 0.38, wz1 = z1 - fh * 0.14;
+      for (let c = 0; c < 2; c++) {
+        const a = 0.12 + c * 0.46, b = a + 0.34;
+        const lx0 = x0 + (x1 - x0) * a, lx1 = x0 + (x1 - x0) * b;
+        poly([P(lx0, y0, wz0), P(lx1, y0, wz0), P(lx1, y0, wz1), P(lx0, y0, wz1)], 'rgba(170,215,235,0.55)');
+        const ly0 = y0 + (y1 - y0) * a, ly1 = y0 + (y1 - y0) * b;
+        poly([P(x0, ly0, wz0), P(x0, ly1, wz0), P(x0, ly1, wz1), P(x0, ly0, wz1)], 'rgba(150,200,225,0.5)');
+      }
+      poly([P(x0, y0 + (y1 - y0) * 0.55, z0 + fh * 0.32), P(x0, y0 + (y1 - y0) * 0.85, z0 + fh * 0.32), P(x0, y0 + (y1 - y0) * 0.85, z0 + fh * 0.72), P(x0, y0 + (y1 - y0) * 0.55, z0 + fh * 0.72)], '#eef1ee');
+      poly([P(x0, y0, z0), P(x1, y0, z0), P(x1, y1, z0), P(x0, y1, z0)], f % 2 ? '#cdbb9c' : '#d8c7aa');
+      poly([P(x0, y1, z0), P(x1, y1, z0), P(x1, y1, z0 - 3), P(x0, y1, z0 - 3)], '#8f7f66');
+      poly([P(x1, y0, z0), P(x1, y1, z0), P(x1, y1, z0 - 3), P(x1, y0, z0 - 3)], '#78694f');
+      const here = crew.filter((c) => c.inside && c.floor === f).sort((p, q) => (p.px + p.py) - (q.px + q.py));
+      for (const c of here) {
+        drawPerson(c, now);
+        if (c.desk) {
+          const dxp = c.px + 0.5 + 0.05, dyp = c.py + 0.5 + 0.05;
+          const dh = 6 * (c.sc || 1);
+          box(dxp - 0.07, dyp - 0.04, dxp + 0.14, dyp + 0.14, z0, z0 + dh, '#8a6a4a', 1, { roof: '#b08a62' });
+          const mx = px(dxp + 0.03, dyp + 0.02), my = py(dxp + 0.03, dyp + 0.02, z0 + dh + 3 * (c.sc || 1));
+          ctx.fillStyle = '#7ef2de'; ctx.fillRect(mx - 3 * rcam.z * (c.sc || 1), my - 2 * rcam.z * (c.sc || 1), 6 * rcam.z * (c.sc || 1), 4 * rcam.z * (c.sc || 1));
+        }
+      }
+    }
+    edge([P(x1, y1, 0), P(x1, y1, H)], '#1a232a', lw * 1.4);
+    edge([P(x0, y1, 0), P(x0, y1, H)], '#1a232a', lw * 1.2);
+    edge([P(x1, y0, 0), P(x1, y0, H)], '#1a232a', lw * 1.2);
+    edge([P(x0, y0, H), P(x1, y0, H), P(x1, y1, H), P(x0, y1, H), P(x0, y0, H)], '#1a232a', lw * 1.4);
+  }
+
+  function drawExtras(now, tbg) {
+    drawBuildPreview();
+    if (tbg) return;
+    drawCutaway(now);
+    for (const a of crew.slice().sort((p, q) => (p.py + p.px) - (q.py + q.px))) if (!a.inside) drawPerson(a, now);
+  }
+
+  function tickCrew(now) {
+    const key = selectedTile ? selectedTile.join(',') : '';
+    if (key !== lastSelKey || (cutawayActive && !crew.length && selectedTile)) {
+      lastSelKey = key;
+      if (selectedTile) {
+        buildCrew();
+        const g = cutawayGeom();
+        if (g) flyToTile(selectedTile[0], selectedTile[1], Math.max(cam.z, 2.0), true);
+      } else crew = [];
+    }
+    for (const a of crew) {
+      const amp = a.inside ? (a.desk ? 0.01 : 0.05) : 0.12;
+      a.px = a.ox + Math.sin(now * 0.0006 + a.phase) * amp;
+      a.py = a.oy + Math.cos(now * 0.0005 + a.phase * 1.7) * amp * 0.85;
+    }
   }
 
   // Register offline PWA service worker
@@ -2850,6 +3070,9 @@
       darkMode = true; themeId = 'dark';
     }
   } catch (e) { /* storage unavailable */ }
+  document.documentElement.dataset.mode = appMode;
+  document.querySelectorAll('.mode-btn').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === appMode)));
+  $('inspCutBtn').setAttribute('aria-pressed', 'true');
   syncBodyPrefs();
   recompute();
   updateCountUI();

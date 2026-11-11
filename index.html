@@ -11,7 +11,7 @@
   <meta property="og:type" content="website" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="city.css?v=20" />
+  <link rel="stylesheet" href="city.css?v=24" />
 </head>
 <body>
   <main class="app">
@@ -31,33 +31,30 @@
         </button>
       </div>
 
-      <div id="filterRow" class="filter-row" role="group" aria-label="Filter city items">
-        <button class="filter-chip" type="button" data-filter="all" aria-pressed="true">Full City</button>
-        <button class="filter-chip" type="button" data-filter="github" aria-pressed="false">GitHub</button>
-        <button class="filter-chip" type="button" data-filter="google" aria-pressed="false">Google &amp; Study</button>
-        <button class="filter-chip" type="button" data-filter="school" aria-pressed="false">School mode</button>
-        <button class="filter-chip" type="button" data-filter="recent" aria-pressed="false">By activity</button>
-      </div>
       <div id="searchResults" class="search-results" role="listbox" aria-label="Matching items" hidden></div>
     </section>
 
     <header class="sim-pill ui-chrome" aria-label="City clock, weather, and simulation status">
+      <div class="mode-switch" role="group" aria-label="App mode">
+        <button class="chip tiny mode-btn" type="button" data-mode="access" aria-pressed="true" title="Access mode: search, links and the city map">Access</button>
+        <button class="chip tiny mode-btn" type="button" data-mode="sim" aria-pressed="false" title="Simulator mode: economy and building tools">Simulator</button>
+      </div>
       <div class="sim-group">
         <span id="dateText" class="sim-meta tnum">Mon, Nov 11</span>
         <span id="clockText" class="sim-val tnum">17:24</span>
         <button id="autoTimeBtn" class="chip tiny" type="button" aria-pressed="true" title="Cycle between Auto Day/Night and Real Time clock">Auto</button>
       </div>
       <button id="weatherBtn" class="chip tiny" type="button" title="Toggle or refresh weather">Clear</button>
-      <div class="sim-group">
+      <div class="sim-group sim-only">
         <span class="sim-meta">Funds</span>
         <span id="sMoney" class="sim-val tnum">$5,000</span>
       </div>
-      <div class="sim-group">
+      <div class="sim-group sim-only">
         <span class="sim-meta">Pop</span>
         <span id="sPop" class="sim-val tnum">0</span>
       </div>
-      <button id="econBtn" class="chip tiny" type="button" aria-expanded="false" aria-controls="econPop">Economy</button>
-      <div class="speed-group" role="group" aria-label="Simulation speed">
+      <button id="econBtn" class="chip tiny sim-only" type="button" aria-expanded="false" aria-controls="econPop">Economy</button>
+      <div class="speed-group sim-only" role="group" aria-label="Simulation speed">
         <button class="chip tiny speed-btn" type="button" data-speed="0" aria-pressed="false" aria-label="Pause simulation">Pause</button>
         <button class="chip tiny speed-btn" type="button" data-speed="1" aria-pressed="true">1x</button>
         <button class="chip tiny speed-btn" type="button" data-speed="2" aria-pressed="false">2x</button>
@@ -66,9 +63,23 @@
       </div>
     </header>
 
-    <div class="minimap-box ui-chrome" aria-label="City minimap">
-      <canvas id="minimap" width="136" height="88"></canvas>
-    </div>
+
+    <aside id="buildBar" class="build-bar sim-only ui-chrome" aria-label="Building tools">
+      <span class="stat-label">Build</span>
+      <div class="tool-grid">
+        <button class="chip small tool-btn" type="button" data-tool="select" aria-pressed="true">Select</button>
+        <button class="chip small tool-btn" type="button" data-tool="road" aria-pressed="false">Road $20</button>
+        <button class="chip small tool-btn" type="button" data-tool="house" aria-pressed="false">Villa $120</button>
+        <button class="chip small tool-btn" type="button" data-tool="shop" aria-pressed="false">Studio $200</button>
+        <button class="chip small tool-btn" type="button" data-tool="apt" aria-pressed="false">Apts $400</button>
+        <button class="chip small tool-btn" type="button" data-tool="office" aria-pressed="false">Tower $800</button>
+        <button class="chip small tool-btn" type="button" data-tool="park" aria-pressed="false">Park $60</button>
+        <button class="chip small tool-btn" type="button" data-tool="forest" aria-pressed="false">Trees $15</button>
+        <button class="chip small tool-btn" type="button" data-tool="upgrade" aria-pressed="false">Upgrade</button>
+        <button class="chip small tool-btn" type="button" data-tool="bulldoze" aria-pressed="false">Bulldoze</button>
+      </div>
+      <p id="buildHint" class="build-hint">Pick a tool, then click or drag on the map.</p>
+    </aside>
 
     <div id="commitTicker" class="ticker-bar ui-chrome" aria-label="Live GitHub commit feed">
       <span class="ticker-dot" aria-hidden="true"></span>
@@ -383,7 +394,7 @@
     <div id="carToast" class="car-toast ui-chrome" role="status" hidden></div>
     <div id="tip" class="tip ui-chrome" role="status" hidden></div>
   </main>
-  <script src="catalog.js?v=20"></script>
-  <script src="city.js?v=20"></script>
+  <script src="catalog.js?v=24"></script>
+  <script src="city.js?v=24"></script>
 </body>
 </html>
