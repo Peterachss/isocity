@@ -1146,7 +1146,7 @@
   const OX = N * (TW / 2) + PAD_X;
   const WW = N * TW + PAD_X * 2;
   const WH = OY + N * TH + 48;
-  const WS = 2; // 2x supersampled base world
+  let WS = 2; // supersampling of the cached world image; raised after zooming settles
 
   const worldCanvas = document.createElement('canvas');
   worldCanvas.width = Math.round(WW * WS);
@@ -1389,21 +1389,9 @@
       }
     }
 
-    // Sharpness upgrade: if cam.z > 1.25 render directly via crisp vector geometry, else fast bitmap blit!
-    if (cam.z > 1.25) {
-      drawSlab(1);
-      for (let s = 0; s <= 2 * N - 2; s++) {
-        for (let x = Math.max(0, s - N + 1); x <= Math.min(N - 1, s); x++) {
-          const y = s - x;
-          const sx = px(x + 0.5, y + 0.5), sy = py(x + 0.5, y + 0.5);
-          if (sx < -120 || sx > W + 120 || sy < -160 || sy > H + 160) continue;
-          drawTile(x, y, grid[x][y], 1, false);
-        }
-      }
-    } else {
-      ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(worldCanvas, cam.x - OX * cam.z, cam.y - OY * cam.z, WW * cam.z, WH * cam.z);
-    }
+    // Always blit the cached world image (fast). Its resolution is raised when zoomed in (see ensureWorldRes).
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(worldCanvas, cam.x - OX * cam.z, cam.y - OY * cam.z, WW * cam.z, WH * cam.z);
 
     // Animated water ripples
     if (!reduceMotion && waterCells.length && L > 0.25) {
@@ -2656,7 +2644,7 @@
 
   function zoomAt(f, mx = W / 2, my = H / 2) {
     camAnim = null;
-    const nz = Math.max(0.45, Math.min(2.6, cam.z * f));
+    const nz = Math.max(0.45, Math.min(2.0, cam.z * f));
     const k = nz / cam.z;
     cam.x = mx - (mx - cam.x) * k; cam.y = my - (my - cam.y) * k; cam.z = nz;
     audio.updateZoomAmbience(cam.z);
@@ -2713,8 +2701,26 @@
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   let last = performance.now(), acc = 0, lastClockTxt = '', lastDateTxt = '';
 
+
+  // Re-render the cached world at a higher resolution once zooming has settled (keeps zoomed-in views sharp without per-frame redraws).
+  let resLastZ = 0, resStableAt = 0, resWantSince = 0;
+  function ensureWorldRes(now) {
+    if (Math.abs(cam.z - resLastZ) > 0.002) { resLastZ = cam.z; resStableAt = now; }
+    if (now - resStableAt < 350) return;
+    const need = cam.z * dpr * 0.9;
+    const want = need > 2.1 ? 2.5 : 2;
+    if (want === WS) { resWantSince = 0; return; }
+    if (want < WS && now - (resWantSince || (resWantSince = now)) < 1500) return;
+    resWantSince = 0;
+    WS = want;
+    worldCanvas.width = Math.round(WW * WS);
+    worldCanvas.height = Math.round(WH * WS);
+    worldDirty = true;
+  }
+
   function frame(now) {
     const rawDt = Math.min(0.1, (now - last) / 1000); last = now;
+    ensureWorldRes(now);
     const effSpeed = isSim() ? simSpeed : 1;
     const simDt = rawDt * effSpeed;
     simClock += simDt;
