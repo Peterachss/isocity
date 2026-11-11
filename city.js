@@ -504,7 +504,7 @@
     canvas.width = W * dpr; canvas.height = H * dpr;
   }
   function center() {
-    cam.z = Math.min(1.1, Math.min(W / (N * TW * 0.62), H / (N * TH * 1.15)) * 1.1);
+    cam.z = Math.max(0.55, Math.min(1.1, W / (N * TW) * 1.15, H / (N * TH + 120) * 1.15));
     cam.x = W / 2; cam.y = H / 2 - (N * TH / 2) * cam.z;
   }
   addEventListener('resize', () => { resize(); });
