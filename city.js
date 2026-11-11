@@ -307,6 +307,7 @@
     pins = (Array.isArray(d.pins) && d.pins.length === N)
       ? d.pins.map((row) => Array.isArray(row) ? row.map((v) => (v && typeof v === 'string') ? v : null) : Array(N).fill(null))
       : makePins();
+    pins = pins.map((row) => row.map((v) => (v === 'co-bo-u' ? 'uni-plan' : v))); // renamed building
 
     themeId = D.THEMES[d.themeId] ? d.themeId : 'autumn';
     timeMode = d.timeMode || 'auto';
@@ -1701,6 +1702,7 @@
     let added = false;
     for (const r of list) {
       if (!r || !r.name) continue;
+      if (r.name === 'co-bo-u') continue;
       const existing = repoMap.get(r.name);
       const webUrl = r.homepage && r.homepage.startsWith('http')
         ? r.homepage
@@ -1793,15 +1795,15 @@
     }
 
     const [repoInfo, commits, runs, files, branches, langs, prs, issues, readmeObj] = await Promise.all([
-      repo.meta ? Promise.resolve(null) : fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.id}`),
-      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.id}/commits?sha=${encodeURIComponent(br)}&per_page=8`),
-      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.id}/actions/runs?per_page=2`),
-      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.id}/contents?ref=${encodeURIComponent(br)}`),
-      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.id}/branches?per_page=8`),
-      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.id}/languages`),
-      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.id}/pulls?state=open&per_page=6`),
-      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.id}/issues?state=open&per_page=6`),
-      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.id}/readme`),
+      repo.meta ? Promise.resolve(null) : fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.api || repo.id}`),
+      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.api || repo.id}/commits?sha=${encodeURIComponent(br)}&per_page=8${repo.path ? '&path=' + encodeURIComponent(repo.path) : ''}`),
+      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.api || repo.id}/actions/runs?per_page=2`),
+      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.api || repo.id}/contents${repo.path ? '/' + repo.path : ''}?ref=${encodeURIComponent(br)}`),
+      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.api || repo.id}/branches?per_page=8`),
+      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.api || repo.id}/languages`),
+      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.api || repo.id}/pulls?state=open&per_page=6`),
+      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.api || repo.id}/issues?state=open&per_page=6`),
+      fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.api || repo.id}/readme`),
     ]);
 
     if (repoInfo) {
@@ -2440,7 +2442,7 @@
   $('ghostBtn').onclick = () => {
     ghostMode = !ghostMode;
     // Move low-activity HTML/old repos to Ghost Town or back
-    const targets = ['co-bo-u', 'claude', 'cham-bracelet-plan'];
+    const targets = ['claude', 'cham-bracelet-plan'];
     targets.forEach((id, idx) => {
       const cur = findItemTile(id);
       if (!cur) return;

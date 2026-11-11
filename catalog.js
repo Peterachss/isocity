@@ -69,7 +69,7 @@ window.ISOCITY_DATA = (() => {
     { id: 'cham-merch-designs', kind: 'github', name: 'cham-merch-designs', lang: 'HTML', desc: 'Hoodie and T-shirt design gallery.', web: 'https://peterachss.github.io/cham-merch-designs/', git: 'https://github.com/Peterachss/cham-merch-designs' },
     { id: 'cham-bracelet-plan', kind: 'github', name: 'cham-bracelet-plan', lang: 'HTML', desc: 'Fundraiser plan for friendship bracelet booth and lucky draw.', web: 'https://peterachss.github.io/cham-bracelet-plan/', git: 'https://github.com/Peterachss/cham-bracelet-plan' },
     { id: 'claude', kind: 'github', name: 'claude', lang: 'HTML', desc: 'Claude web notes and experiments.', web: 'https://peterachss.github.io/claude/', git: 'https://github.com/Peterachss/claude' },
-    { id: 'co-bo-u', kind: 'github', name: 'co-bo-u', lang: 'HTML', desc: 'Co Bo U web project.', web: 'https://peterachss.github.io/co-bo-u/', git: 'https://github.com/Peterachss/co-bo-u' },
+    { id: 'uni-plan', kind: 'github', name: 'uni-plan', lang: 'HTML', desc: 'My university plan, a folder in the claude repo.', web: 'https://peterachss.github.io/claude/uni-plan/', git: 'https://github.com/Peterachss/claude', api: 'claude', path: 'uni-plan' },
   ];
 
   const DEFAULT_GOOGLE_APPS = [
@@ -171,7 +171,7 @@ window.ISOCITY_DATA = (() => {
     { id: 'cham-merch-designs',       x: 8,  y: 12, t: 'shop',     lv: 2 },
     { id: 'cham-bracelet-plan',       x: 11, y: 15, t: 'shop',     lv: 1 },
     { id: 'claude',                   x: 17, y: 15, t: 'windmill', lv: 1 },
-    { id: 'co-bo-u',                  x: 23, y: 12, t: 'house',    lv: 2 },
+    { id: 'uni-plan',                  x: 23, y: 12, t: 'house',    lv: 2 },
   ];
 
   // South Bank across the bridges (y = 20..29): Google & Study District
