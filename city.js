@@ -140,6 +140,12 @@
   ];
 
   const THEMES = {
+    verdant: {
+      skyNight: '#06140d', skyDay: '#a9d3bd', forestA: '#2f6b32', forestB: '#2a6030',
+      grassA: '#6fb85a', grassB: '#64ad52', park: '#82c85f', waterA: '#4d9a98', waterB: '#468f8f',
+      crowns: [['#2f7a33', '#58b04a'], ['#2a6e34', '#4ea54c'], ['#3a8a3a', '#72c25a'], ['#1f5f33', '#3f9650'], ['#4a9a3c', '#8ad065'], ['#2c7a45', '#55b070']],
+      vines: true, mist: true,
+    },
     autumn: {
       skyNight: '#07110c', skyDay: '#1f3b2a', forestA: '#2a4a28', forestB: '#274524',
       grassA: '#7da663', grassB: '#74a05a', park: '#86b65f', waterA: '#295b60', waterB: '#26565b',
@@ -185,7 +191,7 @@
   const $ = (id) => document.getElementById(id);
 
   let edition = 'all'; // 'github' | 'google' | 'all'
-  let themeId = 'autumn';
+  let themeId = 'verdant';
   let showAgents = true;
   let showLabels = true;
 
@@ -225,7 +231,7 @@
   const isBuilding = (t) => !!t && t !== 'road' && t !== 'bridge' && t !== 'water' && t !== 'forest';
   const makeLevels = () => Array.from({ length: N }, () => Array(N).fill(1));
   const makePins = () => Array.from({ length: N }, () => Array(N).fill(null));
-  const curTheme = () => THEMES[themeId] || THEMES.autumn;
+  const curTheme = () => THEMES[themeId] || THEMES.verdant;
 
   function allItems() {
     return [...REPOS, ...GOOGLE_APPS, ...customItems].map((it) => ({ ...it, ...(overrides[it.id] || {}) }));
@@ -404,7 +410,7 @@
       : makePins();
 
     edition = 'all'; // single Full City view
-    themeId = THEMES[d.themeId] ? d.themeId : 'autumn';
+    themeId = THEMES[d.themeId] ? d.themeId : 'verdant';
     showAgents = d.showAgents !== false;
     showLabels = d.showLabels !== false;
     hour = Number.isFinite(d.hour) ? d.hour : 17.4;
@@ -811,6 +817,34 @@
     rctx.beginPath(); rctx.arc(hx, hy, 2.6 * rcam.z, 0, 7); rctx.fill();
   }
 
+  // Lush theme: ivy running down tower walls and a small rooftop garden.
+  function drawVines(x, y, i, H, seed, L) {
+    const x0 = x + i, x1 = x + 1 - i, y0 = y + i, y1 = y + 1 - i;
+    const greens = ['#3f9a46', '#2f7d3a', '#58b04a', '#256a33'];
+    const n = Math.max(5, Math.round(H / 3.2));
+    for (let k = 0; k < n; k++) {
+      const r = Math.imul(seed + k * 7919, 2654435761) >>> 16;
+      const left = (r & 1) === 0;
+      const f = 0.08 + ((r >>> 1) % 84) / 100;
+      const w = 0.1 + ((r >>> 8) % 9) / 100;
+      const zTop = H - ((r >>> 4) % 5) * 2;
+      const len = Math.min(zTop - 1, 14 + ((r >>> 11) % Math.max(10, Math.round(H * 0.85))));
+      const col = shade(greens[r % greens.length], left ? 0.9 : 0.7, L);
+      if (left) {
+        const a = x0 + (x1 - x0) * f, b = Math.min(x1, a + (x1 - x0) * w);
+        poly4(px(a, y1), py(a, y1, zTop), px(b, y1), py(b, y1, zTop), px(b, y1), py(b, y1, zTop - len), px(a, y1), py(a, y1, zTop - len), col);
+      } else {
+        const a = y0 + (y1 - y0) * f, b = Math.min(y1, a + (y1 - y0) * w);
+        poly4(px(x1, a), py(x1, a, zTop), px(x1, b), py(x1, b, zTop), px(x1, b), py(x1, b, zTop - len), px(x1, a), py(x1, a, zTop - len), col);
+      }
+    }
+    const spr = crownSprites[seed % crownSprites.length];
+    const k = 0.62 * rcam.z;
+    for (const [fx, fy] of [[0.35, 0.35], [0.65, 0.4], [0.5, 0.62]]) {
+      rctx.drawImage(spr, px(x + fx, y + fy) - SPR_CX * k, py(x + fx, y + fy, H + 8) - SPR_CY * k, SPR_W * k, SPR_H * k);
+    }
+  }
+
   function drawTile(x, y, t, L, skipGround = false) {
     if (!skipGround && t !== 'road' && t !== 'bridge') drawGround(x, y, t, L);
     if (!t || t === 'water') return;
@@ -875,6 +909,7 @@
     if (!skipGround) castShadow(x + i, y + i, x + 1 - i, y + 1 - i, H);
     box(x + i, y + i, x + 1 - i, y + 1 - i, 0, H, wall, L, { roof, windows: seed, glass: t === 'office' });
 
+    if (curTheme().vines && (t === 'apt' || t === 'office' || t === 'school' || t === 'clinic')) drawVines(x, y, i, H, seed, L);
     if (t === 'shop') {
       poly4(px(x + i, y + 1 - i + 0.04), py(x + i, y + 1 - i + 0.04, 16), px(x + 1 - i, y + 1 - i + 0.04), py(x + 1 - i, y + 1 - i + 0.04, 16),
         px(x + 1 - i, y + 1 - i + 0.13), py(x + 1 - i, y + 1 - i + 0.13, 11), px(x + i, y + 1 - i + 0.13), py(x + i, y + 1 - i + 0.13, 11), shade('#c0463a', 1, L));
@@ -1413,6 +1448,16 @@
       ctx.globalAlpha = 1;
     }
 
+    if (curTheme().mist) {
+      const g = ctx.createLinearGradient(0, 0, 0, H * 0.7);
+      g.addColorStop(0, `rgba(226, 244, 232, ${(0.22 * L).toFixed(3)})`);
+      g.addColorStop(1, 'rgba(226, 244, 232, 0)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H * 0.7);
+      const sun = ctx.createRadialGradient(W * 0.5, 0, 0, W * 0.5, 0, Math.max(W, H) * 0.7);
+      sun.addColorStop(0, `rgba(255, 224, 150, ${(0.2 * L).toFixed(3)})`);
+      sun.addColorStop(1, 'rgba(255, 224, 150, 0)');
+      ctx.fillStyle = sun; ctx.fillRect(0, 0, W, H);
+    }
     drawHeat(now);
     drawMapLabels();
   }
@@ -2235,7 +2280,7 @@
     customItems.length = 0;
     for (const k of Object.keys(overrides)) delete overrides[k];
     starter();
-    themeId = 'autumn'; showAgents = true; showLabels = true;
+    themeId = 'verdant'; showAgents = true; showLabels = true;
     syncThemeUI(); rebuildCrownSprites();
     $('agentsBtn').setAttribute('aria-pressed', 'true');
     $('labelsBtn').setAttribute('aria-pressed', 'true');
