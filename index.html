@@ -4,45 +4,72 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Isocity, build your own city</title>
-  <meta name="description" content="An interactive isometric city builder. Lay roads, place homes, shops and offices, and watch traffic and the day cycle run." />
+  <meta name="description" content="An interactive isometric city builder. Lay roads, bridges, homes, civic services and landmarks, and manage taxes and growth." />
   <meta property="og:title" content="Isocity, build your own city" />
-  <meta property="og:description" content="Lay roads, place buildings and watch the city grow through day and night." />
+  <meta property="og:description" content="Lay roads, place buildings and manage a living autumn forest city through day and night." />
   <meta property="og:type" content="website" />
-  <link rel="stylesheet" href="city.css?v=10" />
+  <link rel="stylesheet" href="city.css?v=11" />
 </head>
 <body>
   <main class="app">
     <canvas id="stage" aria-label="Isometric city map. Click or drag to build."></canvas>
 
     <header class="stats" aria-label="City statistics">
+      <div class="stat"><span class="stat-label">Tier</span><span class="stat-value" id="sTier">Hamlet</span></div>
       <div class="stat"><span class="stat-label">Funds</span><span class="stat-value" id="sMoney">0</span></div>
       <div class="stat"><span class="stat-label">Residents</span><span class="stat-value" id="sPop">0</span></div>
       <div class="stat"><span class="stat-label">Jobs</span><span class="stat-value" id="sJobs">0</span></div>
       <div class="stat"><span class="stat-label">Happiness</span><span class="stat-value" id="sHappy">0</span></div>
       <div class="stat"><span class="stat-label">Net per tick</span><span class="stat-value" id="sNet">0</span></div>
+      <button id="budgetBtn" class="chip stat-btn" type="button" aria-expanded="false" aria-controls="budgetPop">Economy</button>
     </header>
+
+    <section id="budgetPop" class="pop budget-pop" role="dialog" aria-label="City economy and services" data-open="false">
+      <div class="pop-head">
+        <h2>City economy</h2>
+        <div class="tax-row" role="group" aria-label="Tax rate">
+          <button class="chip small tax-btn" type="button" data-tax="0.6" aria-pressed="false">Low 6%</button>
+          <button class="chip small tax-btn" type="button" data-tax="1" aria-pressed="true">Normal 10%</button>
+          <button class="chip small tax-btn" type="button" data-tax="1.45" aria-pressed="false">High 15%</button>
+        </div>
+      </div>
+      <div class="meters" id="meters"></div>
+      <div class="ledger" id="ledger"></div>
+    </section>
 
     <nav class="tools" aria-label="Build tools" id="tools"></nav>
 
     <section class="time" aria-label="Time of day">
-      <label for="clock" class="stat-label">Time <span id="clockText" class="tnum">12:00</span></label>
-      <input id="clock" type="range" min="0" max="24" step="0.05" value="12" />
+      <label for="clock" class="stat-label">Time <span id="clockText" class="tnum">17:24</span></label>
+      <input id="clock" type="range" min="0" max="24" step="0.05" value="17.4" />
       <button id="autoBtn" class="chip" type="button" aria-pressed="false">Auto cycle</button>
-      <button id="speedBtn" class="chip tnum" type="button" aria-label="Simulation speed">1x</button>
+      <button id="speedBtn" class="chip tnum" type="button" aria-label="Simulation speed: 1x">1x</button>
     </section>
 
     <section class="actions" aria-label="City actions">
-      <button id="zoomIn" class="chip icon" type="button" aria-label="Zoom in">+</button>
-      <button id="zoomOut" class="chip icon" type="button" aria-label="Zoom out">&minus;</button>
-      <button id="rotBtn" class="chip" type="button" aria-label="Rotate camera 90 degrees">Rotate</button>
-      <button id="soundBtn" class="chip" type="button" aria-pressed="true" aria-label="Toggle sound effects">Sound</button>
-      <button id="undoBtn" class="chip" type="button" aria-label="Undo last action" disabled>Undo</button>
-      <button id="redoBtn" class="chip" type="button" aria-label="Redo last undone action" disabled>Redo</button>
+      <button id="zoomIn" class="chip icon" type="button" aria-label="Zoom in" title="Zoom in (+)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <button id="zoomOut" class="chip icon" type="button" aria-label="Zoom out" title="Zoom out (-)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <button id="rotBtn" class="chip icon" type="button" aria-label="Rotate camera 90 degrees" title="Rotate view (R / Q)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+      </button>
+      <button id="soundBtn" class="chip icon" type="button" aria-pressed="true" aria-label="Toggle sound effects" title="Toggle sound">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+      </button>
+      <button id="undoBtn" class="chip icon" type="button" aria-label="Undo last action" title="Undo (Ctrl+Z)" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+      </button>
+      <button id="redoBtn" class="chip icon" type="button" aria-label="Redo last undone action" title="Redo (Ctrl+Y)" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></svg>
+      </button>
       <button id="citiesBtn" class="chip" type="button" aria-expanded="false" aria-controls="citiesPop">Saves</button>
       <button id="resetBtn" class="chip" type="button">New city</button>
     </section>
 
-    <div id="citiesPop" class="cities-pop" role="dialog" aria-label="Saved cities" data-open="false">
+    <div id="citiesPop" class="pop cities-pop" role="dialog" aria-label="Saved cities" data-open="false">
       <div class="pop-head">
         <h2>City saves</h2>
         <div class="pop-io">
@@ -55,9 +82,21 @@
       <div id="slotList" class="slot-list"></div>
     </div>
 
+    <aside id="inspectCard" class="pop inspect-card" role="dialog" aria-label="Selected building" data-open="false">
+      <div class="inspect-head">
+        <h2 id="inspTitle">Building</h2>
+        <button id="inspClose" class="chip small" type="button" aria-label="Close inspector">Close</button>
+      </div>
+      <p id="inspBody" class="insp-body"></p>
+      <div class="insp-actions">
+        <button id="inspUpgrade" class="chip small primary" type="button">Upgrade</button>
+        <button id="inspDemolish" class="chip small danger" type="button">Demolish</button>
+      </div>
+    </aside>
+
     <div id="tip" class="tip" role="status" hidden></div>
-    <p class="hint" id="hint">Click or drag to build. Right drag pans, scroll zooms, R rotates view, Space pauses, Ctrl+Z undoes.</p>
+    <p class="hint" id="hint">Click or drag to build. In Pan mode, click any building to inspect or upgrade it. R rotates, Space pauses.</p>
   </main>
-  <script src="city.js?v=10"></script>
+  <script src="city.js?v=11"></script>
 </body>
 </html>
