@@ -143,7 +143,7 @@
     autumn: {
       skyNight: '#07110c', skyDay: '#1f3b2a', forestA: '#2a4a28', forestB: '#274524',
       grassA: '#7da663', grassB: '#74a05a', park: '#86b65f', waterA: '#295b60', waterB: '#26565b',
-      crowns: [['#2c5a2b', '#3f7a35'], ['#3a6b2e', '#5a8f3c'], ['#c98a14', '#e8b832'], ['#d9a21f', '#f0c64a'], ['#b8601a', '#e08a2c'], ['#8a9a2a', '#b7b93a']],
+      crowns: [['#0a3324', '#14523a'], ['#0e3a1c', '#1a5a2c'], ['#0a2a18', '#124a2c'], ['#12401f', '#1f6232'], ['#0a2010', '#16401f'], ['#0c3020', '#175a3a']],
     },
     alpine: {
       skyNight: '#061014', skyDay: '#183238', forestA: '#1d3c2e', forestB: '#1a3629',
@@ -2408,6 +2408,7 @@
     $('lnkCal').href = 'https://calendar.google.com/calendar/u/0/r';
     $('acctPersonal').setAttribute('aria-pressed', String(!school));
     $('acctSchool').setAttribute('aria-pressed', String(school));
+    $('acctBtn').textContent = school ? 'School' : 'Personal';
     $('acctNote').textContent = school
       ? 'School account opens as your second signed-in Google account. Calendar stays personal.'
       : 'Calendar is personal only.';
@@ -2416,6 +2417,7 @@
   let saved = 'personal';
   try { saved = localStorage.getItem(KEY) === 'school' ? 'school' : 'personal'; } catch (e) { /* ignore */ }
   $('acctPersonal').onclick = () => apply('personal');
+  $('acctBtn').onclick = () => apply($('acctSchool').getAttribute('aria-pressed') === 'true' ? 'personal' : 'school');
   $('acctSchool').onclick = () => apply('school');
   apply(saved);
 })();
