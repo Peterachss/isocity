@@ -2405,6 +2405,7 @@
   }
   addEventListener('resize', resize);
 
+  let headless = false;
   let last = performance.now();
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
@@ -2422,7 +2423,7 @@
       stepList(bots, dt, isRoad);
       stepList(boats, dt, isWater);
     }
-    draw(now, dt);
+    if (!headless) draw(now, dt);
     requestAnimationFrame(frame);
   }
 
@@ -2432,6 +2433,22 @@
   setEdition(edition, false);
   center(false);
   fetchUserRepos(false);
+  // Bridge for the optional 3D renderer (city3d.js).
+  window.CityBridge = {
+    N, TYPES, bldHeight, isBuilding, isRoad, isWater, getItem,
+    getGrid: () => ({ grid, levels, pins }),
+    select: (x, y) => { selectedTile = [x, y]; renderInspect(); sfx('select'); },
+    clear: () => { selectedTile = null; renderInspect(); },
+    getSelected: () => selectedTile,
+    getHour: () => hour,
+    getL: () => daylight(hour),
+    getShowLabels: () => showLabels,
+    getShowHeat: () => showHeat,
+    heat: (id) => heatOf(getItem(id)),
+    agents: () => ({ cars, boats, walkers }),
+    setHeadless: (v) => { headless = !!v; },
+    isDirty: () => worldDirty,
+  };
   requestAnimationFrame(frame);
 })();
 
