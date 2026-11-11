@@ -2492,7 +2492,6 @@
     syncBodyPrefs();
     $('exitPhotoBtn').hidden = !on;
   }
-  $('photoBtn').onclick = () => setPhotoMode(true);
   $('exitPhotoBtn').onclick = () => setPhotoMode(false);
 
   function capturePng(transparent) {
@@ -3068,6 +3067,19 @@
     }
   });
   syncAcctUI();
+
+
+  // ---------- Dusk / Day / Night button ----------
+  const LIGHT_MODES = [{ label: 'Dusk', hour: 17.4 }, { label: 'Day', hour: 13.0 }, { label: 'Night', hour: 22.4 }];
+  const periodOf = (h) => (h >= 5 && h < 8 ? 'Dawn' : h >= 8 && h < 16.5 ? 'Day' : h >= 16.5 && h < 19.5 ? 'Dusk' : 'Night');
+  $('lightBtn').onclick = () => {
+    const i = LIGHT_MODES.findIndex((m) => m.label === periodOf(hour));
+    const next = LIGHT_MODES[(i + 1) % LIGHT_MODES.length];
+    hour = next.hour; timeMode = 'paused';
+    syncBodyPrefs(); scheduleSave(); audio.sfx('tap');
+    $('lightBtn').textContent = next.label;
+  };
+  setInterval(() => { const p = periodOf(hour); if ($('lightBtn').textContent !== p) $('lightBtn').textContent = p; }, 400);
 
   // Register offline PWA service worker
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
