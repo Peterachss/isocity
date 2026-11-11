@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Isocity, build your own city</title>
+  <meta name="description" content="An interactive isometric city builder. Lay roads, place homes, shops and offices, and watch traffic and the day cycle run." />
+  <meta property="og:title" content="Isocity, build your own city" />
+  <meta property="og:description" content="Lay roads, place buildings and watch the city grow through day and night." />
+  <meta property="og:type" content="website" />
+  <link rel="stylesheet" href="city.css" />
+</head>
+<body>
+  <main class="app">
+    <canvas id="stage" aria-label="Isometric city map. Click or drag to build."></canvas>
+
+    <header class="stats" aria-label="City statistics">
+      <div class="stat"><span class="stat-label">Funds</span><span class="stat-value" id="sMoney">0</span></div>
+      <div class="stat"><span class="stat-label">Residents</span><span class="stat-value" id="sPop">0</span></div>
+      <div class="stat"><span class="stat-label">Jobs</span><span class="stat-value" id="sJobs">0</span></div>
+      <div class="stat"><span class="stat-label">Happiness</span><span class="stat-value" id="sHappy">0</span></div>
+      <div class="stat"><span class="stat-label">Net per tick</span><span class="stat-value" id="sNet">0</span></div>
+    </header>
+
+    <nav class="tools" aria-label="Build tools" id="tools"></nav>
+
+    <section class="time" aria-label="Time of day">
+      <label for="clock" class="stat-label">Time <span id="clockText" class="tnum">12:00</span></label>
+      <input id="clock" type="range" min="0" max="24" step="0.05" value="12" />
+      <button id="autoBtn" class="chip" type="button" aria-pressed="true">Auto cycle</button>
+    </section>
+
+    <section class="actions" aria-label="City actions">
+      <button id="zoomIn" class="chip icon" type="button" aria-label="Zoom in">+</button>
+      <button id="zoomOut" class="chip icon" type="button" aria-label="Zoom out">&minus;</button>
+      <button id="undoBtn" class="chip" type="button" aria-label="Undo last change">Undo</button>
+      <button id="resetBtn" class="chip" type="button">New city</button>
+    </section>
+
+    <div id="tip" class="tip" role="status" hidden></div>
+    <p class="hint" id="hint">Click or drag to build. Right drag, or the Pan tool, moves the map. Scroll to zoom. Ctrl+Z undoes.</p>
+  </main>
+  <script src="city.js"></script>
+</body>
+</html>
