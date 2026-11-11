@@ -4,10 +4,10 @@ window.ISOCITY_DATA = (() => {
   const THEMES = {
     dark: {
       name: 'Dark',
-      skyNight: '#040d07', skyDay: '#0a2010', forestA: '#1d3a22', forestB: '#1a341f',
-      grassA: '#3a5a34', grassB: '#365230', park: '#47703d', waterA: '#1f4a4a', waterB: '#1b4242',
-      road: '#2d302b', curb: '#55584a',
-      crowns: [['#1f5a3a', '#2f7d52'], ['#1a4d32', '#2a6f48'], ['#25663f', '#38905d'], ['#2d6b3a', '#44985a']],
+      skyNight: '#14180f', skyDay: '#2a3322', forestA: '#414833', forestB: '#3b4230',
+      grassA: '#656D4A', grassB: '#5f6744', park: '#7b8458', waterA: '#4d5f57', waterB: '#47584f',
+      road: '#4a4337', curb: '#A68A64',
+      crowns: [['#414833', '#656D4A'], ['#565e3f', '#7b8458'], ['#7F4F24', '#936639'], ['#656D4A', '#A4AC86']],
     },
     forest: {
       name: 'Forest',
