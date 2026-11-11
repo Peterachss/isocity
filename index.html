@@ -11,7 +11,7 @@
   <meta property="og:type" content="website" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="city.css?v=24" />
+  <link rel="stylesheet" href="city.css?v=26" />
 </head>
 <body>
   <main class="app">
@@ -90,7 +90,6 @@
       <div class="preset-group" role="group" aria-label="Camera presets">
         <button class="chip small preset-btn" type="button" data-preset="overview">Overview</button>
         <button class="chip small preset-btn" type="button" data-preset="street">Street</button>
-        <button class="chip small preset-btn" type="button" data-preset="orbit">Orbit</button>
       </div>
       <button id="labelsBtn" class="chip small" type="button" aria-pressed="true">Labels</button>
       <button id="compareBtn" class="chip small" type="button" aria-expanded="false" aria-controls="comparePop">Compare</button>
@@ -138,7 +137,6 @@
         <a id="inspEditor" class="chip small link-btn" href="#" target="_blank" rel="noopener noreferrer">Open vscode.dev</a>
         <a id="inspGit" class="chip small link-btn" href="#" target="_blank" rel="noopener noreferrer">GitHub</a>
         <button id="inspCopy" class="chip small" type="button">Copy link</button>
-        <button id="inspOrbitBtn" class="chip small" type="button" aria-pressed="false">Orbit</button>
         <button id="inspCutBtn" class="chip small" type="button" aria-pressed="false">Cutaway</button>
         <button id="inspEditBtn" class="chip small" type="button" aria-expanded="false" aria-controls="inspEditBox">Edit</button>
       </div>
@@ -312,11 +310,9 @@
         <span class="stat-label">Map theme</span>
         <div id="themeRow" class="theme-grid" role="group" aria-label="Map biome themes">
           <button class="filter-chip theme-btn" type="button" data-theme="dark" aria-pressed="true">Dark</button>
+          <button class="filter-chip theme-btn" type="button" data-theme="forest" aria-pressed="false">Forest</button>
           <button class="filter-chip theme-btn" type="button" data-theme="autumn" aria-pressed="false">Autumn</button>
-          <button class="filter-chip theme-btn" type="button" data-theme="alpine" aria-pressed="false">Alpine</button>
-          <button class="filter-chip theme-btn" type="button" data-theme="slate" aria-pressed="false">Slate</button>
           <button class="filter-chip theme-btn" type="button" data-theme="sakura" aria-pressed="false">Sakura</button>
-          <button class="filter-chip theme-btn" type="button" data-theme="neon" aria-pressed="false">Neon</button>
           <button class="filter-chip theme-btn" type="button" data-theme="desert" aria-pressed="false">Desert</button>
           <button class="filter-chip theme-btn" type="button" data-theme="snow" aria-pressed="false">Snow</button>
         </div>
@@ -394,7 +390,7 @@
     <div id="carToast" class="car-toast ui-chrome" role="status" hidden></div>
     <div id="tip" class="tip ui-chrome" role="status" hidden></div>
   </main>
-  <script src="catalog.js?v=24"></script>
-  <script src="city.js?v=24"></script>
+  <script src="catalog.js?v=26"></script>
+  <script src="city.js?v=26"></script>
 </body>
 </html>

@@ -715,6 +715,7 @@
   }
 
   function drawBuildingNightWindows(x, y, t, L) {
+    if (t === 'wheel' || t === 'windmill') return;
     const h = bldHeight(t, levels[x][y] || 1);
     if (!h) return;
     const winThresh = 0.22 + ((x * 13 + y * 7) % 24) * 0.015;
@@ -810,8 +811,6 @@
       const sc = c.getContext('2d');
       sc.setTransform(SPR_S, 0, 0, SPR_S, 0, 0);
       const R = 9.5;
-      sc.fillStyle = 'rgba(14, 28, 16, 0.35)';
-      sc.beginPath(); sc.ellipse(SPR_CX + 3, SPR_CY + 14, R * 0.95, R * 0.45, 0, 0, 7); sc.fill();
       sc.fillStyle = dark;
       sc.beginPath(); sc.arc(SPR_CX - 3, SPR_CY + 2, R * 0.75, 0, 7); sc.fill();
       sc.beginPath(); sc.arc(SPR_CX + 3.5, SPR_CY + 2, R * 0.72, 0, 7); sc.fill();
@@ -900,7 +899,7 @@
     if (!t || t === 'water') return;
     if (t === 'forest') {
       const sd = x * 17 + y * 31;
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 3; i++) {
         const [a, b] = FOREST_SPOTS[i];
         const sc = 0.8 + ((Math.imul(sd + i * 331, 2246822519) >>> 24) % 4) * 0.1;
         const cs = Math.imul(sd + i * 977, 2654435761) >>> 20;
@@ -1068,8 +1067,9 @@
       vehicleHits.push({ sx: px(x, y), sy: py(x, y, z0 + 3), car: c });
     } else if (L < 0.5) {
       const hx = px(x + dx * 0.2, y + dy * 0.2), hy = py(x + dx * 0.2, y + dy * 0.2, z0 + 4);
-      rctx.fillStyle = 'rgba(255,230,160,0.55)';
-      rctx.beginPath(); rctx.arc(hx, hy, 7 * rcam.z, 0, 7); rctx.fill();
+      const hr = 9 * rcam.z, hg = rctx.createRadialGradient(hx, hy, 0, hx, hy, hr);
+      hg.addColorStop(0, 'rgba(255,230,160,0.6)'); hg.addColorStop(1, 'rgba(255,230,160,0)');
+      rctx.fillStyle = hg; rctx.beginPath(); rctx.arc(hx, hy, hr, 0, 7); rctx.fill();
     }
   }
 
@@ -1086,12 +1086,6 @@
     rctx.fillRect(sx - 1 * sz, sy - 7 * sz, 2 * sz, 2 * sz);
     if (w.bench && Math.sin(now * 0.004 + w.px) > 0.7) {
       rctx.fillRect(sx + 2 * sz, sy - 6 * sz, 1.5 * sz, 1.5 * sz);
-    }
-    if (cam.z >= 1.38) {
-      rctx.font = '600 9.5px system-ui, sans-serif';
-      rctx.textAlign = 'center';
-      rctx.fillStyle = 'rgba(244,241,234,0.92)';
-      rctx.fillText(`${w.name} · ${w.role}`, sx, sy - 11 * sz);
     }
   }
 
@@ -2102,7 +2096,7 @@
 
   function renderInspect(forceFetch = false) {
     const card = $('inspectCard');
-    if (!selectedTile) { card.dataset.open = 'false'; orbitActive = false; $('inspOrbitBtn').setAttribute('aria-pressed', 'false'); $('inspEditBox').hidden = true; return; }
+    if (!selectedTile) { card.dataset.open = 'false'; orbitActive = false; $('inspEditBox').hidden = true; return; }
     const [x, y] = selectedTile;
     const t = grid[x][y], id = pins[x][y];
     if (!t || !id) { selectedTile = null; card.dataset.open = 'false'; return; }
@@ -2144,10 +2138,6 @@
   }
 
   $('inspClose').onclick = () => { selectedTile = null; renderInspect(); };
-  $('inspOrbitBtn').onclick = () => {
-    orbitActive = !orbitActive;
-    $('inspOrbitBtn').setAttribute('aria-pressed', String(orbitActive));
-  };
   $('inspCutBtn').onclick = () => {
     cutawayActive = !cutawayActive;
     $('inspCutBtn').setAttribute('aria-pressed', String(cutawayActive));
@@ -2491,11 +2481,6 @@
   function applyPreset(p) {
     if (p === 'overview') { orbitActive = false; center(true); }
     else if (p === 'street') { orbitActive = false; flyToTile(selectedTile ? selectedTile[0] : 12, selectedTile ? selectedTile[1] : 16, 1.75, false); }
-    else if (p === 'orbit') {
-      if (!selectedTile) selectedTile = findItemTile('isocity') || [8, 4];
-      orbitActive = true;
-      flyToTile(selectedTile[0], selectedTile[1], 1.35, $('inspectCard').dataset.open === 'true');
-    }
   }
   document.querySelectorAll('.preset-btn').forEach((b) => { b.onclick = () => applyPreset(b.dataset.preset); });
   $('labelsBtn').onclick = () => { showLabels = !showLabels; syncBodyPrefs(); scheduleSave(); };
@@ -2695,7 +2680,6 @@
     if (k === 'q') return rotateCity(false);
     if (k === '1') return applyPreset('overview');
     if (k === '2') return applyPreset('street');
-    if (k === '3') return applyPreset('orbit');
     if (e.key === '+' || e.key === '=') zoomAt(1.2);
     if (e.key === '-') zoomAt(1 / 1.2);
   });
@@ -2976,16 +2960,6 @@
     ctx.beginPath(); ctx.moveTo(x + 3.4 * z, y - 12 * z + bob); ctx.lineTo(x + 6 * z, y - 8.5 * z + (seated ? Math.sin(now * 0.03 + a.phase) * 1.2 * z : Math.sin(now * 0.004 + a.phase) * 2 * z)); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(x - 3.4 * z, y - 12 * z + bob); ctx.lineTo(x - 5.8 * z, y - 8 * z); ctx.stroke();
     if (!a.inside) { ctx.fillStyle = '#5ef2d6'; ctx.fillRect(x + 4 * z, y - 9 * z + bob, 4 * z, 3 * z); }
-    const spot = crew.length ? Math.floor(now / 2600) % crew.length : 0;
-    if (crew[spot] === a) {
-      if (now > a.info.nextTask) { a.info.nextTask = now + 2600; }
-      const txt = `${a.info.name} · ${a.info.task}`;
-      ctx.font = `600 ${Math.max(9, 10 * Math.min(rcam.z, 1.4))}px system-ui, sans-serif`;
-      const w = ctx.measureText(txt).width + 14, h = 17;
-      const bx = Math.round(x - w / 2), by = Math.round(y - 25 * z - h);
-      ctx.fillStyle = 'rgba(244,241,234,0.96)'; ctx.beginPath(); ctx.roundRect(bx, by, w, h, 8); ctx.fill();
-      ctx.fillStyle = '#1d2320'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(txt, bx + 7, by + h / 2 + 0.5);
-    }
   }
 
   function drawCutaway(now) {
