@@ -1,12 +1,13 @@
 # Isocity
 
-A small isometric city builder that runs in the browser. No dependencies, no build step. One canvas, plain HTML, CSS and JavaScript.
+A small isometric city builder set in an autumn forest at golden hour. It runs in the browser. No dependencies, no build step. One canvas, plain HTML, CSS and JavaScript.
 
 Live demo: https://peterachss.github.io/isocity/
 
 ## Play
 
-- Pick a tool on the left (or press 1 to 8) and click or drag on the map.
+- Pick a tool on the left (or press 1 to 9). Forest tiles clear with Bulldoze or get built over.
+- Pick a tool on the left and click or drag on the map.
 - Buildings only count when they touch a road. Unconnected ones show a red marker.
 - Residents need jobs. Parks raise happiness. Roads, parks and buildings cost upkeep.
 - Right drag, shift drag or the Pan tool moves the map. Scroll, pinch or +/- to zoom.

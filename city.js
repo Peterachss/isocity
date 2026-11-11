@@ -1,19 +1,20 @@
 (() => {
   const N = 26;
   const TW = 64, TH = 32;
-  const SAVE_KEY = 'isocity-v1';
+  const SAVE_KEY = 'isocity-v2';
 
   const TYPES = {
     pan:    { name: 'Pan',      cost: 0,   color: '#9aa39d' },
-    road:   { name: 'Road',     cost: 10,  color: '#4a5159' },
+    road:   { name: 'Road',     cost: 10,  color: '#3b3f44' },
     house:  { name: 'House',    cost: 100, color: '#d9a273', pop: 4,  h: 22, inset: 0.2 },
     apt:    { name: 'Apartment',cost: 400, color: '#c98a8a', pop: 14, h: 72, inset: 0.12 },
     shop:   { name: 'Shop',     cost: 250, color: '#e0c25b', jobs: 5, h: 28, inset: 0.1 },
     office: { name: 'Office',   cost: 600, color: '#7fa6c9', jobs: 16, h: 118, inset: 0.1 },
-    park:   { name: 'Park',     cost: 150, color: '#6fa964' },
+    park:   { name: 'Park',     cost: 150, color: '#8cbf5c' },
+    forest: { name: 'Forest',   cost: 5,   color: '#d9a21f' },
     bulldoze:{ name: 'Bulldoze',cost: 0,   color: '#b4513f' },
   };
-  const ORDER = ['pan', 'road', 'house', 'apt', 'shop', 'office', 'park', 'bulldoze'];
+  const ORDER = ['pan', 'road', 'house', 'apt', 'shop', 'office', 'park', 'forest', 'bulldoze'];
 
   const canvas = document.getElementById('stage');
   const ctx = canvas.getContext('2d');
@@ -22,7 +23,7 @@
   let grid, money, tool = 'road';
   let cam = { x: 0, y: 0, z: 1 };
   let hover = null, cars = [];
-  let hour = 12, auto = true, tick = 0, stats = {};
+  let hour = 12, auto = false, tick = 0, stats = {};
   let dpr = 1, W = 0, H = 0;
   const rnd = (a, b) => a + Math.random() * (b - a);
   const inb = (x, y) => x >= 0 && y >= 0 && x < N && y < N;
@@ -39,17 +40,31 @@
 
   // ---------- state ----------
   function starter() {
-    grid = Array.from({ length: N }, () => Array(N).fill(null));
+    // Autumn forest with a small suburb cut into it, like an aerial photo at golden hour.
+    grid = Array.from({ length: N }, () => Array(N).fill('forest'));
     money = 5000;
-    for (let i = 6; i < 20; i++) { grid[i][12] = 'road'; grid[12][i] = 'road'; }
-    for (let i = 8; i < 17; i++) { grid[i][17] = 'road'; }
-    for (let i = 12; i <= 17; i++) { grid[8][i] = 'road'; }
-    const place = (x, y, t) => { if (!grid[x][y]) grid[x][y] = t; };
-    [[11,11],[13,11],[11,13],[13,13],[10,11],[14,11],[10,13],[14,13]].forEach(([x,y],i) => place(x,y,i%3===0?'apt':'house'));
-    [[9,11],[9,13],[15,13]].forEach(([x,y]) => place(x,y,'house'));
-    [[11,16],[13,16],[15,16]].forEach(([x,y]) => place(x,y,'shop'));
-    [[9,16],[10,18],[12,18],[14,18]].forEach(([x,y]) => place(x,y,'office'));
-    place(11, 10, 'park'); place(13, 10, 'park');
+    hour = 17.4;
+    const set = (x, y, t) => { grid[x][y] = t; };
+    // a winding main road, a side street and a loop
+    let y = 4;
+    for (let x = 3; x < 23; x++) { set(x, y, 'road'); if (x % 5 === 0) { y += x % 10 === 0 ? 1 : -1; set(x, y, 'road'); } }
+    for (let j = 4; j < 20; j++) set(11, j, 'road');
+    for (let i = 11; i <= 17; i++) set(i, 15, 'road');
+    for (let j = 9; j <= 15; j++) set(17, j, 'road');
+    // clearings next to the roads, then buildings
+    const lots = [];
+    for (let x = 0; x < N; x++) for (let j = 0; j < N; j++) {
+      if (grid[x][j] !== 'forest') continue;
+      const near = [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy]) => inb(x+dx,j+dy) && grid[x+dx][j+dy] === 'road');
+      if (near) lots.push([x, j]);
+    }
+    let k = 0;
+    for (const [x, j] of lots) {
+      k++;
+      if (k % 4 === 0) continue;                 // leave some trees standing
+      const r = (x * 7 + j * 13) % 13;
+      set(x, j, k === 22 ? 'office' : r < 8 ? 'house' : r < 10 ? 'shop' : r < 12 ? 'park' : 'apt');
+    }
   }
 
   function save() {
@@ -68,10 +83,11 @@
   const connected = (x, y) => NB.some(([dx,dy]) => inb(x+dx,y+dy) && grid[x+dx][y+dy] === 'road');
 
   function recompute() {
-    let pop = 0, jobs = 0, parks = 0, roads = 0, orphans = 0, blds = 0;
+    let pop = 0, jobs = 0, parks = 0, roads = 0, orphans = 0, blds = 0, trees = 0;
     for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
       const t = grid[x][y];
       if (!t) continue;
+      if (t === 'forest') { trees++; continue; }
       if (t === 'road') { roads++; continue; }
       if (t === 'park') { parks++; continue; }
       blds++;
@@ -82,7 +98,7 @@
     const employed = Math.min(pop, jobs);
     const income = employed * 3 + Math.min(pop, jobs * 2) * 0.5;
     const upkeep = roads * 0.4 + parks * 2 + blds * 0.5;
-    let happy = 55 + Math.min(parks * 5, 25) - orphans * 6;
+    let happy = 50 + Math.min(parks * 5, 25) + Math.min(trees * 0.1, 15) - orphans * 6;
     if (pop > 0) happy += (employed / pop - 0.6) * 30;
     if (jobs > pop * 1.5) happy -= 8;
     happy = Math.max(0, Math.min(100, Math.round(happy)));
@@ -155,14 +171,16 @@
   function daylight(h) {
     // 1 at noon, 0 at midnight, smooth dawn and dusk
     const s = Math.sin(((h - 6) / 24) * Math.PI * 2);
-    return Math.max(0, Math.min(1, s * 1.6 + 0.35));
+    return Math.max(0, Math.min(1, s * 1.6 + 0.5));
   }
   const hex = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+  let warm = 0;
   function shade(c, k, light) {
     const [r, g, b] = hex(c);
     const n = 1 - light;
     const tint = [0.55, 0.62, 0.9];
-    const f = (v, i) => Math.round(Math.min(255, v * k * (light + n * 0.38 * tint[i] / 0.55 * 0.75)));
+    const w = [1 + 0.2 * warm, 1 + 0.05 * warm, 1 - 0.28 * warm];
+    const f = (v, i) => Math.round(Math.min(255, v * w[i] * k * (light + n * 0.38 * tint[i] / 0.55 * 0.75)));
     return `rgb(${f(r,0)},${f(g,1)},${f(b,2)})`;
   }
   function mix(a, b, t) {
@@ -231,19 +249,34 @@
     }
   }
 
-  function tree(x, y, z, s, L) {
-    box(x - 0.03, y - 0.03, x + 0.03, y + 0.03, 0, 7 * s, '#6b4a2f', L);
-    const [cx, cy] = P(x, y, 7 * s + 7 * s);
-    ctx.fillStyle = shade('#4d8a49', 1, L);
-    ctx.beginPath(); ctx.arc(cx, cy, 9 * s * cam.z, 0, 7); ctx.fill();
-    ctx.fillStyle = shade('#6aa85f', 1, L);
-    ctx.beginPath(); ctx.arc(cx - 2 * cam.z, cy - 3 * cam.z, 6 * s * cam.z, 0, 7); ctx.fill();
+  const CROWNS = [
+    ['#2c5a2b', '#3f7a35'], ['#3a6b2e', '#5a8f3c'], ['#c98a14', '#e8b832'],
+    ['#d9a21f', '#f0c64a'], ['#b8601a', '#e08a2c'], ['#8a9a2a', '#b7b93a'],
+  ];
+  function tree(x, y, z, s, L, seed = 0) {
+    const [dark, light] = CROWNS[Math.abs(seed) % CROWNS.length];
+    box(x - 0.025, y - 0.025, x + 0.025, y + 0.025, 0, 8 * s, '#4a3624', L);
+    const [cx, cy] = P(x, y, 8 * s + 11 * s);
+    const R = 10 * s * cam.z;
+    ctx.fillStyle = shade('#16301a', 1, L) ;
+    ctx.beginPath(); ctx.ellipse(cx + 3 * cam.z, cy + 14 * s * cam.z, R * 0.95, R * 0.45, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = shade(dark, 1, L);
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.fill();
+    ctx.fillStyle = shade(light, 1, L);
+    ctx.beginPath(); ctx.arc(cx - R * 0.25, cy - R * 0.3, R * 0.68, 0, 7); ctx.fill();
   }
 
   function drawTile(x, y, t, L, hs = 1) {
-    const base = t === 'park' ? '#8cbf7c' : ((x + y) % 2 ? '#a8c79a' : '#9fc092');
+    const base = t === 'forest' ? ((x + y) % 2 ? '#2a4a28' : '#274524')
+      : t === 'park' ? '#86b65f' : ((x + y) % 2 ? '#7da663' : '#74a05a');
     if (t !== 'road') poly(quad(x, y, x + 1, y + 1, 0), shade(base, 1, L));
     if (!t) return;
+    if (t === 'forest') {
+      const sd = x * 17 + y * 31;
+      const spots = [[0.28, 0.25], [0.74, 0.3], [0.5, 0.52], [0.25, 0.78], [0.76, 0.76]];
+      spots.forEach(([a, b], i) => tree(x + a, y + b, 0, (0.8 + ((Math.imul(sd + i * 331, 2246822519) >>> 24) % 4) * 0.1) * hs, L, Math.imul(sd + i * 977, 2654435761) >>> 20));
+      return;
+    }
     if (t === 'road') {
       ctx.globalAlpha = hs;
       drawRoad(x, y, L);
@@ -252,18 +285,22 @@
     }
     if (t === 'park') {
       const sd = (x * 7 + y * 3);
-      tree(x + 0.3, y + 0.3, 0, hs, L);
-      tree(x + 0.7, y + 0.55, 0, 0.85 * hs, L);
-      if (sd % 2) tree(x + 0.35, y + 0.78, 0, 0.7 * hs, L);
+      tree(x + 0.3, y + 0.3, 0, hs, L, 0);
+      tree(x + 0.7, y + 0.55, 0, 0.85 * hs, L, 1);
+      if (sd % 2) tree(x + 0.35, y + 0.78, 0, 0.7 * hs, L, 0);
       return;
     }
     const d = TYPES[t];
     const i = d.inset;
     const ok = connected(x, y);
     const seed = x * 11 + y * 5;
-    const roofs = { house: '#a8523f', apt: '#9c9c9c', shop: d.color, office: '#5d7e9c' };
+    const WALLS = ['#efe6d2', '#f2f0ea', '#e8c98a', '#d7d2c4'];
+    const REDS = ['#b0412e', '#bd5530', '#923a2c', '#c9612f'];
+    const red = REDS[seed % REDS.length];
+    const wall = t === 'house' ? WALLS[seed % WALLS.length] : d.color;
+    const roofs = { house: red, apt: '#a2432f', shop: red, office: '#5d7e9c' };
     const H = Math.max(1, d.h * hs);
-    box(x + i, y + i, x + 1 - i, y + 1 - i, 0, H, d.color, L, { roof: roofs[t], windows: hs > 0.6 ? seed : 0 });
+    box(x + i, y + i, x + 1 - i, y + 1 - i, 0, H, wall, L, { roof: roofs[t], windows: hs > 0.6 ? seed : 0 });
     if (t === 'shop' && hs > 0.6) {
       // awning
       poly([P(x + i, y + 1 - i + 0.04, 16), P(x + 1 - i, y + 1 - i + 0.04, 16), P(x + 1 - i, y + 1 - i + 0.12, 11), P(x + i, y + 1 - i + 0.12, 11)], shade('#c0463a', 1, L));
@@ -271,8 +308,8 @@
     if (t === 'house') {
       // pitched roof ridge
       const r0 = P(x + i, y + 0.5, H + 10 * hs), r1 = P(x + 1 - i, y + 0.5, H + 10 * hs);
-      poly([P(x + i, y + i, H), P(x + 1 - i, y + i, H), r1, r0], shade('#b05d48', 0.95, L));
-      poly([P(x + i, y + 1 - i, H), P(x + 1 - i, y + 1 - i, H), r1, r0], shade('#8f4636', 1, L));
+      poly([P(x + i, y + i, H), P(x + 1 - i, y + i, H), r1, r0], shade(red, 1.0, L));
+      poly([P(x + i, y + 1 - i, H), P(x + 1 - i, y + 1 - i, H), r1, r0], shade(red, 0.78, L));
     }
     if (!ok && hs === 1) {
       const [bx, by] = P(x + 0.5, y + 0.5, d.h + 22 + Math.sin(performance.now() / 260) * 3);
@@ -303,7 +340,8 @@
   function draw() {
     const L = daylight(hour);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const sky = mix(mix('#0e1730', '#9fcfd4', L), '#f3c9a0', Math.max(0, 1 - Math.abs(L - 0.45) * 6) * 0.35);
+    warm = Math.max(0, 1 - Math.abs(hour - 17.6) / 2.2, 1 - Math.abs(hour - 6.4) / 1.6);
+    const sky = mix('#07110c', '#1f3b2a', L);
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, W, H);
 
@@ -341,7 +379,9 @@
     if (hover && tool !== 'pan') {
       const [x, y] = hover;
       const T = TYPES[tool];
-      const bad = tool === 'bulldoze' ? !grid[x][y] : (T.cost > money || (grid[x][y] && tool !== 'bulldoze'));
+      const cur = grid[x][y];
+      const bad = tool === 'bulldoze' ? !cur
+        : (T.cost > money || (tool === 'forest' ? !!cur : (cur && cur !== 'forest')));
       const col = tool === 'bulldoze' ? '#b4513f' : bad ? '#b4513f' : '#0f766e';
       poly(quad(x, y, x + 1, y + 1, 0), col + '88');
       ctx.strokeStyle = col; ctx.lineWidth = 2;
@@ -369,8 +409,9 @@
       animate(x, y, true, cur);
     } else {
       const cost = TYPES[tool].cost;
-      if (cur || cost > money) { if (cost > money) flash('Not enough funds'); return; }
-      history.push({ x, y, prev: null, cost });
+      const blocked = tool === 'forest' ? !!cur : (cur && cur !== 'forest');
+      if (blocked || cur === tool || cost > money) { if (!blocked && cost > money) flash('Not enough funds'); return; }
+      history.push({ x, y, prev: cur, cost });
       grid[x][y] = tool; money -= cost;
       animate(x, y, false);
     }
@@ -400,6 +441,7 @@
     if (!t) return null;
     if (t === 'road') return 'Road';
     if (t === 'park') return 'Park. Raises happiness.';
+    if (t === 'forest') return 'Forest. Clear it with the Bulldoze tool, or build over it.';
     const d = TYPES[t];
     const info = d.pop ? `${d.pop} residents` : `${d.jobs} jobs`;
     return `${d.name}, ${info}.` + (connected(x, y) ? '' : ' No road access, so it does not count.');
@@ -512,7 +554,8 @@
   let last = performance.now(), acc = 0;
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
-    if (auto) { hour = (hour + dt * 0.35) % 24; $('clock').value = hour; }
+    if (auto) hour = (hour + dt * 0.35) % 24;
+    $('clock').value = hour;
     const hh = Math.floor(hour), mm = Math.floor((hour % 1) * 60);
     $('clockText').textContent = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
     stepCars(dt);
