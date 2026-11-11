@@ -538,3 +538,7 @@ html, body { height: 100%; overflow: hidden; background: #162b1f; }
 .ag-row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-top: 1px solid rgba(29, 35, 32, 0.08); }
 .ag-row span { color: #5a665f; }
 .ag-actions { margin-top: 8px; }
+
+#timeBar .chip { display: inline-flex; align-items: center; justify-content: center; line-height: 1; height: 30px; box-sizing: border-box; }
+#timeBar #clockText { min-width: 98px; cursor: default; }
+#timeBar .chip:focus:not(:focus-visible) { outline: none; box-shadow: none; }
