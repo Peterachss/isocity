@@ -809,14 +809,25 @@
     return !!nxt && tileCost(cur, tool) <= money;
   }
 
-  const history = [];
+  const history = [], redoStack = [];
+  let strokeId = 0;
+  function syncUndoUI() {
+    $('undoBtn').disabled = !history.length;
+    $('redoBtn').disabled = !redoStack.length;
+  }
+  function markCol(x, y) {
+    dirtyCols.add(x - y);
+    dirtyCols.add(x - y + 1);
+    dirtyCols.add(x - y - 1);
+  }
   function apply(x, y) {
     const cur = grid[x][y];
     if (tool === 'pan') return;
     if (tool === 'bulldoze') {
       if (!cur) return;
       const nxt = nextTile(cur, 'bulldoze');
-      history.push({ x, y, prev: cur, cost: 0 });
+      history.push({ x, y, prev: cur, next: nxt, cost: 0, stroke: strokeId });
+      redoStack.length = 0;
       grid[x][y] = nxt;
       animate(x, y, true, cur);
       sfx('bulldoze');
@@ -825,28 +836,54 @@
       if (!nxt) return;
       const cost = tileCost(cur, tool);
       if (cost > money) return flash('Not enough funds');
-      history.push({ x, y, prev: cur, cost });
+      history.push({ x, y, prev: cur, next: nxt, cost, stroke: strokeId });
+      redoStack.length = 0;
       grid[x][y] = nxt; money -= cost;
       animate(x, y, false);
       sfx(nxt === 'road' || nxt === 'bridge' || nxt === 'water' || nxt === 'forest' ? 'tap' : 'build');
     }
-    if (history.length > 200) history.shift();
-    dirtyCols.add(x - y);
-    dirtyCols.add(x - y + 1);
-    dirtyCols.add(x - y - 1);
+    if (history.length > 400) history.shift();
+    markCol(x, y);
+    syncUndoUI();
     recompute(); scheduleSave();
   }
 
   function undo() {
-    const h = history.pop();
-    if (!h) return flash('Nothing to undo');
-    if (h.prev) { grid[h.x][h.y] = h.prev; animate(h.x, h.y, false); }
-    else { animate(h.x, h.y, true, grid[h.x][h.y]); grid[h.x][h.y] = null; }
-    money += h.cost;
+    if (!history.length) return flash('Nothing to undo');
+    const sid = history[history.length - 1].stroke;
+    while (history.length && history[history.length - 1].stroke === sid) {
+      const h = history.pop();
+      const cur = grid[h.x][h.y];
+      grid[h.x][h.y] = h.prev;
+      if (h.prev) animate(h.x, h.y, false);
+      else animate(h.x, h.y, true, cur);
+      money += h.cost;
+      redoStack.push(h);
+      markCol(h.x, h.y);
+    }
     sfx('undo');
-    dirtyCols.add(h.x - h.y);
-    dirtyCols.add(h.x - h.y + 1);
-    dirtyCols.add(h.x - h.y - 1);
+    syncUndoUI();
+    recompute(); scheduleSave();
+  }
+
+  function redo() {
+    if (!redoStack.length) return flash('Nothing to redo');
+    const sid = redoStack[redoStack.length - 1].stroke;
+    let totalCost = 0;
+    for (let i = redoStack.length - 1; i >= 0 && redoStack[i].stroke === sid; i--) totalCost += redoStack[i].cost;
+    if (totalCost > money) return flash('Not enough funds');
+    while (redoStack.length && redoStack[redoStack.length - 1].stroke === sid) {
+      const h = redoStack.pop();
+      const cur = grid[h.x][h.y];
+      grid[h.x][h.y] = h.next;
+      if (h.next) animate(h.x, h.y, false);
+      else animate(h.x, h.y, true, cur);
+      money -= h.cost;
+      history.push(h);
+      markCol(h.x, h.y);
+    }
+    sfx('build');
+    syncUndoUI();
     recompute(); scheduleSave();
   }
 
@@ -885,6 +922,7 @@
     if (ptrs.size === 2) { drag = { pinch: true, d: dist() }; return; }
     const panning = e.button === 2 || e.button === 1 || e.shiftKey || tool === 'pan';
     if (panning) { drag = { pan: true, sx: e.clientX, sy: e.clientY, cx: cam.x, cy: cam.y }; canvas.style.cursor = 'grabbing'; return; }
+    strokeId++;
     drag = { pan: false };
     const t = pick(e.clientX, e.clientY);
     if (t) { apply(t[0], t[1]); lastTile = t.join(); }
@@ -950,7 +988,8 @@
   });
   addEventListener('keydown', (e) => {
     if (e.target.matches('input')) return;
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); return undo(); }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); return e.shiftKey ? redo() : undo(); }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); return redo(); }
     if (e.key === '0') return setTool(ORDER[9]);
     const n = Number(e.key);
     if (n >= 1 && n <= 9 && ORDER[n - 1]) setTool(ORDER[n - 1]);
@@ -974,9 +1013,10 @@
       return;
     }
     clearTimeout(resetArmed); resetArmed = 0; b.textContent = 'New city';
-    history.length = 0; starter(); worldDirty = true; recompute(); saveNow(); center();
+    history.length = 0; redoStack.length = 0; syncUndoUI(); starter(); worldDirty = true; recompute(); saveNow(); center();
   };
   $('undoBtn').onclick = undo;
+  $('redoBtn').onclick = redo;
 
   // ---------- loop ----------
   function resize() {

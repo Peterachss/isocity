@@ -100,7 +100,7 @@ html, body { height: 100%; overflow: hidden; background: #162b1f; }
 
 @media (hover: hover) and (pointer: fine) {
   .tool:hover:not([aria-pressed="true"]) { background: var(--surface-2); }
-  .chip:hover:not([aria-pressed="true"]) { background: var(--surface-3); }
+  .chip:hover:not([aria-pressed="true"]):not(:disabled) { background: var(--surface-3); }
 }
 
 .time {
@@ -139,6 +139,7 @@ html, body { height: 100%; overflow: hidden; background: #162b1f; }
 
 .chip.icon { width: 38px; padding: 9px 0; font-size: 17px; line-height: 1; }
 .chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.chip:disabled { opacity: 0.4; cursor: default; transform: none; }
 
 .tip {
   top: 0;
@@ -177,8 +178,8 @@ html, body { height: 100%; overflow: hidden; background: #162b1f; }
   .time input[type="range"] { width: 56px; }
   .time .chip { display: none; }
   .actions { gap: 3px; padding: 5px; }
-  .actions .chip { padding: 8px 9px; font-size: 12px; }
-  .actions .chip.icon { display: none; }
+  .actions .chip { padding: 8px 8px; font-size: 12px; }
+  .actions .chip.icon, #soundBtn { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
