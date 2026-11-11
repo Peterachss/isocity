@@ -22,6 +22,8 @@
 
   let grid, money, tool = 'road';
   let cam = { x: 0, y: 0, z: 1 };
+  let zoomTarget = null;
+  let zoomAnchorX = 0, zoomAnchorY = 0;
   let hover = null, cars = [], orphansList = [];
   let hour = 17.4, auto = false, stats = {};
   let dpr = 1, W = 0, H = 0;
@@ -723,6 +725,7 @@
   const dist = () => { const [a, b] = [...ptrs.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   canvas.addEventListener('pointerdown', (e) => {
+    zoomTarget = null;
     canvas.setPointerCapture(e.pointerId);
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     $('hint').dataset.hidden = 'true';
@@ -742,6 +745,9 @@
     if (drag?.pinch) return;
     if (drag?.pan) {
       cam.x = drag.cx + e.clientX - drag.sx; cam.y = drag.cy + e.clientY - drag.sy;
+      hover = null;
+      if (!flashTimer) $('tip').hidden = true;
+      return;
     }
     const t = pick(e.clientX, e.clientY);
     hover = t;
@@ -770,9 +776,32 @@
     const k = nz / cam.z;
     cam.x = mx - (mx - cam.x) * k; cam.y = my - (my - cam.y) * k; cam.z = nz;
   }
-  canvas.addEventListener('wheel', (e) => { e.preventDefault(); zoomAt(e.deltaY < 0 ? 1.1 : 1 / 1.1, e.clientX, e.clientY); }, { passive: false });
-  $('zoomIn').onclick = () => zoomAt(1.2);
-  $('zoomOut').onclick = () => zoomAt(1 / 1.2);
+  function requestZoom(f, mx = W / 2, my = H / 2) {
+    if (reduceMotion) return zoomAt(f, mx, my);
+    zoomTarget = Math.max(0.5, Math.min(2.4, (zoomTarget ?? cam.z) * f));
+    zoomAnchorX = mx; zoomAnchorY = my;
+    hover = null;
+    if (!flashTimer) $('tip').hidden = true;
+  }
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? H : 1;
+    // Trackpads send many tiny deltas; one event is not one wheel notch.
+    // Horizontal scrolling moves the map and must never trigger zoom-out.
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY) && !e.ctrlKey) {
+      zoomTarget = null;
+      cam.x -= e.deltaX * unit;
+      cam.y -= e.deltaY * unit;
+      hover = null;
+      if (!flashTimer) $('tip').hidden = true;
+      return;
+    }
+    if (!e.deltaY) return;
+    const pixels = Math.max(-240, Math.min(240, e.deltaY * unit));
+    requestZoom(Math.exp(-pixels * 0.0015), e.clientX, e.clientY);
+  }, { passive: false });
+  $('zoomIn').onclick = () => requestZoom(1.2);
+  $('zoomOut').onclick = () => requestZoom(1 / 1.2);
 
   function setTool(t) {
     tool = t;
@@ -796,8 +825,8 @@
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); return undo(); }
     const n = Number(e.key);
     if (n >= 1 && n <= ORDER.length) setTool(ORDER[n - 1]);
-    if (e.key === '+' || e.key === '=') zoomAt(1.2);
-    if (e.key === '-') zoomAt(1 / 1.2);
+    if (e.key === '+' || e.key === '=') requestZoom(1.2);
+    if (e.key === '-') requestZoom(1 / 1.2);
   });
 
   $('clock').addEventListener('input', (e) => { hour = Number(e.target.value); auto = false; $('autoBtn').setAttribute('aria-pressed', 'false'); });
@@ -822,6 +851,7 @@
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
   }
   function center() {
+    zoomTarget = null;
     cam.z = Math.max(0.55, Math.min(1.1, W / (N * TW) * 1.15, H / (N * TH + 120) * 1.15));
     cam.x = W / 2; cam.y = H / 2 - (N * TH / 2) * cam.z;
   }
@@ -830,6 +860,12 @@
   let last = performance.now(), acc = 0, lastLabel = '';
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    if (zoomTarget !== null) {
+      const next = cam.z + (zoomTarget - cam.z) * (1 - Math.exp(-22 * dt));
+      const settled = Math.abs(zoomTarget - next) < 0.00001;
+      zoomAt((settled ? zoomTarget : next) / cam.z, zoomAnchorX, zoomAnchorY);
+      if (settled) zoomTarget = null;
+    }
     if (auto) hour = (hour + dt * 0.35) % 24;
     const hh = Math.floor(hour), mm = Math.floor((hour % 1) * 60);
     const label = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
