@@ -1306,7 +1306,7 @@
       ctx.fillStyle = 'rgba(12, 20, 16, 0.22)';
       ctx.beginPath(); ctx.roundRect(rx, ry + 2, rw, rh, 99); ctx.fill();
 
-      ctx.fillStyle = active ? accentHex : (darkMode ? 'rgba(23, 29, 26, 0.94)' : 'rgba(244, 241, 234, 0.96)');
+      ctx.fillStyle = active ? accentHex : (darkMode ? 'rgba(11, 35, 20, 0.95)' : 'rgba(244, 241, 234, 0.96)');
       ctx.beginPath(); ctx.roundRect(rx, ry, rw, rh, 99); ctx.fill();
 
       ctx.strokeStyle = active ? accentHex : 'rgba(29, 35, 32, 0.18)';
