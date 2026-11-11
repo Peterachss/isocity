@@ -143,7 +143,7 @@
     autumn: {
       skyNight: '#07110c', skyDay: '#1f3b2a', forestA: '#2a4a28', forestB: '#274524',
       grassA: '#7da663', grassB: '#74a05a', park: '#86b65f', waterA: '#295b60', waterB: '#26565b',
-      crowns: [['#0a3324', '#14523a'], ['#0e3a1c', '#1a5a2c'], ['#0a2a18', '#124a2c'], ['#12401f', '#1f6232'], ['#0a2010', '#16401f'], ['#0c3020', '#175a3a']],
+      crowns: [['#2c5a2b', '#3f7a35'], ['#3a6b2e', '#5a8f3c'], ['#c98a14', '#e8b832'], ['#d9a21f', '#f0c64a'], ['#b8601a', '#e08a2c'], ['#8a9a2a', '#b7b93a']],
     },
     alpine: {
       skyNight: '#061014', skyDay: '#183238', forestA: '#1d3c2e', forestB: '#1a3629',
@@ -738,8 +738,6 @@
       const sc = c.getContext('2d');
       sc.setTransform(SPR_S, 0, 0, SPR_S, 0, 0);
       const R = 10;
-      sc.fillStyle = '#16301a';
-      sc.beginPath(); sc.ellipse(SPR_CX + 3, SPR_CY + 14, R * 0.95, R * 0.45, 0, 0, 7); sc.fill();
       sc.fillStyle = dark;
       sc.beginPath(); sc.arc(SPR_CX, SPR_CY, R, 0, 7); sc.fill();
       sc.fillStyle = light;
