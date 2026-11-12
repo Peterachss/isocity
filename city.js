@@ -3243,16 +3243,19 @@
   };
 
   // Manual Smooth mode: steady 30 fps and 1x resolution, regardless of what the automatic governor decides.
-  $('smoothBtn').setAttribute('aria-pressed', String(perfForced));
-  $('smoothBtn').onclick = () => {
+  const smoothButtons = () => [$('smoothBtn'), $('smoothBarBtn')].filter(Boolean);
+  const syncSmoothUI = () => smoothButtons().forEach((b) => b.setAttribute('aria-pressed', String(perfForced)));
+  syncSmoothUI();
+  const toggleSmooth = () => {
     perfForced = !perfForced;
     try { localStorage.setItem('isocity-smooth', perfForced ? '1' : '0'); } catch (e) { /* ignore */ }
-    $('smoothBtn').setAttribute('aria-pressed', String(perfForced));
+    syncSmoothUI();
     slowFrames = 0; intervalEma = 16.7;
     setPerfLevel(perfForced ? 2 : 0);
     notify(perfForced ? 'Smooth mode on: steady 30 fps, lighter graphics.' : 'Smooth mode off: full quality (auto-lowers if the screen struggles).', 2800);
     audio.sfx('tap');
   };
+  smoothButtons().forEach((b) => { b.onclick = toggleSmooth; });
 
   // Register offline PWA service worker
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
