@@ -89,6 +89,7 @@
   let cars = [], walkers = [], boats = [], bots = [], drones = [], birds = [], dogs = [], confetti = [], raindrops = [];
   let wheelsList = [], millsList = [], beaconsList = [], housesList = [], buildingsList = [], waterCells = [], crossings = new Set(), busStops = [];
   let labelHits = [], vehicleHits = [];
+  let perfMaxDpr = 1.5;
   let dpr = 1, W = 0, H = 0;
 
   // Pomodoro state
@@ -111,7 +112,7 @@
   }
 
   // Personal = u/0, School = u/1. Chat always uses the school account; Calendar is personal only.
-  const FORCED_ACCT = { 'google-chat': 1, 'google-calendar': 0 };
+  const FORCED_ACCT = { 'google-chat': 1, 'google-calendar': 0, 'toddle': 1 };
   const GOOGLE_HOSTS = /^(docs|mail|drive|chat|calendar)\.google\.com$/;
   function applyAccountToUrl(url, acct) {
     if (!url || acct === undefined) return url;
@@ -1395,7 +1396,7 @@
     ctx.drawImage(worldCanvas, cam.x - OX * cam.z, cam.y - OY * cam.z, WW * cam.z, WH * cam.z);
 
     // Animated water ripples
-    if (!reduceMotion && waterCells.length && L > 0.25) {
+    if (!reduceMotion && perfLevel < 1 && waterCells.length && L > 0.25) {
       ctx.fillStyle = `rgba(195, 240, 238, ${(L * 0.36).toFixed(2)})`;
       const step = Math.max(1, Math.floor(waterCells.length / 18));
       const t = now * 0.0022;
@@ -1898,7 +1899,7 @@
     if (isGoogleAcct) {
       const forced = FORCED_ACCT[item.id];
       const curA = String(forced !== undefined ? forced : (accountPrefs[item.id] ?? globalAcct));
-      $('acctNote').textContent = item.id === 'google-chat' ? 'Chat always uses your school account' : item.id === 'google-calendar' ? 'Calendar is personal only' : '';
+      $('acctNote').textContent = item.id === 'google-chat' ? 'Chat always uses your school account' : item.id === 'google-calendar' ? 'Calendar is personal only' : item.id === 'toddle' ? 'Toddle is school only' : '';
       document.querySelectorAll('.acct-btn').forEach((b) => {
         b.setAttribute('aria-pressed', String(b.dataset.acct === curA));
         b.disabled = forced !== undefined;
@@ -2702,7 +2703,7 @@
   }
 
   function resize() {
-    dpr = Math.max(1, Math.min(1.5, devicePixelRatio || 1, Math.sqrt(2400000 / Math.max(1, innerWidth * innerHeight))));
+    dpr = Math.max(1, Math.min(perfMaxDpr, devicePixelRatio || 1, Math.sqrt(2400000 / Math.max(1, innerWidth * innerHeight))));
     W = innerWidth; H = innerHeight;
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
   }
@@ -2735,11 +2736,31 @@
     worldDirty = true;
   }
 
-  let lastFrameAt = 0, workEma = 6;
+  // Performance governor: measures the real time between frames (this includes GPU work).
+  // Level 0 = full quality. Level 1 = render at 1x resolution and skip water shimmer.
+  // Level 2 = also lock to a steady 30 fps, which looks smoother than an uneven 40-50.
+  let perfLevel = 0, intervalEma = 16.7, slowFrames = 0, lastFrameAt = 0, workEma = 6, perfCheckAt = 0;
+  function setPerfLevel(n) {
+    if (n === perfLevel) return;
+    perfLevel = n;
+    perfMaxDpr = n >= 1 ? 1 : 1.5;
+    resize();
+    worldDirty = true;
+  }
   function frame(now) {
     if (weather === 'fog') weather = 'clear';
-    // If frames are expensive on this device, draw at 30 fps instead of stuttering.
-    if (workEma > 11 && now - lastFrameAt < 30) { requestAnimationFrame(frame); return; }
+    const gap = now - lastFrameAt;
+    if (perfLevel >= 2 && gap < 30) { requestAnimationFrame(frame); return; }
+    if (lastFrameAt && gap < 200) {
+      intervalEma = intervalEma * 0.95 + gap * 0.05;
+      if (now > perfCheckAt) {
+        // judge at most once per second, and only while the page is visible and active
+        perfCheckAt = now + 1000;
+        const target = perfLevel >= 2 ? 36 : 22;
+        if (intervalEma > target) slowFrames++; else slowFrames = Math.max(0, slowFrames - 1);
+        if (slowFrames >= 3 && perfLevel < 2) { setPerfLevel(perfLevel + 1); slowFrames = 0; intervalEma = 16.7; }
+      }
+    }
     lastFrameAt = now;
     const t0 = performance.now();
     const rawDt = Math.min(0.1, (now - last) / 1000); last = now;
@@ -3069,9 +3090,9 @@
     $('acctBtn').textContent = school ? 'School' : 'Personal';
     $('acctBtn').setAttribute('aria-pressed', String(school));
     $('acctBtn').title = school ? 'School account (Slides, Docs, Gmail). Calendar stays personal, Chat always uses school.' : 'Personal account (Slides, Docs, Gmail). Chat always uses school.';
-    $('launchNote').textContent = school ? 'Opening with your school account. Calendar stays personal.' : 'Opening with your personal account.';
+    $('launchNote').textContent = school ? 'Opening with your school account. Calendar stays personal. Toddle is school only.' : 'Opening with your personal account.';
     $('launchGrid').innerHTML = '';
-    for (const [id, label] of LAUNCH) {
+    for (const [id, label] of (school ? [...LAUNCH, ['toddle', 'Toddle']] : LAUNCH)) {
       const it = getItem(id);
       const a = document.createElement('a');
       a.className = 'chip small link-btn';
