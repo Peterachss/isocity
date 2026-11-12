@@ -97,7 +97,8 @@
   let labelHits = [], vehicleHits = [];
   let perfForced = false;
   try { perfForced = localStorage.getItem('isocity-smooth') === '1'; } catch (e) { /* ignore */ }
-  let perfMaxDpr = perfForced ? 1 : 1.25;
+  const weakStart = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4 || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+  let perfMaxDpr = (perfForced || weakStart) ? 1 : 1.25;
   let dpr = 1, W = 0, H = 0;
 
   // Pomodoro state
@@ -1518,7 +1519,7 @@
       for (const w of walkers) {
         const wx0 = px(w.px + 0.5, w.py + 0.5), wy0 = py(w.px + 0.5, w.py + 0.5);
         if (wx0 < -30 || wx0 > W + 30 || wy0 < -30 || wy0 > H + 30) continue;
-        ov.push({ k: 2, s: w.px + w.py, w }); addOccluders(Math.floor(w.px), Math.floor(w.py));
+        ov.push({ k: 2, s: w.px + w.py, w });
       }
       for (const b of bots) {
         const bx0 = px(b.px + 0.5, b.py + 0.5), by0 = py(b.px + 0.5, b.py + 0.5);
@@ -1528,7 +1529,7 @@
       for (const b of boats) {
         const bx0 = px(b.px + 0.5, b.py + 0.5), by0 = py(b.px + 0.5, b.py + 0.5);
         if (bx0 < -40 || bx0 > W + 40 || by0 < -40 || by0 > H + 40) continue;
-        ov.push({ k: 3, s: b.px + b.py, b }); addOccluders(Math.floor(b.px), Math.floor(b.py));
+        ov.push({ k: 3, s: b.px + b.py, b });
       }
     }
 
@@ -2827,7 +2828,8 @@
   // Performance governor: measures the real time between frames (this includes GPU work).
   // Level 0 = full quality. Level 1 = render at 1x resolution and skip water shimmer.
   // Level 2 = also lock to a steady 30 fps, which looks smoother than an uneven 40-50.
-  let perfLevel = perfForced ? 2 : 0, intervalEma = 16.7, slowFrames = 0, lastFrameAt = 0, workEma = 6, perfCheckAt = 0;
+  const weakDevice = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4 || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+  let perfLevel = perfForced ? 2 : (weakDevice ? 1 : 0), intervalEma = 16.7, slowFrames = 0, lastFrameAt = 0, workEma = 6, perfCheckAt = 0;
   function setPerfLevel(n) {
     if (n === perfLevel) return;
     perfLevel = n;
@@ -2842,10 +2844,10 @@
       intervalEma = intervalEma * 0.95 + gap * 0.05;
       if (now > perfCheckAt) {
         // judge at most once per second, and only while the page is visible and active
-        perfCheckAt = now + 1000;
+        perfCheckAt = now + 500;
         const target = perfLevel >= 2 ? 36 : 22;
         if (intervalEma > target) slowFrames++; else slowFrames = Math.max(0, slowFrames - 1);
-        if (!perfForced && slowFrames >= 3 && perfLevel < 2) { setPerfLevel(perfLevel + 1); slowFrames = 0; intervalEma = 16.7; }
+        if (!perfForced && slowFrames >= 2 && perfLevel < 2) { setPerfLevel(perfLevel + 1); slowFrames = 0; intervalEma = 16.7; }
       }
     }
     lastFrameAt = now;
