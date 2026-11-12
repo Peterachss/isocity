@@ -162,6 +162,17 @@ window.ISOCITY_DATA = (() => {
       ],
     },
     {
+      id: 'google-sheets', kind: 'google', name: 'Google Sheets', cat: 'Google', study: true,
+      desc: 'Spreadsheets, data tables, and budgets. Opens with your personal or school account.',
+      web: 'https://docs.google.com/spreadsheets/u/0/',
+      alt: 'https://docs.google.com/spreadsheets/create', altLabel: 'New sheet',
+      shortcuts: [
+        { label: 'All spreadsheets', url: 'https://docs.google.com/spreadsheets/u/0/', sub: 'Browse existing sheets' },
+        { label: 'Create blank spreadsheet', url: 'https://docs.google.com/spreadsheets/create', sub: 'Open an empty sheet' },
+        { label: 'Google Drive', url: 'https://drive.google.com/', sub: 'Open Drive folders' },
+      ],
+    },
+    {
       id: 'mybib', kind: 'google', name: 'MyBib', cat: 'Study', study: true,
       desc: 'Citation generator, bibliography folders, and formatted references.',
       web: 'https://www.mybib.com/app',
