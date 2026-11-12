@@ -26,7 +26,7 @@
   const LVL_MULT = [1, 1, 1.5, 2.2];
 
   const canvas = document.getElementById('stage');
-  let ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+  let ctx = canvas.getContext('2d', { alpha: false });
   const labelCanvas = document.createElement('canvas');
   const labelCtx = labelCanvas.getContext('2d');
   let labelKey = '';
