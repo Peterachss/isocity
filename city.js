@@ -35,7 +35,7 @@
   let themeId = 'autumn';
   let timeMode = 'auto'; // 'auto' | 'realtime' | 'paused'
   let simSpeed = 1;
-  let weather = 'clear'; // 'clear' | 'rain' | 'fog' | 'overcast'
+  let weather = 'clear'; // 'clear' | 'rain' | 'overcast'
   let darkMode = false;
   let cbMode = false;
   let largeText = false;
@@ -1543,12 +1543,6 @@
       for (const it of ov) if (it.k === 1) drawCar(it.c, L, true);
     }
 
-    // Morning fog layer (05:30 - 08:45) or manual Fog weather
-    if (!transparentBg && ((hour >= 5.5 && hour <= 8.75) || weather === 'fog')) {
-      ctx.fillStyle = 'rgba(235, 240, 238, 0.22)';
-      ctx.fillRect(0, H * 0.42, W, H * 0.58);
-    }
-
     // Rain weather overlay
     if (!transparentBg && (weather === 'rain' || activeDisaster === 'storm')) {
       ctx.strokeStyle = 'rgba(180, 215, 235, 0.45)';
@@ -1764,7 +1758,7 @@
     const res = await fetchJsonTimed('https://api.open-meteo.com/v1/forecast?latitude=10.82&longitude=106.63&current_weather=true');
     if (!res?.current_weather) return;
     const code = res.current_weather.weathercode;
-    weather = (code >= 51 && code <= 99) ? 'rain' : (code === 45 || code === 48) ? 'fog' : (code >= 2 && code <= 3) ? 'overcast' : 'clear';
+    weather = (code >= 51 && code <= 99) ? 'rain' : (code >= 2 && code <= 3) ? 'overcast' : 'clear';
     syncBodyPrefs();
     scheduleSave();
   }
@@ -2431,7 +2425,7 @@
     syncBodyPrefs(); scheduleSave();
   };
   $('weatherBtn').onclick = () => {
-    const order = ['clear', 'rain', 'fog', 'overcast'];
+    const order = ['clear', 'rain', 'overcast'];
     weather = order[(order.indexOf(weather) + 1) % order.length];
     syncBodyPrefs(); scheduleSave();
   };
@@ -2708,7 +2702,7 @@
   }
 
   function resize() {
-    dpr = Math.min(1.5, devicePixelRatio || 1);
+    dpr = Math.max(1, Math.min(1.5, devicePixelRatio || 1, Math.sqrt(2400000 / Math.max(1, innerWidth * innerHeight))));
     W = innerWidth; H = innerHeight;
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
   }
@@ -2741,7 +2735,13 @@
     worldDirty = true;
   }
 
+  let lastFrameAt = 0, workEma = 6;
   function frame(now) {
+    if (weather === 'fog') weather = 'clear';
+    // If frames are expensive on this device, draw at 30 fps instead of stuttering.
+    if (workEma > 11 && now - lastFrameAt < 30) { requestAnimationFrame(frame); return; }
+    lastFrameAt = now;
+    const t0 = performance.now();
     const rawDt = Math.min(0.1, (now - last) / 1000); last = now;
     ensureWorldRes(now);
     const effSpeed = isSim() ? simSpeed : 1;
@@ -2810,6 +2810,7 @@
 
     tickCrew(now);
     draw(now, rawDt, false);
+    workEma = workEma * 0.9 + (performance.now() - t0) * 0.1;
     requestAnimationFrame(frame);
   }
 

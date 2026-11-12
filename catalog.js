@@ -127,6 +127,15 @@ window.ISOCITY_DATA = (() => {
       ],
     },
     {
+      id: 'toddle', kind: 'google', name: 'Toddle', cat: 'Study', study: true,
+      desc: 'School learning platform: units, assessments, and class updates.',
+      web: 'https://web.toddleapp.com/?type=loginHome',
+      alt: 'https://web.toddleapp.com/', altLabel: 'Toddle home',
+      shortcuts: [
+        { label: 'Toddle login', url: 'https://web.toddleapp.com/?type=loginHome', sub: 'Units, tasks, and grades' },
+      ],
+    },
+    {
       id: 'mybib', kind: 'google', name: 'MyBib', cat: 'Study', study: true,
       desc: 'Citation generator, bibliography folders, and formatted references.',
       web: 'https://www.mybib.com/app',
@@ -185,6 +194,7 @@ window.ISOCITY_DATA = (() => {
     { id: 'google-calendar', x: 17, y: 27, t: 'plaza',    lv: 1 },
     { id: 'pomodoro',        x: 21, y: 27, t: 'windmill', lv: 1 },
     { id: 'quick-notes',     x: 7,  y: 27, t: 'house',    lv: 2 },
+    { id: 'toddle',          x: 14, y: 27, t: 'school',   lv: 1 },
   ];
 
   const SCENIC_PARKS = [
