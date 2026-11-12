@@ -26,7 +26,10 @@
   const LVL_MULT = [1, 1, 1.5, 2.2];
 
   const canvas = document.getElementById('stage');
-  const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+  let ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+  const labelCanvas = document.createElement('canvas');
+  const labelCtx = labelCanvas.getContext('2d');
+  let labelKey = '';
   const $ = (id) => document.getElementById(id);
 
   const audio = new D.CityAudio();
@@ -1210,6 +1213,7 @@
   const ov = [];
 
   function addOccluders(rx, ry) {
+    if (perfLevel >= 1) return;
     for (let dx = 0; dx <= 3; dx++) {
       const tx = rx + dx;
       if (tx < 0 || tx >= N) continue;
@@ -1242,7 +1246,22 @@
     return z;
   }
 
+  // Labels are expensive to lay out, so they are drawn to their own layer and only redrawn when something changes.
   function drawMapLabels(now) {
+    const key = [cam.x.toFixed(1), cam.y.toFixed(1), cam.z.toFixed(3), W, H, dpr, selectedTile ? selectedTile.join(',') : '', hover ? hover.join(',') : '', hoveredLabel || '', activeFilter, showLabels, darkMode, cbMode, Math.floor(now / 1000)].join('|');
+    if (key !== labelKey) {
+      labelKey = key;
+      const saved = ctx;
+      ctx = labelCtx;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      drawMapLabelsRaw(now);
+      ctx = saved;
+    }
+    if (showLabels) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(labelCanvas, 0, 0); ctx.restore(); }
+  }
+
+  function drawMapLabelsRaw(now) {
     labelHits.length = 0;
     if (!showLabels) return;
 
@@ -2706,6 +2725,7 @@
     dpr = Math.max(1, Math.min(perfMaxDpr, devicePixelRatio || 1, Math.sqrt(2400000 / Math.max(1, innerWidth * innerHeight))));
     W = innerWidth; H = innerHeight;
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    labelCanvas.width = canvas.width; labelCanvas.height = canvas.height; labelKey = '';
   }
   function center(animateMove = false) {
     const tz = Math.max(0.45, Math.min(0.95, W / (N * TW) * 1.12, H / (N * TH + 150) * 1.12));
@@ -2726,7 +2746,7 @@
     if (Math.abs(cam.z - resLastZ) > 0.002) { resLastZ = cam.z; resStableAt = now; }
     if (now - resStableAt < 350) return;
     const need = cam.z * dpr * 0.9;
-    const want = need > 2.1 ? 2.5 : 2;
+    const want = 2; // fixed: re-rasterising the map caused multi-hundred-millisecond freezes
     if (want === WS) { resWantSince = 0; return; }
     if (want < WS && now - (resWantSince || (resWantSince = now)) < 1500) return;
     resWantSince = 0;
@@ -2745,7 +2765,6 @@
     perfLevel = n;
     perfMaxDpr = n >= 1 ? 1 : 1.5;
     resize();
-    worldDirty = true;
   }
   function frame(now) {
     if (weather === 'fog') weather = 'clear';
