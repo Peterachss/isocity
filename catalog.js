@@ -70,6 +70,7 @@ window.ISOCITY_DATA = (() => {
     { id: 'cham-bracelet-plan', kind: 'github', name: 'cham-bracelet-plan', lang: 'HTML', desc: 'Fundraiser plan for friendship bracelet booth and lucky draw.', web: 'https://peterachss.github.io/cham-bracelet-plan/', git: 'https://github.com/Peterachss/cham-bracelet-plan' },
     { id: 'claude', kind: 'github', name: 'claude', lang: 'HTML', desc: 'Claude web notes and experiments.', web: 'https://peterachss.github.io/claude/', git: 'https://github.com/Peterachss/claude' },
     { id: 'uni-plan', kind: 'github', name: 'uni-plan', lang: 'HTML', desc: 'My university plan, a folder in the claude repo.', web: 'https://peterachss.github.io/claude/uni-plan/', git: 'https://github.com/Peterachss/claude', api: 'claude', path: 'uni-plan' },
+    { id: 'econ-app', kind: 'github', name: 'econ-app', lang: 'HTML', desc: 'Interactive IB Economics revision guide.', web: 'https://peterachss.github.io/econ-app/', git: 'https://github.com/Peterachss/econ-app' },
   ];
 
   const DEFAULT_GOOGLE_APPS = [

@@ -754,3 +754,14 @@ body:has(#searchResults:not([hidden])) .build-bar { visibility: hidden; }
 @media (min-width: 761px) {
   #customPop, #econPop, #citiesPop, #comparePop, #helpPop { top: 100px; bottom: 120px; max-height: none; }
 }
+
+
+/* mobile: tidy bottom bar, lift the card above it, and avoid stacked panels */
+body:has(.pop[data-open="true"]) .build-bar { visibility: hidden; }
+@media (max-width: 760px) {
+  #zoomIn, #zoomOut, #helpBtn { display: none; }
+  .inspect-card { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 52px); max-height: calc(100dvh - 190px); border-radius: 18px; left: 12px; right: 12px; width: auto; padding-bottom: 16px; }
+  body:has(#inspectCard[data-open="true"]) .ticker-bar { display: none; }
+}
+
+@media (max-width: 760px) { .car-toast { top: max(200px, calc(env(safe-area-inset-top) + 192px)); } }

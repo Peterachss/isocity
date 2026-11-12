@@ -143,6 +143,12 @@
     return merged;
   }
 
+  let toastTimer = 0;
+  function notify(msg, ms = 2600) {
+    const t = $('carToast'); if (!t) return;
+    t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, ms);
+  }
   let rctx = ctx, rcam = cam;
   let worldDirty = true;
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1678,7 +1684,7 @@
         if (isGh && (res.status === 403 || res.status === 429)) {
           const reset = Number(res.headers.get('x-ratelimit-reset'));
           ghBlockedUntil = reset ? reset * 1000 + 2000 : Date.now() + 10 * 60 * 1000;
-          const n = $('carToast'); if (n && ghToastFor !== ghBlockedUntil) { ghToastFor = ghBlockedUntil; n.textContent = 'GitHub rate limit reached. Showing saved data until it resets.'; n.hidden = false; setTimeout(() => { n.hidden = true; }, 3500); }
+          if (ghToastFor !== ghBlockedUntil) { ghToastFor = ghBlockedUntil; notify('GitHub rate limit reached. Showing saved data until it resets.', 3500); }
         }
         return cached ? cached.d : null;
       }
@@ -2599,7 +2605,7 @@
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
   canvas.addEventListener('pointerdown', (e) => {
-    canvas.setPointerCapture(e.pointerId);
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* synthetic or released pointer */ }
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     camAnim = null; orbitActive = false;
     if (ptrs.size === 2) { drag = { pinch: true, d: dist() }; return; }
@@ -2643,11 +2649,10 @@
       const veh = !lbl ? hitVehicle(e.clientX, e.clientY) : null;
       if (veh) {
         selectedVehicle = veh;
-        $('carToast').textContent = `${veh.kind.toUpperCase()} #${veh.id} · ${veh.dest} · ${schedulePhase(hour)}`;
-        $('carToast').hidden = false;
+        notify(`${veh.kind.toUpperCase()} #${veh.id} · ${veh.dest} · ${schedulePhase(hour)}`, 4000);
         audio.sfx('select');
       } else {
-        $('carToast').hidden = true;
+        $('carToast').hidden = true; clearTimeout(toastTimer);
         selectedVehicle = null;
         const t = lbl ? [lbl.x, lbl.y] : pick(e.clientX, e.clientY);
         if (t && pins[t[0]]?.[t[1]]) {
@@ -2696,7 +2701,7 @@
       if (selectedTile) { selectedTile = null; renderInspect(); }
       return;
     }
-    if (e.target.matches('input, select, textarea')) return;
+    if (e.target.matches && e.target.matches('input, select, textarea')) return;
     if (e.key === '/') { e.preventDefault(); $('repoSearch').focus(); return; }
     if (e.key === '?') { e.preventDefault(); setPop('helpPop', 'helpBtn', $('helpPop').dataset.open !== 'true'); return; }
     if (e.code === 'Space') { e.preventDefault(); simSpeed = simSpeed === 0 ? 1 : 0; syncBodyPrefs(); return; }
@@ -2796,17 +2801,17 @@
       if (dtStr !== lastDateTxt) { lastDateTxt = dtStr; $('dateText').textContent = dtStr; }
     } else {
       if (timeMode === 'auto') {
-        const rate = effSpeed > 0 ? 0.14 * effSpeed : 0.12;
+        const rate = isSim() ? (effSpeed > 0 ? 0.14 * effSpeed : 0.12) : 0.05;
         const prevH = hour;
         hour = (hour + rawDt * rate) % 24;
         if (hour < prevH) {
-          dayCount++;
-          $('carToast').textContent = `Day ${dayCount} report · Pop ${simStats.pop} · Net +$${fmt(simStats.net)}/tick`;
-          $('carToast').hidden = false;
-          setTimeout(() => { $('carToast').hidden = true; }, 3200);
+          if (isSim()) {
+            dayCount++;
+            notify(`Day ${dayCount} report · Pop ${fmt(simStats.pop)} · Net ${simStats.net >= 0 ? '+' : '-'}$${fmt(Math.abs(simStats.net))}/tick`, 3200);
+          }
         }
       }
-      const d = new Date(Date.now() + (dayCount - 1) * 86400000);
+      const d = new Date(Date.now() + (isSim() ? (dayCount - 1) * 86400000 : 0));
       const dtStr = `${DAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}`;
       if (dtStr !== lastDateTxt) { lastDateTxt = dtStr; $('dateText').textContent = dtStr; }
     }
@@ -2894,10 +2899,7 @@
   }
   document.querySelectorAll('.tool-btn').forEach((b) => { b.onclick = () => setBuildTool(b.dataset.tool); });
 
-  function toast(msg) {
-    const t = $('carToast'); t.textContent = msg; t.hidden = false;
-    clearTimeout(toast.h); toast.h = setTimeout(() => { t.hidden = true; }, 2200);
-  }
+  function toast(msg) { notify(msg, 2200); }
   function applyTool(x, y) {
     if (!inb(x, y) || buildTool === 'select') return false;
     const cur = grid[x][y];
