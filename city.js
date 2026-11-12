@@ -95,7 +95,9 @@
   let cars = [], walkers = [], boats = [], bots = [], drones = [], birds = [], dogs = [], confetti = [], raindrops = [];
   let wheelsList = [], millsList = [], beaconsList = [], housesList = [], buildingsList = [], waterCells = [], crossings = new Set(), busStops = [];
   let labelHits = [], vehicleHits = [];
-  let perfMaxDpr = 1.5;
+  let perfForced = false;
+  try { perfForced = localStorage.getItem('isocity-smooth') === '1'; } catch (e) { /* ignore */ }
+  let perfMaxDpr = perfForced ? 1 : 1.25;
   let dpr = 1, W = 0, H = 0;
 
   // Pomodoro state
@@ -1208,7 +1210,7 @@
   const OX = N * (TW / 2) + PAD_X;
   const WW = N * TW + PAD_X * 2;
   const WH = OY + N * TH + 48;
-  let WS = 2; // supersampling of the cached world image; raised after zooming settles
+  let WS = 1.5; // supersampling of the cached world image (kept modest so each frame is cheap to draw)
 
   const worldCanvas = document.createElement('canvas');
   worldCanvas.width = Math.round(WW * WS);
@@ -2746,7 +2748,7 @@
 
   function zoomAt(f, mx = W / 2, my = H / 2) {
     camAnim = null;
-    const nz = Math.max(0.45, Math.min(2.0, cam.z * f));
+    const nz = Math.max(0.45, Math.min(1.8, cam.z * f));
     const k = nz / cam.z;
     cam.x = mx - (mx - cam.x) * k; cam.y = my - (my - cam.y) * k; cam.z = nz;
     audio.updateZoomAmbience(cam.z);
@@ -2812,7 +2814,7 @@
     if (Math.abs(cam.z - resLastZ) > 0.002) { resLastZ = cam.z; resStableAt = now; }
     if (now - resStableAt < 350) return;
     const need = cam.z * dpr * 0.9;
-    const want = 2; // fixed: re-rasterising the map caused multi-hundred-millisecond freezes
+    const want = 1.5; // fixed: re-rasterising the map caused multi-hundred-millisecond freezes
     if (want === WS) { resWantSince = 0; return; }
     if (want < WS && now - (resWantSince || (resWantSince = now)) < 1500) return;
     resWantSince = 0;
@@ -2825,11 +2827,11 @@
   // Performance governor: measures the real time between frames (this includes GPU work).
   // Level 0 = full quality. Level 1 = render at 1x resolution and skip water shimmer.
   // Level 2 = also lock to a steady 30 fps, which looks smoother than an uneven 40-50.
-  let perfLevel = 0, intervalEma = 16.7, slowFrames = 0, lastFrameAt = 0, workEma = 6, perfCheckAt = 0;
+  let perfLevel = perfForced ? 2 : 0, intervalEma = 16.7, slowFrames = 0, lastFrameAt = 0, workEma = 6, perfCheckAt = 0;
   function setPerfLevel(n) {
     if (n === perfLevel) return;
     perfLevel = n;
-    perfMaxDpr = n >= 1 ? 1 : 1.5;
+    perfMaxDpr = n >= 1 ? 1 : 1.25;
     resize();
   }
   function frame(now) {
@@ -2843,7 +2845,7 @@
         perfCheckAt = now + 1000;
         const target = perfLevel >= 2 ? 36 : 22;
         if (intervalEma > target) slowFrames++; else slowFrames = Math.max(0, slowFrames - 1);
-        if (slowFrames >= 3 && perfLevel < 2) { setPerfLevel(perfLevel + 1); slowFrames = 0; intervalEma = 16.7; }
+        if (!perfForced && slowFrames >= 3 && perfLevel < 2) { setPerfLevel(perfLevel + 1); slowFrames = 0; intervalEma = 16.7; }
       }
     }
     lastFrameAt = now;
@@ -3235,6 +3237,18 @@
     syncAcctUI();
     if (selectedTile) renderInspect();
     notify(acctSwap ? 'Personal now opens your 2nd Google sign-in (u/1), School your 1st (u/0).' : 'Personal opens your 1st Google sign-in (u/0), School your 2nd (u/1).', 3600);
+    audio.sfx('tap');
+  };
+
+  // Manual Smooth mode: steady 30 fps and 1x resolution, regardless of what the automatic governor decides.
+  $('smoothBtn').setAttribute('aria-pressed', String(perfForced));
+  $('smoothBtn').onclick = () => {
+    perfForced = !perfForced;
+    try { localStorage.setItem('isocity-smooth', perfForced ? '1' : '0'); } catch (e) { /* ignore */ }
+    $('smoothBtn').setAttribute('aria-pressed', String(perfForced));
+    slowFrames = 0; intervalEma = 16.7;
+    setPerfLevel(perfForced ? 2 : 0);
+    notify(perfForced ? 'Smooth mode on: steady 30 fps, lighter graphics.' : 'Smooth mode off: full quality (auto-lowers if the screen struggles).', 2800);
     audio.sfx('tap');
   };
 
