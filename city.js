@@ -1799,7 +1799,7 @@
       if (existing) {
         if (r.description) existing.desc = r.description;
         if (r.language) existing.lang = r.language;
-        if (webUrl) existing.web = webUrl;
+        if (webUrl && !existing.fixedWeb) existing.web = webUrl;
         existing.meta = meta;
       } else {
         const entry = {
