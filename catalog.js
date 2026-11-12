@@ -143,6 +143,16 @@ window.ISOCITY_DATA = (() => {
       ],
     },
     {
+      id: 'blooket', kind: 'google', name: 'Blooket', cat: 'Study', study: true,
+      desc: 'Study games and quiz sets: open your Blooket sets dashboard.',
+      web: 'https://dashboard.blooket.com/my-sets',
+      alt: 'https://dashboard.blooket.com/', altLabel: 'Dashboard',
+      shortcuts: [
+        { label: 'My sets', url: 'https://dashboard.blooket.com/my-sets', sub: 'Your question sets' },
+        { label: 'Dashboard', url: 'https://dashboard.blooket.com/', sub: 'Blooket home' },
+      ],
+    },
+    {
       id: 'toddle', kind: 'google', name: 'Toddle', cat: 'Study', study: true,
       desc: 'School learning platform: units, assessments, and class updates.',
       web: 'https://web.toddleapp.com/?type=loginHome',

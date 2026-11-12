@@ -1983,7 +1983,7 @@
     try { host = item.web ? new URL(item.web).hostname.replace(/^www\./, '') : 'Local'; } catch (e) {}
 
     // Account chooser visible for Google web apps
-    const isGoogleAcct = item.kind === 'google' && !item.localTool && !item.isCustom && item.id !== 'seqta' && item.id !== 'mybib';
+    const isGoogleAcct = item.kind === 'google' && !item.localTool && !item.isCustom && item.id !== 'seqta' && item.id !== 'mybib' && item.id !== 'blooket';
     $('accountRow').hidden = !isGoogleAcct;
     if (isGoogleAcct) {
       const forced = FORCED_ACCT[item.id];
