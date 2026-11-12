@@ -99,10 +99,11 @@ window.ISOCITY_DATA = (() => {
     {
       id: 'seqta', kind: 'google', name: 'SEQTA', cat: 'Study', study: true,
       desc: 'Timetable, courses, assessments, and notices. Edit URL or customize timetable periods locally.',
-      web: 'https://learn.seqta.com.au/',
-      alt: 'https://seqta.com.au/', altLabel: 'Portal info',
+      web: 'https://learn.ishcmc.edu.vn/#?page=/timetable',
+      alt: 'https://learn.ishcmc.edu.vn/', altLabel: 'SEQTA home',
       shortcuts: [
-        { label: 'SEQTA Learn', url: 'https://learn.seqta.com.au/', sub: 'Courses and assessments (customizable via Edit)' },
+        { label: 'Timetable', url: 'https://learn.ishcmc.edu.vn/#?page=/timetable', sub: 'Your school timetable' },
+        { label: 'SEQTA home', url: 'https://learn.ishcmc.edu.vn/', sub: 'Courses, assessments and notices' },
       ],
     },
     {
