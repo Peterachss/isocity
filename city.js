@@ -26,7 +26,7 @@
   const LVL_MULT = [1, 1, 1.5, 2.2];
 
   const canvas = document.getElementById('stage');
-  const ctx = canvas.getContext('2d', { alpha: false });
+  const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
   const $ = (id) => document.getElementById(id);
 
   const audio = new D.CityAudio();
@@ -1392,7 +1392,7 @@
     }
 
     // Always blit the cached world image (fast). Its resolution is raised when zoomed in (see ensureWorldRes).
-    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'low';
     ctx.drawImage(worldCanvas, cam.x - OX * cam.z, cam.y - OY * cam.z, WW * cam.z, WH * cam.z);
 
     // Animated water ripples
@@ -2325,9 +2325,9 @@
     b.onclick = () => setPop(b.dataset.target, b.dataset.btn, false);
   });
   $('econBtn').onclick = (e) => { e.stopPropagation(); setPop('econPop', 'econBtn', $('econPop').dataset.open !== 'true'); };
-  $('citiesBtn').onclick = (e) => { e.stopPropagation(); setPop('citiesPop', 'citiesBtn', $('citiesPop').dataset.open !== 'true'); };
+  if ($('citiesBtn')) $('citiesBtn').onclick = (e) => { e.stopPropagation(); setPop('citiesPop', 'citiesBtn', $('citiesPop').dataset.open !== 'true'); };
   $('customBtn').onclick = (e) => { e.stopPropagation(); setPop('customPop', 'customBtn', $('customPop').dataset.open !== 'true'); };
-  $('compareBtn').onclick = (e) => { e.stopPropagation(); setPop('comparePop', 'compareBtn', $('comparePop').dataset.open !== 'true'); };
+  if ($('compareBtn')) $('compareBtn').onclick = (e) => { e.stopPropagation(); setPop('comparePop', 'compareBtn', $('comparePop').dataset.open !== 'true'); };
   $('helpBtn').onclick = (e) => { e.stopPropagation(); setPop('helpPop', 'helpBtn', $('helpPop').dataset.open !== 'true'); };
 
   function renderEconomyUI() {
