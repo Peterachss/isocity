@@ -730,12 +730,12 @@
     }
   }
 
-  function drawBuildingNightWindows(x, y, t, L) {
+  function drawBuildingNightWindows(x, y, t, L, force = false) {
     if (t === 'wheel' || t === 'windmill') return;
     const h = bldHeight(t, levels[x][y] || 1);
     if (!h) return;
     const winThresh = 0.22 + ((x * 13 + y * 7) % 24) * 0.015;
-    if ((1 - L) <= winThresh) return;
+    if (!force && (1 - L) <= winThresh) return;
 
     const i = TYPES[t].inset;
     const x0 = x + i, y0 = y + i, x1 = x + 1 - i, y1 = y + 1 - i;
@@ -755,6 +755,48 @@
         poly4(px(x1, ry0), py(x1, ry0, zz0), px(x1, ry1), py(x1, ry1, zz0), px(x1, ry1), py(x1, ry1, zz1), px(x1, ry0), py(x1, ry0, zz1), '#f0b862');
       }
     }
+  }
+
+
+  // Lit windows are pre-drawn once per building into a small sprite, with every tile in front of the building
+  // (trees, other buildings) cut out of it, so windows never show through trees. At night only the sprites are blitted.
+  let winSprites = [], winDirty = true;
+  function buildWinSprites() {
+    winDirty = false;
+    winSprites = [];
+    const savedR = rctx, savedC = rcam, savedW = warm;
+    warm = 0;
+    const SS = 2;
+    for (const [x, y, t] of buildingsList) {
+      if (t === 'wheel' || t === 'windmill') continue;
+      const lv = levels[x][y] || 1;
+      const h = bldHeight(t, lv);
+      if (!h || !TYPES[t]) continue;
+      const i = TYPES[t].inset;
+      const X0 = x + i, Y0 = y + i, X1 = x + 1 - i, Y1 = y + 1 - i;
+      const wx = (a, b) => (a - b) * (TW / 2) + OX;
+      const wy = (a, b, z = 0) => (a + b) * (TH / 2) + OY - z;
+      const left = Math.floor(wx(X0, Y1)) - 6, right = Math.ceil(wx(X1, Y0)) + 6;
+      const top = Math.floor(wy(X0, Y0, h)) - 6, bottom = Math.ceil(wy(X1, Y1, 0)) + 6;
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round((right - left) * SS)); c.height = Math.max(1, Math.round((bottom - top) * SS));
+      const g = c.getContext('2d');
+      g.setTransform(SS, 0, 0, SS, 0, 0);
+      rctx = g; rcam = { x: OX - left, y: OY - top, z: 1 };
+      drawBuildingNightWindows(x, y, t, 1, true);
+      g.globalCompositeOperation = 'destination-out';
+      for (let dx = 0; dx <= 3; dx++) for (let dy = 0; dy <= 3; dy++) {
+        if (dx === 0 && dy === 0) continue;
+        if (Math.abs(dx - dy) > 2) continue;
+        const tx = x + dx, ty = y + dy;
+        if (tx >= N || ty >= N) continue;
+        const tt = grid[tx][ty];
+        if (!tt || isRoad(tt) || tt === 'water') continue;
+        drawTile(tx, ty, tt, 1, true);
+      }
+      winSprites.push({ x, y, c, left, top, w: right - left, h: bottom - top });
+    }
+    rctx = savedR; rcam = savedC; warm = savedW;
   }
 
   function drawWater(x, y, L) {
@@ -1203,6 +1245,7 @@
     }
     warm = savedW;
     worldDirty = false;
+    winDirty = true;
   }
 
   const vigCanvas = document.createElement('canvas');
@@ -1561,8 +1604,14 @@
       ctx.globalAlpha = Math.min(1, (0.72 - L) * 2.4);
       ctx.drawImage(nightCanvas, cam.x - OX * cam.z, cam.y - OY * cam.z, WW * cam.z, WH * cam.z);
       ctx.globalAlpha = 1;
-      for (let i = 0; i < buildingsList.length; i++) {
-        drawBuildingNightWindows(buildingsList[i][0], buildingsList[i][1], buildingsList[i][2], L);
+      if (winDirty) buildWinSprites();
+      for (let i = 0; i < winSprites.length; i++) {
+        const ws = winSprites[i];
+        const winThresh = 0.22 + ((ws.x * 13 + ws.y * 7) % 24) * 0.015;
+        if ((1 - L) <= winThresh) continue;
+        const sx = cam.x + (ws.left - OX) * cam.z, sy = cam.y + (ws.top - OY) * cam.z;
+        if (sx > W || sy > H || sx + ws.w * cam.z < 0 || sy + ws.h * cam.z < 0) continue;
+        ctx.drawImage(ws.c, sx, sy, ws.w * cam.z, ws.h * cam.z);
       }
     }
     if (L < 0.5 && cars.length && showAgents) {
