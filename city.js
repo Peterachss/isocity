@@ -117,6 +117,17 @@
   const makePins = () => Array.from({ length: N }, () => Array(N).fill(null));
   const curTheme = () => D.THEMES[themeId] || D.THEMES.autumn;
   const fmt = (n) => Math.round(n).toLocaleString('en-US');
+  const clearObj = (o) => { for (const k of Object.keys(o)) delete o[k]; };
+  const safeHref = (u) => {
+    try { const p = new URL(String(u || ''), location.href); return (p.protocol === 'https:' || p.protocol === 'http:') ? p.href : '#'; } catch (e) { return '#'; }
+  };
+  let rotSteps = 0;
+  function rotPt(x, y, steps = rotSteps) {
+    let rx = x, ry = y;
+    for (let i = 0; i < (steps & 3); i++) { const nx = N - 1 - ry, ny = rx; rx = nx; ry = ny; }
+    return [rx, ry];
+  }
+  const unrotPt = (x, y) => rotPt(x, y, (4 - (rotSteps & 3)) & 3);
 
   function allItems() {
     return [...REPOS, ...GOOGLE_APPS, ...customItems].map((it) => ({ ...it, ...(overrides[it.id] || {}) }));
@@ -216,7 +227,7 @@
   let saveTimer = 0;
   function serializeState() {
     return {
-      themeId, timeMode, simSpeed, weather, darkMode, cbMode, largeText, ghostMode,
+      themeId, timeMode, simSpeed, weather, darkMode, cbMode, largeText, ghostMode, rotSteps,
       showAgents, showLabels, showHeatmap, money, dayCount, hour, needs,
       simStats, grid, levels, pins, customItems, overrides, bookmarks, accountPrefs, timetable, deadlines, quickNoteText, studyStreak,
     };
@@ -239,7 +250,7 @@
     r.dataset.cb = String(cbMode);
     r.dataset.large = String(largeText);
     r.dataset.photo = String(photoMode);
-    document.body.style.background = curTheme().skyDay;
+    document.body.style.background = mix(curTheme().skyNight, curTheme().skyDay, daylight(hour));
     $('darkModeBtn').setAttribute('aria-pressed', String(darkMode));
     $('cbModeBtn').setAttribute('aria-pressed', String(cbMode));
     $('largeTextBtn').setAttribute('aria-pressed', String(largeText));
@@ -257,6 +268,7 @@
 
   // ---------- city builder ----------
   function starter() {
+    rotSteps = 0;
     grid = Array.from({ length: N }, () => Array(N).fill('forest'));
     levels = makeLevels();
     pins = makePins();
@@ -298,14 +310,17 @@
 
   function findFreeLot(kind, preferType = null) {
     const pool = kind === 'google' ? D.SPARE_SOUTH : D.SPARE_NORTH;
-    for (const [sx, sy, st, slv] of pool) {
+    for (const [sx0, sy0, st, slv] of pool) {
+      const [sx, sy] = rotPt(sx0, sy0);
       if (!pins[sx][sy] && (grid[sx][sy] === 'forest' || grid[sx][sy] === 'park')) {
         return { x: sx, y: sy, t: preferType || st, lv: slv };
       }
     }
     const yMin = kind === 'google' ? 20 : 3;
     const yMax = kind === 'google' ? N - 3 : 16;
-    for (let x = 3; x < N - 3; x++) for (let y = yMin; y <= yMax; y++) {
+    for (let x = 3; x < N - 3; x++) for (let y = 3; y < N - 3; y++) {
+      const [, uy] = unrotPt(x, y);
+      if (uy < yMin || uy > yMax) continue;
       if (!pins[x][y] && grid[x][y] === 'forest') {
         const nearRoad = NB.some(([dx, dy]) => inb(x + dx, y + dy) && isRoad(grid[x + dx][y + dy]));
         if (nearRoad) return { x, y, t: preferType || 'house', lv: 1 };
@@ -328,31 +343,35 @@
   }
 
   function applySaveData(d) {
-    if (!d || !Array.isArray(d.grid) || d.grid.length !== N || !Array.isArray(d.grid[0]) || d.grid[0].length !== N) return false;
+    if (!d || !Array.isArray(d.grid) || d.grid.length !== N || !d.grid.every((row) => Array.isArray(row) && row.length === N)) return false;
     grid = d.grid.map((row) => row.map((t) => (t && TYPES[t]) ? t : null));
     levels = (Array.isArray(d.levels) && d.levels.length === N)
-      ? d.levels.map((row) => row.map((v) => Math.max(1, Math.min(3, Number(v) || 1))))
+      ? d.levels.map((row) => Array.isArray(row) ? Array.from({ length: N }, (_, j) => Math.max(1, Math.min(3, Number(row[j]) || 1))) : Array(N).fill(1))
       : makeLevels();
     pins = (Array.isArray(d.pins) && d.pins.length === N)
-      ? d.pins.map((row) => Array.isArray(row) ? row.map((v) => (v && typeof v === 'string') ? v : null) : Array(N).fill(null))
+      ? d.pins.map((row) => Array.isArray(row) ? Array.from({ length: N }, (_, j) => (row[j] && typeof row[j] === 'string') ? row[j] : null) : Array(N).fill(null))
       : makePins();
     pins = pins.map((row) => row.map((v) => (v === 'co-bo-u' ? 'uni-plan' : v))); // renamed building
+    rotSteps = Number.isInteger(d.rotSteps) ? ((d.rotSteps % 4) + 4) % 4 : 0;
 
     themeId = D.THEMES[d.themeId] ? d.themeId : 'autumn';
-    timeMode = d.timeMode || 'auto';
-    simSpeed = Number.isFinite(d.simSpeed) ? d.simSpeed : 1;
-    weather = d.weather || 'clear';
+    timeMode = (d.timeMode === 'auto' || d.timeMode === 'realtime' || d.timeMode === 'paused') ? d.timeMode : 'auto';
+    simSpeed = Number.isFinite(d.simSpeed) ? Math.max(0, Math.min(5, d.simSpeed)) : 1;
+    weather = (d.weather === 'clear' || d.weather === 'rain' || d.weather === 'overcast') ? d.weather : 'clear';
     darkMode = !!d.darkMode; cbMode = !!d.cbMode; largeText = !!d.largeText; ghostMode = !!d.ghostMode;
     showAgents = d.showAgents !== false; showLabels = d.showLabels !== false; showHeatmap = d.showHeatmap !== false;
     money = Number.isFinite(d.money) ? d.money : 5000;
-    dayCount = Number.isFinite(d.dayCount) ? d.dayCount : 1;
-    hour = Number.isFinite(d.hour) ? d.hour : 17.4;
-    if (d.needs) needs = { ...needs, ...d.needs };
-    if (d.simStats) simStats = { ...simStats, ...d.simStats };
-    if (Array.isArray(d.customItems)) customItems.splice(0, customItems.length, ...d.customItems);
-    if (d.overrides) Object.assign(overrides, d.overrides);
-    if (d.bookmarks) Object.assign(bookmarks, d.bookmarks);
-    if (d.accountPrefs) Object.assign(accountPrefs, d.accountPrefs);
+    dayCount = Number.isFinite(d.dayCount) ? Math.max(1, d.dayCount) : 1;
+    hour = Number.isFinite(d.hour) ? ((d.hour % 24) + 24) % 24 : 17.4;
+    if (d.needs && typeof d.needs === 'object' && !Array.isArray(d.needs)) needs = { ...needs, ...d.needs };
+    if (d.simStats && typeof d.simStats === 'object' && !Array.isArray(d.simStats)) simStats = { ...simStats, ...d.simStats };
+    customItems.splice(0, customItems.length, ...(Array.isArray(d.customItems) ? d.customItems : []));
+    clearObj(overrides);
+    if (d.overrides && typeof d.overrides === 'object' && !Array.isArray(d.overrides)) Object.assign(overrides, d.overrides);
+    clearObj(bookmarks);
+    if (d.bookmarks && typeof d.bookmarks === 'object' && !Array.isArray(d.bookmarks)) Object.assign(bookmarks, d.bookmarks);
+    clearObj(accountPrefs);
+    if (d.accountPrefs && typeof d.accountPrefs === 'object' && !Array.isArray(d.accountPrefs)) Object.assign(accountPrefs, d.accountPrefs);
     if (Array.isArray(d.timetable)) timetable = d.timetable;
     if (Array.isArray(d.deadlines)) deadlines = d.deadlines;
     if (typeof d.quickNoteText === 'string') quickNoteText = d.quickNoteText;
@@ -366,22 +385,30 @@
 
   function load() {
     loadLinksOnly();
-    // Try hash share link first
+    let shareParsed = null;
     if (location.hash.startsWith('#city=')) {
       try {
-        const parsed = JSON.parse(decodeURIComponent(atob(location.hash.slice(6))));
-        if (parsed.themeId && D.THEMES[parsed.themeId]) themeId = parsed.themeId;
-        if (Number.isFinite(parsed.hour)) hour = parsed.hour;
-        if (Array.isArray(parsed.customItems)) customItems.push(...parsed.customItems);
-        if (parsed.overrides) Object.assign(overrides, parsed.overrides);
-        if (parsed.bookmarks) Object.assign(bookmarks, parsed.bookmarks);
+        shareParsed = JSON.parse(decodeURIComponent(atob(location.hash.slice(6))));
       } catch (e) {}
     }
+    let loadedSave = false;
     try {
       const saved = JSON.parse(localStorage.getItem(SAVE_KEY));
-      if (applySaveData(saved)) return true;
+      loadedSave = applySaveData(saved);
     } catch (e) {}
-    return false;
+    if (shareParsed && typeof shareParsed === 'object') {
+      if (shareParsed.themeId && D.THEMES[shareParsed.themeId]) themeId = shareParsed.themeId;
+      if (Number.isFinite(shareParsed.hour)) hour = ((shareParsed.hour % 24) + 24) % 24;
+      if (Array.isArray(shareParsed.customItems)) {
+        for (const ci of shareParsed.customItems) {
+          if (ci && ci.id && !customItems.some((x) => x.id === ci.id)) customItems.push(ci);
+        }
+      }
+      if (shareParsed.overrides && typeof shareParsed.overrides === 'object') Object.assign(overrides, shareParsed.overrides);
+      if (shareParsed.bookmarks && typeof shareParsed.bookmarks === 'object') Object.assign(bookmarks, shareParsed.bookmarks);
+      if (loadedSave) { assignUnpinnedItems(); syncBodyPrefs(); rebuildCrownSprites(); }
+    }
+    return loadedSave;
   }
 
   // ---------- schedule, traffic crossings, simulation & agents ----------
@@ -625,12 +652,16 @@
     }
     return null;
   }
+  const MAX_ZOOM = 2.0;
+  const finiteCam = () => Number.isFinite(cam.x) && Number.isFinite(cam.y) && Number.isFinite(cam.z) && cam.z > 0;
   function flyToTile(x, y, targetZ = null, withDrawer = true) {
-    const tz = targetZ || Math.max(cam.z, W >= 760 ? 1.05 : 0.9);
+    if (!finiteCam()) center(false);
+    const tz = Math.max(0.45, Math.min(MAX_ZOOM, targetZ || Math.max(cam.z, W >= 760 ? 1.05 : 0.9)));
     const offsetX = (withDrawer && W >= 760) ? -150 : 0;
     const centerY = (withDrawer && W < 760) ? H * 0.34 : H * 0.54;
     const tx = W / 2 + offsetX - ((x + 0.5) - (y + 0.5)) * (TW / 2) * tz;
     const ty = centerY - ((x + 0.5) + (y + 0.5)) * (TH / 2) * tz + 28 * tz;
+    if (!Number.isFinite(tx) || !Number.isFinite(ty) || !Number.isFinite(tz)) return;
     if (reduceMotion) { cam.x = tx; cam.y = ty; cam.z = tz; camAnim = null; return; }
     camAnim = { sx: cam.x, sy: cam.y, sz: cam.z, tx, ty, tz, start: performance.now(), dur: 380 };
   }
@@ -640,7 +671,9 @@
     const s = Math.sin(((h - 6) / 24) * Math.PI * 2);
     return Math.max(0, Math.min(1, s * 1.6 + 0.5));
   }
-  const hex = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+  const hex = (c) => (typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c))
+    ? [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16))
+    : [128, 128, 128];
   let warm = 0;
   const shadeCache = new Map();
   function shade(c, k, light) {
@@ -917,10 +950,13 @@
     quadZ(x, y, x + 1, y + 1, 0, shade(base, 1, L));
 
     // Ground GitHub contribution heatmap near central north plaza
-    if (showHeatmap && x >= 11 && x <= 17 && y >= 11 && y <= 13 && (t === 'park' || t === 'forest')) {
-      const heatLvl = ((x * 5 + y * 3) % 4);
-      const cols = ['rgba(15,118,110,0.22)', 'rgba(20,184,166,0.34)', 'rgba(52,211,153,0.46)', 'rgba(232,184,50,0.52)'];
-      quadZ(x + 0.14, y + 0.14, x + 0.86, y + 0.86, 0.25, cols[heatLvl]);
+    if (showHeatmap && (t === 'park' || t === 'forest')) {
+      const [hx, hy] = unrotPt(x, y);
+      if (hx >= 11 && hx <= 17 && hy >= 11 && hy <= 13) {
+        const heatLvl = ((hx * 5 + hy * 3) % 4);
+        const cols = ['rgba(15,118,110,0.22)', 'rgba(20,184,166,0.34)', 'rgba(52,211,153,0.46)', 'rgba(232,184,50,0.52)'];
+        quadZ(x + 0.14, y + 0.14, x + 0.86, y + 0.86, 0.25, cols[heatLvl]);
+      }
     }
   }
 
@@ -1322,7 +1358,8 @@
 
   // Labels are expensive to lay out, so they are drawn to their own layer and only redrawn when something changes.
   function drawMapLabels(now) {
-    const key = [cam.x.toFixed(1), cam.y.toFixed(1), cam.z.toFixed(3), W, H, dpr, selectedTile ? selectedTile.join(',') : '', hover ? hover.join(',') : '', hoveredLabel || '', activeFilter, showLabels, darkMode, cbMode, Math.floor(now / 1000)].join('|');
+    const pomoSec = pomo.running ? Math.floor(now / 1000) : 0;
+    const key = [cam.x.toFixed(1), cam.y.toFixed(1), cam.z.toFixed(3), W, H, dpr, selectedTile ? selectedTile.join(',') : '', hover ? hover.join(',') : '', hoveredLabel || '', activeFilter, showLabels, darkMode, cbMode, pomoSec].join('|');
     if (key !== labelKey) {
       labelKey = key;
       const saved = ctx;
@@ -1433,14 +1470,6 @@
         ctx.fillText(msg, rx + 5, ry - 10);
         ctx.font = '600 11.5px system-ui, -apple-system, "Segoe UI", sans-serif';
       }
-
-      // Flashing red CI failure alarm or CI smoke
-      if (cached?.failed) {
-        if (Math.sin(now * 0.014) > 0) {
-          ctx.fillStyle = '#ef4444';
-          ctx.beginPath(); ctx.arc(ax, ay - 2, 4, 0, 7); ctx.fill();
-        }
-      }
     }
   }
 
@@ -1532,7 +1561,7 @@
       for (const w of walkers) {
         const wx0 = px(w.px + 0.5, w.py + 0.5), wy0 = py(w.px + 0.5, w.py + 0.5);
         if (wx0 < -30 || wx0 > W + 30 || wy0 < -30 || wy0 > H + 30) continue;
-        ov.push({ k: 2, s: w.px + w.py, w });
+        ov.push({ k: 2, s: w.px + w.py, w }); addOccluders(Math.floor(w.px), Math.floor(w.py));
       }
       for (const b of bots) {
         const bx0 = px(b.px + 0.5, b.py + 0.5), by0 = py(b.px + 0.5, b.py + 0.5);
@@ -1542,7 +1571,7 @@
       for (const b of boats) {
         const bx0 = px(b.px + 0.5, b.py + 0.5), by0 = py(b.px + 0.5, b.py + 0.5);
         if (bx0 < -40 || bx0 > W + 40 || by0 < -40 || by0 > H + 40) continue;
-        ov.push({ k: 3, s: b.px + b.py, b });
+        ov.push({ k: 3, s: b.px + b.py, b }); addOccluders(Math.floor(b.px), Math.floor(b.py));
       }
     }
 
@@ -1701,12 +1730,27 @@
       ctx.globalAlpha = 1;
     }
 
-    if (!transparentBg) drawMapLabels(now);
+    if (!transparentBg) {
+      drawMapLabels(now);
+      if (showLabels && repoCache.size) {
+        const flash = reduceMotion || ((now >> 8) & 1);
+        if (flash) {
+          for (const lh of labelHits) {
+            const cached = repoCache.get(lh.id);
+            if (cached?.failed && lh.rw > 20) {
+              ctx.fillStyle = '#ef4444';
+              ctx.beginPath(); ctx.arc(lh.rx + lh.rw - 5, lh.ry + 4, 3.5, 0, Math.PI * 2); ctx.fill();
+            }
+          }
+        }
+      }
+    }
     drawExtras(now, transparentBg);
   }
 
   // ---------- rotate ----------
   function rotateCity(cw = true) {
+    rotSteps = (rotSteps + (cw ? 1 : 3)) % 4;
     const ng = Array.from({ length: N }, () => Array(N).fill(null));
     const nl = makeLevels();
     const np = makePins();
@@ -1786,9 +1830,10 @@
     btn.textContent = `${item.repo} · ${item.sha}: ${item.msg} (${item.ago})`;
   }
   setInterval(() => {
-    if (tickerQueue.length > 1) { tickerIdx++; refreshTickerUI(); }
+    if (!document.hidden && tickerQueue.length > 1) { tickerIdx++; refreshTickerUI(); }
   }, 4500);
   $('tickerLink').onclick = () => {
+    unreadNotifs = 0; $('notifBadge').hidden = true;
     const item = tickerQueue[tickerIdx % Math.max(1, tickerQueue.length)];
     if (item?.repo) focusItemById(item.repo);
   };
@@ -1834,9 +1879,9 @@
     if (force) repoCache.clear();
     updateCountUI();
 
-    // Seed bottom commit ticker from top 3 updated public repos
+    // Seed bottom commit ticker from top 4 updated public repos
     tickerQueue.length = 0;
-    const topRepos = list.slice(0, 4);
+    const topRepos = list.filter((r) => r && r.name && r.name !== 'co-bo-u').slice(0, 4);
     await Promise.all(topRepos.map(async (r) => {
       const commits = await fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${r.name}/commits?per_page=2`);
       if (Array.isArray(commits)) {
@@ -1866,13 +1911,17 @@
     scheduleSave();
   }
 
+  let ghReqSeq = 0;
   async function fetchRepoActivity(repo, force = false, branchOverride = null) {
     if (repo.isCustom || !repo.git) return null;
     const prev = repoCache.get(repo.id);
     const now = Date.now();
-    if (!force && !branchOverride && prev && (prev.loading || now - prev.at < 120000)) return prev;
+    const ttl = prev?.live ? 120000 : 10000;
+    if (!force && !branchOverride && prev && (prev.loading || now - prev.at < ttl)) return prev;
 
     const br = branchOverride || repo.meta?.branch || 'main';
+    const reqId = ++ghReqSeq;
+    repo._reqId = reqId;
     const entry = {
       at: now, loading: true, live: false, branch: br,
       bots: [{ name: 'CommitBot', state: 'ok', task: 'Syncing commits' }, { name: 'DeployBot', state: 'ok', task: 'Checking workflows' }, { name: 'ReviewBot', state: 'busy', task: 'Reading tree' }],
@@ -1903,6 +1952,7 @@
       fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${repo.api || repo.id}/readme`),
     ]);
 
+    if (repo._reqId !== reqId) return repoCache.get(repo.id) || entry;
     if (repoInfo) {
       repo.meta = { stars: repoInfo.stargazers_count ?? 0, issues: repoInfo.open_issues_count ?? 0, branch: repoInfo.default_branch || 'main', pushedAt: repoInfo.pushed_at };
       if (repoInfo.description) repo.desc = repoInfo.description;
@@ -1962,23 +2012,29 @@
         pomo.running = !pomo.running;
         if (pomo.running && !pomo.timer) {
           pomo.timer = setInterval(() => {
-            if (!pomo.running) return;
+            if (!pomo.running || document.hidden) return;
             pomo.secLeft--;
             if (pomo.secLeft <= 0) {
               pomo.running = false;
               clearInterval(pomo.timer); pomo.timer = 0;
               if (pomo.mode === 'work') { simStats.pomodoros++; studyStreak++; saveNow(); }
-              if (selectedTile) spawnConfetti(selectedTile[0], selectedTile[1], 36);
+              const ptTile = findItemTile('pomodoro') || selectedTile;
+              if (ptTile) spawnConfetti(ptTile[0], ptTile[1], 36);
+              pomo.mode = 'work';
               pomo.secLeft = 25 * 60;
+              renderLocalStudyTools(getItem('pomodoro'));
+              return;
             }
             const pt = $('pomoTime');
             if (pt) pt.textContent = `${String(Math.floor(pomo.secLeft / 60)).padStart(2, '0')}:${String(pomo.secLeft % 60).padStart(2, '0')}`;
           }, 1000);
+        } else if (!pomo.running && pomo.timer) {
+          clearInterval(pomo.timer); pomo.timer = 0;
         }
         renderLocalStudyTools(item);
       };
-      $('pomoBreak').onclick = () => { pomo.running = false; pomo.mode = 'break'; pomo.secLeft = 5 * 60; renderLocalStudyTools(item); };
-      $('pomoReset').onclick = () => { pomo.running = false; pomo.mode = 'work'; pomo.secLeft = 25 * 60; renderLocalStudyTools(item); };
+      $('pomoBreak').onclick = () => { pomo.running = false; clearInterval(pomo.timer); pomo.timer = 0; pomo.mode = 'break'; pomo.secLeft = 5 * 60; renderLocalStudyTools(item); };
+      $('pomoReset').onclick = () => { pomo.running = false; clearInterval(pomo.timer); pomo.timer = 0; pomo.mode = 'work'; pomo.secLeft = 25 * 60; renderLocalStudyTools(item); };
     } else if (item.localTool === 'notes') {
       const lbl = document.createElement('span'); lbl.className = 'stat-label'; lbl.textContent = 'Local study scratchpad (auto-saved)';
       const ta = document.createElement('textarea'); ta.className = 'field-input note-area'; ta.value = quickNoteText;
@@ -2124,7 +2180,7 @@
       if (cached?.files?.length) {
         for (const f of cached.files.slice(0, 20)) {
           const a = document.createElement('a'); a.className = 'detail-row';
-          a.href = f.type === 'dir' ? `${item.git}/tree/${branch}/${f.path}` : `https://vscode.dev/github/${GITHUB_OWNER}/${item.id}/blob/${branch}/${f.path}`;
+          a.href = f.type === 'dir' ? `${item.git}/tree/${branch}/${f.path}` : `https://vscode.dev/github/${GITHUB_OWNER}/${item.api || item.id}/blob/${branch}/${f.path}`;
           a.target = '_blank'; a.rel = 'noopener noreferrer';
           a.innerHTML = `<div class="detail-top"><span class="detail-title"></span><span class="detail-meta">${f.type === 'dir' ? 'Folder' : 'View'}</span></div>`;
           a.querySelector('.detail-title').textContent = f.type === 'dir' ? `${f.name}/` : f.name;
@@ -2152,12 +2208,14 @@
       if (item.id === 'seqta') {
         for (const row of timetable) {
           const r = document.createElement('div'); r.className = 'detail-row';
-          r.innerHTML = `<div class="detail-top"><span class="detail-title">${row.day}</span><span class="detail-meta">4 periods</span></div><div class="detail-sub">${row.p1} · ${row.p2} · ${row.p3} · ${row.p4}</div>`;
+          r.innerHTML = `<div class="detail-top"><span class="detail-title"></span><span class="detail-meta">4 periods</span></div><div class="detail-sub"></div>`;
+          r.querySelector('.detail-title').textContent = row.day || '';
+          r.querySelector('.detail-sub').textContent = `${row.p1 || ''} · ${row.p2 || ''} · ${row.p3 || ''} · ${row.p4 || ''}`;
           l2.appendChild(r);
         }
       } else {
         for (const s of (item.shortcuts || [])) {
-          const a = document.createElement('a'); a.className = 'detail-row'; a.href = s.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+          const a = document.createElement('a'); a.className = 'detail-row'; a.href = safeHref(s.url); a.target = '_blank'; a.rel = 'noopener noreferrer';
           a.innerHTML = `<div class="detail-top"><span class="detail-title"></span><span class="detail-meta">Open</span></div><div class="detail-sub"></div>`;
           a.querySelector('.detail-title').textContent = s.label;
           a.querySelector('.detail-sub').textContent = s.sub || s.url;
@@ -2168,7 +2226,7 @@
       const bms = bookmarks[item.id] || [];
       bms.forEach((bm, idx) => {
         const wrap = document.createElement('div'); wrap.className = 'bookmark-row';
-        const a = document.createElement('a'); a.className = 'detail-row'; a.href = bm.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+        const a = document.createElement('a'); a.className = 'detail-row'; a.href = safeHref(bm.url); a.target = '_blank'; a.rel = 'noopener noreferrer';
         a.innerHTML = `<div class="detail-top"><span class="detail-title"></span><span class="detail-meta">Open</span></div>`;
         a.querySelector('.detail-title').textContent = bm.label;
         const del = document.createElement('button'); del.type = 'button'; del.className = 'chip icon tiny'; del.textContent = '×';
@@ -2202,14 +2260,35 @@
   }
   document.querySelectorAll('.tab-btn').forEach((b) => { b.onclick = () => { setTab(b.dataset.tab); audio.sfx('tap'); }; });
 
+  let lastInspId = null;
   function renderInspect(forceFetch = false) {
     const card = $('inspectCard');
-    if (!selectedTile) { card.dataset.open = 'false'; orbitActive = false; $('inspEditBox').hidden = true; return; }
+    if (!selectedTile) {
+      card.dataset.open = 'false'; card.inert = true; orbitActive = false;
+      $('inspEditBox').hidden = true; $('inspEditBtn').setAttribute('aria-expanded', 'false');
+      lastInspId = null;
+      return;
+    }
     const [x, y] = selectedTile;
     const t = grid[x][y], id = pins[x][y];
-    if (!t || !id) { selectedTile = null; card.dataset.open = 'false'; return; }
+    if (!t || !id) {
+      selectedTile = null; card.dataset.open = 'false'; card.inert = true;
+      $('inspEditBox').hidden = true; $('inspEditBtn').setAttribute('aria-expanded', 'false');
+      lastInspId = null;
+      return;
+    }
+
+    $('launchPop').dataset.open = 'false';
+    $('launchBtn').setAttribute('aria-expanded', 'false');
+    $('launchPop').inert = true;
+    card.inert = false;
 
     const item = getItem(id);
+    if (item.id !== lastInspId) {
+      $('inspEditBox').hidden = true;
+      $('inspEditBtn').setAttribute('aria-expanded', 'false');
+      lastInspId = item.id;
+    }
     const isGit = item.kind === 'github' && !item.isCustom;
     if (item.kind === 'github') simStats.visitedGit = true;
     else simStats.visitedGoogle = true;
@@ -2219,14 +2298,18 @@
     $('inspDesc').textContent = item.desc || item.web || '';
 
     $('inspWeb').hidden = !item.web;
-    if (item.web) { $('inspWeb').href = item.web; $('inspWeb').textContent = isGit ? 'Open live site' : `Open ${item.name}`; }
+    if (item.web) { $('inspWeb').href = safeHref(item.web); $('inspWeb').textContent = isGit ? 'Open live site' : `Open ${item.name}`; }
 
     $('inspEditor').hidden = !(isGit || item.alt);
-    if (isGit) { $('inspEditor').href = `https://vscode.dev/github/${GITHUB_OWNER}/${item.id}`; $('inspEditor').textContent = 'Open vscode.dev'; }
-    else if (item.alt) { $('inspEditor').href = item.alt; $('inspEditor').textContent = item.altLabel || 'Quick action'; }
+    if (isGit) {
+      const br = repoCache.get(item.id)?.branch || 'main';
+      $('inspEditor').href = `https://vscode.dev/github/${GITHUB_OWNER}/${item.api || item.id}${item.path ? `/tree/${br}/${item.path}` : ''}`;
+      $('inspEditor').textContent = 'Open vscode.dev';
+    }
+    else if (item.alt) { $('inspEditor').href = safeHref(item.alt); $('inspEditor').textContent = item.altLabel || 'Quick action'; }
 
     $('inspGit').hidden = !(isGit && item.git);
-    if (isGit && item.git) $('inspGit').href = item.git;
+    if (isGit && item.git) $('inspGit').href = safeHref(item.git);
 
     $('inspCopy').textContent = isGit && item.git ? 'Copy clone' : 'Copy link';
     $('inspCloneBox').hidden = !(isGit && item.git);
@@ -2237,7 +2320,7 @@
     $('editAlt').value = isGit ? (item.git || '') : (item.alt || '');
     $('editStyle').value = t;
     $('editColor').value = item.customColor || TYPES[t].color;
-    $('editDeleteBtn').hidden = !item.isCustom;
+    $('editDeleteBtn').hidden = !(item.isCustom && !item.builtin);
 
     setTab(activeTab);
     if (isGit) fetchRepoActivity(item, forceFetch);
@@ -2403,7 +2486,6 @@
   $('syncBtn').onclick = async () => {
     $('syncBtn').disabled = true;
     await Promise.all([fetchUserRepos(true), fetchLocalWeather()]);
-    unreadNotifs = 0; $('notifBadge').hidden = true;
     $('syncBtn').disabled = false;
     audio.sfx('select');
   };
@@ -2412,6 +2494,7 @@
   function setPop(id, btnId, open) {
     ['econPop', 'citiesPop', 'customPop', 'comparePop', 'helpPop'].forEach((pid) => {
       if (pid !== id) $(pid).dataset.open = 'false';
+      $(pid).inert = (pid !== id || !open);
     });
     ['econBtn', 'citiesBtn', 'customBtn', 'compareBtn'].forEach((bid) => {
       if ($(bid)) $(bid).setAttribute('aria-expanded', String(bid === btnId && open));
@@ -2467,7 +2550,10 @@
       try { saved = JSON.parse(localStorage.getItem(SLOT_PREFIX + i)); } catch (e) {}
       const row = document.createElement('div'); row.className = 'detail-row bookmark-row';
       const meta = document.createElement('div');
-      meta.innerHTML = `<div class="detail-title">City Slot ${i}</div><div class="detail-sub">${saved ? `${saved.themeId || 'autumn'} · $${fmt(saved.money || 0)}` : 'Empty slot'}</div>`;
+      const mTitle = document.createElement('div'); mTitle.className = 'detail-title'; mTitle.textContent = `City Slot ${i}`;
+      const mSub = document.createElement('div'); mSub.className = 'detail-sub';
+      mSub.textContent = saved ? `${saved.themeId || 'autumn'} · $${fmt(saved.money || 0)}` : 'Empty slot';
+      meta.append(mTitle, mSub);
       const btns = document.createElement('div'); btns.className = 'field-row';
       const sBtn = document.createElement('button'); sBtn.type = 'button'; sBtn.className = 'chip tiny'; sBtn.textContent = 'Save';
       sBtn.onclick = () => { localStorage.setItem(SLOT_PREFIX + i, JSON.stringify(serializeState())); renderCitiesUI(); audio.sfx('select'); };
@@ -2492,15 +2578,26 @@
   async function renderCompareCols() {
     const a = getItem($('cmpA').value), b = getItem($('cmpB').value);
     const [ca, cb] = await Promise.all([fetchRepoActivity(a), fetchRepoActivity(b)]);
-    const colHtml = (r, c) => `
-      <div class="cmp-col">
-        <strong>${r.name}</strong>
-        <span class="detail-sub">${r.lang} · Stars: ${r.meta?.stars ?? c?.meta?.stars ?? 0}</span>
-        <span class="detail-sub">Issues: ${r.meta?.issues ?? c?.issues?.length ?? 0} · PRs: ${c?.prs?.length ?? 0}</span>
-        <span class="detail-sub">Commits loaded: ${c?.commits?.length ?? 0}</span>
-        ${r.web ? `<a class="chip tiny primary link-btn" href="${r.web}" target="_blank" rel="noopener noreferrer">Open web</a>` : ''}
-      </div>`;
-    $('cmpGrid').innerHTML = colHtml(a, ca) + colHtml(b, cb);
+    const buildCol = (r, c) => {
+      const col = document.createElement('div'); col.className = 'cmp-col';
+      const st = document.createElement('strong'); st.textContent = r.name || '';
+      const s1 = document.createElement('span'); s1.className = 'detail-sub';
+      s1.textContent = `${r.lang || ''} · Stars: ${r.meta?.stars ?? c?.meta?.stars ?? 0}`;
+      const s2 = document.createElement('span'); s2.className = 'detail-sub';
+      s2.textContent = `Issues: ${r.meta?.issues ?? c?.issues?.length ?? 0} · PRs: ${c?.prs?.length ?? 0}`;
+      const s3 = document.createElement('span'); s3.className = 'detail-sub';
+      s3.textContent = `Commits loaded: ${c?.commits?.length ?? 0}`;
+      col.append(st, s1, s2, s3);
+      if (r.web) {
+        const lk = document.createElement('a'); lk.className = 'chip tiny primary link-btn';
+        lk.href = safeHref(r.web); lk.target = '_blank'; lk.rel = 'noopener noreferrer';
+        lk.textContent = 'Open web';
+        col.appendChild(lk);
+      }
+      return col;
+    };
+    const gridEl = $('cmpGrid'); gridEl.innerHTML = '';
+    gridEl.append(buildCol(a, ca), buildCol(b, cb));
   }
 
   function renderHelpUI() {
@@ -2544,12 +2641,24 @@
       const cur = findItemTile(id);
       if (!cur) return;
       if (ghostMode) {
-        const [gx, gy, gt] = D.GHOST_TOWN_LOTS[idx];
-        pins[cur[0]][cur[1]] = null; grid[cur[0]][cur[1]] = 'forest';
-        pins[gx][gy] = id; grid[gx][gy] = gt;
+        const [gx0, gy0, gt] = D.GHOST_TOWN_LOTS[idx];
+        const [gx, gy] = rotPt(gx0, gy0);
+        if (!pins[gx][gy]) {
+          pins[cur[0]][cur[1]] = null; grid[cur[0]][cur[1]] = 'forest';
+          pins[gx][gy] = id; grid[gx][gy] = gt;
+        }
+      } else {
+        const lm = D.GITHUB_LANDMARKS.find((l) => l.id === id);
+        const [rx, ry] = lm ? rotPt(lm.x, lm.y) : [-1, -1];
+        const dest = (rx >= 0 && !pins[rx][ry])
+          ? { x: rx, y: ry, lv: lm.lv || 1, t: lm.t }
+          : (() => { const f = findFreeLot('github', lm?.t || 'shop'); return f ? { ...f, t: lm?.t || 'shop' } : null; })();
+        if (dest) {
+          pins[cur[0]][cur[1]] = null; grid[cur[0]][cur[1]] = 'forest';
+          pins[dest.x][dest.y] = id; grid[dest.x][dest.y] = dest.t; levels[dest.x][dest.y] = dest.lv;
+        }
       }
     });
-    if (!ghostMode) starter();
     worldDirty = true; recompute(); syncBodyPrefs(); scheduleSave();
   };
   $('agentsBtn').onclick = () => { showAgents = !showAgents; syncAgents(); syncBodyPrefs(); scheduleSave(); };
@@ -2626,9 +2735,11 @@
     rec.onstop = () => {
       simSpeed = prevSpeed;
       const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob(chunks, { type: 'video/webm' }));
+      const url = URL.createObjectURL(new Blob(chunks, { type: 'video/webm' }));
+      a.href = url;
       a.download = 'workspace-city-timelapse.webm';
       a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
     };
     rec.start();
     setTimeout(() => rec.stop(), 3500);
@@ -2645,7 +2756,8 @@
 
   $('exportBtn').onclick = () => {
     const blob = new Blob([JSON.stringify(serializeState(), null, 2)], { type: 'application/json' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'workspace-city-save.json'; a.click();
+    const a = document.createElement('a'); const url = URL.createObjectURL(blob); a.href = url; a.download = 'workspace-city-save.json'; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
   };
   $('importBtn').onclick = () => $('importFile').click();
   $('importFile').onchange = async (e) => {
@@ -2657,7 +2769,10 @@
     } catch (err) {}
   };
   $('resetBtn').onclick = () => {
-    customItems.length = 0; Object.keys(overrides).forEach((k) => delete overrides[k]);
+    customItems.length = 0; clearObj(overrides); clearObj(bookmarks); clearObj(accountPrefs);
+    deadlines = [{ title: 'Maths IA draft review', due: 'Fri', place: 'seqta' }];
+    timetable = D.DEFAULT_TIMETABLE.map((r) => ({ ...r }));
+    quickNoteText = ''; studyStreak = 1; ghostMode = false; selectedTile = null;
     starter(); themeId = 'autumn'; money = 5000; dayCount = 1; hour = 17.4;
     worldDirty = true; recompute(); syncBodyPrefs(); rebuildCrownSprites(); renderInspect(); saveNow(); center(true);
     setPop('citiesPop', 'citiesBtn', false);
@@ -2694,7 +2809,8 @@
     if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (drag?.pinch && ptrs.size === 2) {
       const [a, b] = [...ptrs.values()], nd = dist();
-      zoomAt(nd / drag.d, (a.x + b.x) / 2, (a.y + b.y) / 2); drag.d = nd; return;
+      if (drag.d > 4 && nd > 4) zoomAt(nd / drag.d, (a.x + b.x) / 2, (a.y + b.y) / 2);
+      drag.d = nd; return;
     }
     if (drag?.pinch) return;
     if (drag) {
@@ -2707,6 +2823,7 @@
     hoveredLabel = lbl ? lbl.id : null;
     const t = lbl ? [lbl.x, lbl.y] : pick(e.clientX, e.clientY);
     hover = t;
+    if (toolsActive()) { $('tip').hidden = true; return; }
     if (!drag) canvas.style.cursor = (lbl || (t && pins[t[0]]?.[t[1]])) ? 'pointer' : 'grab';
 
     const tip = $('tip');
@@ -2761,10 +2878,15 @@
   canvas.addEventListener('pointerleave', () => { hover = null; hoveredLabel = null; $('tip').hidden = true; });
 
   function zoomAt(f, mx = W / 2, my = H / 2) {
+    if (!Number.isFinite(f) || f <= 0) return;
+    if (!finiteCam()) center(false);
     camAnim = null;
-    const nz = Math.max(0.45, Math.min(1.8, cam.z * f));
+    const nz = Math.max(0.45, Math.min(MAX_ZOOM, cam.z * f));
     const k = nz / cam.z;
-    cam.x = mx - (mx - cam.x) * k; cam.y = my - (my - cam.y) * k; cam.z = nz;
+    const nx = mx - (mx - cam.x) * k, ny = my - (my - cam.y) * k;
+    if (Number.isFinite(nx) && Number.isFinite(ny) && Number.isFinite(nz)) {
+      cam.x = nx; cam.y = ny; cam.z = nz;
+    }
     audio.updateZoomAmbience(cam.z);
   }
   canvas.addEventListener('wheel', (e) => { e.preventDefault(); zoomAt(e.deltaY < 0 ? 1.1 : 1 / 1.1, e.clientX, e.clientY); }, { passive: false });
@@ -2774,11 +2896,11 @@
       if (photoMode) { setPhotoMode(false); return; }
       $('searchResults').hidden = true;
       ['econPop', 'citiesPop', 'customPop', 'comparePop', 'helpPop'].forEach((id) => setPop(id, '', false));
-      if ($('launchPop')) { $('launchPop').dataset.open = 'false'; $('launchBtn').setAttribute('aria-expanded', 'false'); }
+      if ($('launchPop')) { $('launchPop').dataset.open = 'false'; $('launchPop').inert = true; $('launchBtn').setAttribute('aria-expanded', 'false'); }
       if (selectedTile) { selectedTile = null; renderInspect(); }
       return;
     }
-    if (e.target.matches && e.target.matches('input, select, textarea')) return;
+    if (e.target.closest && e.target.closest('input, select, textarea, button, a, [role="button"], summary')) return;
     if (e.key === '/') { e.preventDefault(); $('repoSearch').focus(); return; }
     if (e.key === '?') { e.preventDefault(); setPop('helpPop', 'helpBtn', $('helpPop').dataset.open !== 'true'); return; }
     if (e.code === 'Space') { e.preventDefault(); simSpeed = simSpeed === 0 ? 1 : 0; syncBodyPrefs(); return; }
@@ -2903,11 +3025,14 @@
     }
 
     if (camAnim) {
-      const p = Math.min(1, (now - camAnim.start) / camAnim.dur);
+      const p = Math.max(0, Math.min(1, (now - camAnim.start) / Math.max(1, camAnim.dur)));
       const e = easeOut(p);
-      cam.x = camAnim.sx + (camAnim.tx - camAnim.sx) * e;
-      cam.y = camAnim.sy + (camAnim.ty - camAnim.sy) * e;
-      cam.z = camAnim.sz + (camAnim.tz - camAnim.sz) * e;
+      const nx = camAnim.sx + (camAnim.tx - camAnim.sx) * e;
+      const ny = camAnim.sy + (camAnim.ty - camAnim.sy) * e;
+      const nz = camAnim.sz + (camAnim.tz - camAnim.sz) * e;
+      if (Number.isFinite(nx) && Number.isFinite(ny) && Number.isFinite(nz) && nz > 0) {
+        cam.x = nx; cam.y = ny; cam.z = nz;
+      } else { camAnim = null; }
       if (p >= 1) camAnim = null;
     } else if (orbitActive && selectedTile && !reduceMotion) {
       const [ox, oy] = selectedTile;
@@ -3211,7 +3336,6 @@
   }
   $('acctBtn').onclick = () => {
     globalAcct = globalAcct === 1 ? 0 : 1;
-    for (const k of Object.keys(accountPrefs)) delete accountPrefs[k];
     try { localStorage.setItem('isocity-acct', String(globalAcct)); } catch (e) { /* ignore */ }
     syncAcctUI(); scheduleSave();
     if (selectedTile) renderInspect();
@@ -3221,12 +3345,13 @@
     e.stopPropagation();
     const open = $('launchPop').dataset.open !== 'true';
     $('launchPop').dataset.open = String(open);
+    $('launchPop').inert = !open;
     $('launchBtn').setAttribute('aria-expanded', String(open));
     if (open) syncAcctUI();
   };
   addEventListener('pointerdown', (e) => {
     if ($('launchPop').dataset.open === 'true' && !$('launchPop').contains(e.target) && e.target !== $('launchBtn')) {
-      $('launchPop').dataset.open = 'false'; $('launchBtn').setAttribute('aria-expanded', 'false');
+      $('launchPop').dataset.open = 'false'; $('launchPop').inert = true; $('launchBtn').setAttribute('aria-expanded', 'false');
     }
   });
   syncAcctUI();
@@ -3242,7 +3367,7 @@
     syncBodyPrefs(); scheduleSave(); audio.sfx('tap');
     $('lightBtn').textContent = next.label;
   };
-  setInterval(() => { const p = periodOf(hour); if ($('lightBtn').textContent !== p) $('lightBtn').textContent = p; }, 400);
+  setInterval(() => { if (document.hidden) return; const p = periodOf(hour); if ($('lightBtn').textContent !== p) $('lightBtn').textContent = p; }, 400);
 
   $('swapAcctBtn').setAttribute('aria-pressed', String(acctSwap));
   $('swapAcctBtn').onclick = () => {
@@ -3300,6 +3425,9 @@
   document.documentElement.dataset.mode = appMode;
   document.querySelectorAll('.mode-btn').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === appMode)));
   $('inspCutBtn').setAttribute('aria-pressed', 'true');
+  ['econPop', 'citiesPop', 'customPop', 'comparePop', 'helpPop', 'inspectCard', 'launchPop'].forEach((id) => {
+    if ($(id) && $(id).dataset.open !== 'true') $(id).inert = true;
+  });
   syncBodyPrefs();
   recompute();
   updateCountUI();

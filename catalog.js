@@ -72,7 +72,7 @@ window.ISOCITY_DATA = (() => {
     { id: 'uni-plan', kind: 'github', name: 'uni-plan', lang: 'HTML', desc: 'My university plan, a folder in the claude repo.', web: 'https://peterachss.github.io/claude/uni-plan/', git: 'https://github.com/Peterachss/claude', api: 'claude', path: 'uni-plan' },
     { id: 'econ-app', kind: 'github', name: 'econ-app', lang: 'HTML', desc: 'Interactive IB Economics revision guide.', web: 'https://econ-app-bice.vercel.app/', fixedWeb: true, git: 'https://github.com/Peterachss/econ-app' },
     {
-      id: 'github-hub', kind: 'github', isCustom: true, name: 'GitHub', lang: '', cat: 'GitHub',
+      id: 'github-hub', kind: 'github', isCustom: true, builtin: true, name: 'GitHub', lang: '', cat: 'GitHub',
       desc: 'Quick access to GitHub: all your repositories, a new repo, issues and pull requests.',
       web: 'https://github.com/Peterachss?tab=repositories',
       alt: 'https://github.com/new', altLabel: 'New repo',
@@ -241,7 +241,7 @@ window.ISOCITY_DATA = (() => {
   ];
 
   const SPARE_NORTH = [
-    [21, 11, 'shop', 2], [16, 9, 'apt', 2], [5, 11, 'house', 2],
+    [21, 11, 'shop', 2], [18, 7, 'apt', 2], [5, 11, 'house', 2],
     [24, 6, 'clinic', 1], [9, 7, 'house', 2], [20, 4, 'shop', 1],
     [26, 11, 'house', 2], [23, 15, 'school', 1],
   ];

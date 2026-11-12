@@ -1,4 +1,4 @@
-const CACHE = 'workspace-city-v76';
+const CACHE = 'workspace-city-v77';
 const ASSETS = [
   './',
   './index.html',
@@ -31,10 +31,14 @@ self.addEventListener('fetch', (e) => {
   e.respondWith(
     fetch(e.request)
       .then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(e.request, copy));
+        if (res && res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, copy));
+        }
         return res;
       })
-      .catch(() => caches.match(e.request, { ignoreSearch: true }).then((m) => m || caches.match('./index.html')))
+      .catch(() => caches.match(e.request, { ignoreSearch: true }).then((m) => (
+        m || (e.request.mode === 'navigate' ? caches.match('./index.html') : Response.error())
+      )))
   );
 });
