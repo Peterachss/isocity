@@ -71,6 +71,8 @@
   const bookmarks = {};
   const accountPrefs = {};
   let globalAcct = 0;
+  let acctEmails = { personal: '', school: '' };
+  try { const e = JSON.parse(localStorage.getItem('isocity-acct-emails')); if (e) acctEmails = { personal: e.personal || '', school: e.school || '' }; } catch (e) { /* ignore */ }
   let acctSwap = false;
   try { acctSwap = localStorage.getItem('isocity-acct-swap') === '1'; } catch (e) { /* ignore */ }
   const uIdx = (a) => (acctSwap ? 1 - a : a);
@@ -123,8 +125,17 @@
   // Personal = u/0, School = u/1. Chat always uses the school account; Calendar is personal only.
   const FORCED_ACCT = { 'google-chat': 1, 'google-calendar': 0, 'toddle': 1 };
   const GOOGLE_HOSTS = /^(docs|mail|drive|chat|calendar)\.google\.com$/;
-  function applyAccountToUrl(url, acct) {
-    if (!url || acct === undefined) return url;
+  function applyAccountToUrl(url, acct, email = '') {
+    if (!url || (acct === undefined && !email)) return url;
+    if (email) {
+      try {
+        const x = new URL(url);
+        if (!GOOGLE_HOSTS.test(x.host)) return url;
+        x.pathname = x.pathname.replace(/\/u\/\d+\//, '/');
+        x.searchParams.set('authuser', email);
+        return x.toString();
+      } catch (e) { return url; }
+    }
     if (/\/u\/\d+\//.test(url)) return url.replace(/\/u\/\d+\//, `/u/${acct}/`);
     try {
       const x = new URL(url);
@@ -138,12 +149,14 @@
     const base = repoMap.get(id) || googleMap.get(id) || customItems.find((c) => c.id === id) || REPOS[0];
     const merged = { ...base, ...(overrides[base.id] || {}) };
     const acctForced = FORCED_ACCT[merged.id];
-    if (merged.kind === 'google' && (acctForced !== undefined || accountPrefs[merged.id] !== undefined || globalAcct !== 0 || acctSwap)) {
-      const a = uIdx(acctForced !== undefined ? acctForced : (accountPrefs[merged.id] !== undefined ? accountPrefs[merged.id] : globalAcct));
-      merged.web = applyAccountToUrl(merged.web, a);
-      merged.alt = applyAccountToUrl(merged.alt, a);
+    if (merged.kind === 'google' && (acctForced !== undefined || accountPrefs[merged.id] !== undefined || globalAcct !== 0 || acctSwap || acctEmails.personal || acctEmails.school)) {
+      const la = acctForced !== undefined ? acctForced : (accountPrefs[merged.id] !== undefined ? accountPrefs[merged.id] : globalAcct);
+      const a = uIdx(la);
+      const em = la === 1 ? acctEmails.school : acctEmails.personal;
+      merged.web = applyAccountToUrl(merged.web, a, em);
+      merged.alt = applyAccountToUrl(merged.alt, a, em);
       if (Array.isArray(merged.shortcuts)) {
-        merged.shortcuts = merged.shortcuts.map((s) => ({ ...s, url: applyAccountToUrl(s.url, a) }));
+        merged.shortcuts = merged.shortcuts.map((s) => ({ ...s, url: applyAccountToUrl(s.url, a, em) }));
       }
     }
     return merged;
@@ -3256,6 +3269,19 @@
     audio.sfx('tap');
   };
   smoothButtons().forEach((b) => { b.onclick = toggleSmooth; });
+
+  // Google account emails: with these set, links pick the exact account whatever order you signed in.
+  const emailOk = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+  $('acctEmailP').value = acctEmails.personal; $('acctEmailS').value = acctEmails.school;
+  const saveEmails = () => {
+    const p = $('acctEmailP').value.trim().toLowerCase(), q = $('acctEmailS').value.trim().toLowerCase();
+    acctEmails = { personal: emailOk(p) ? p : '', school: emailOk(q) ? q : '' };
+    try { localStorage.setItem('isocity-acct-emails', JSON.stringify(acctEmails)); } catch (e) { /* ignore */ }
+    syncAcctUI();
+    if (selectedTile) renderInspect();
+    notify(acctEmails.personal || acctEmails.school ? 'Google accounts saved in this browser. Links now open the exact account.' : 'Google account emails cleared.', 3000);
+  };
+  $('acctEmailP').onchange = saveEmails; $('acctEmailS').onchange = saveEmails;
 
   // Register offline PWA service worker
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
