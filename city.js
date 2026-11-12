@@ -2011,7 +2011,7 @@
       ['Issues', String(meta.issues ?? cached?.issues?.length ?? 0)],
       ['PRs', String(cached?.prs?.length ?? 0)],
     ] : [
-      ['District', 'South'],
+      ['District', item.kind === 'github' ? 'North' : 'South'],
       ['Category', item.cat || 'App'],
       ['Host', host.split('.')[0]],
       ['Pinned', String((bookmarks[item.id] || []).length)],

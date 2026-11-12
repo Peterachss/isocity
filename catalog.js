@@ -71,6 +71,20 @@ window.ISOCITY_DATA = (() => {
     { id: 'claude', kind: 'github', name: 'claude', lang: 'HTML', desc: 'Claude web notes and experiments.', web: 'https://peterachss.github.io/claude/', git: 'https://github.com/Peterachss/claude' },
     { id: 'uni-plan', kind: 'github', name: 'uni-plan', lang: 'HTML', desc: 'My university plan, a folder in the claude repo.', web: 'https://peterachss.github.io/claude/uni-plan/', git: 'https://github.com/Peterachss/claude', api: 'claude', path: 'uni-plan' },
     { id: 'econ-app', kind: 'github', name: 'econ-app', lang: 'HTML', desc: 'Interactive IB Economics revision guide.', web: 'https://econ-app-bice.vercel.app/', fixedWeb: true, git: 'https://github.com/Peterachss/econ-app' },
+    {
+      id: 'github-hub', kind: 'github', isCustom: true, name: 'GitHub', lang: '', cat: 'GitHub',
+      desc: 'Quick access to GitHub: all your repositories, a new repo, issues and pull requests.',
+      web: 'https://github.com/Peterachss?tab=repositories',
+      alt: 'https://github.com/new', altLabel: 'New repo',
+      shortcuts: [
+        { label: 'My repositories', url: 'https://github.com/Peterachss?tab=repositories', sub: 'Every repo on your account' },
+        { label: 'New repository', url: 'https://github.com/new', sub: 'Start a new repo' },
+        { label: 'Pull requests', url: 'https://github.com/pulls', sub: 'PRs you opened or review' },
+        { label: 'Issues', url: 'https://github.com/issues', sub: 'Issues assigned to you' },
+        { label: 'Notifications', url: 'https://github.com/notifications', sub: 'Your inbox' },
+        { label: 'This app (isocity)', url: 'https://github.com/Peterachss/isocity', sub: 'Code for this city' },
+      ],
+    },
   ];
 
   const DEFAULT_GOOGLE_APPS = [
@@ -183,6 +197,7 @@ window.ISOCITY_DATA = (() => {
     { id: 'cham-bracelet-plan',       x: 11, y: 15, t: 'shop',     lv: 1 },
     { id: 'claude',                   x: 17, y: 15, t: 'windmill', lv: 1 },
     { id: 'uni-plan',                  x: 23, y: 12, t: 'house',    lv: 2 },
+    { id: 'github-hub',                x: 16, y: 9,  t: 'office',   lv: 2 },
   ];
 
   // South Bank across the bridges (y = 20..29): Google & Study District
