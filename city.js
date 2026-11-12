@@ -71,6 +71,9 @@
   const bookmarks = {};
   const accountPrefs = {};
   let globalAcct = 0;
+  let acctSwap = false;
+  try { acctSwap = localStorage.getItem('isocity-acct-swap') === '1'; } catch (e) { /* ignore */ }
+  const uIdx = (a) => (acctSwap ? 1 - a : a);
   try { globalAcct = localStorage.getItem('isocity-acct') === '1' ? 1 : 0; } catch (e) { /* ignore */ }
   let timetable = D.DEFAULT_TIMETABLE.map((r) => ({ ...r }));
   let deadlines = [{ title: 'Maths IA draft review', due: 'Fri', place: 'seqta' }];
@@ -132,8 +135,8 @@
     const base = repoMap.get(id) || googleMap.get(id) || customItems.find((c) => c.id === id) || REPOS[0];
     const merged = { ...base, ...(overrides[base.id] || {}) };
     const acctForced = FORCED_ACCT[merged.id];
-    if (merged.kind === 'google' && (acctForced !== undefined || accountPrefs[merged.id] !== undefined || globalAcct !== 0)) {
-      const a = acctForced !== undefined ? acctForced : (accountPrefs[merged.id] !== undefined ? accountPrefs[merged.id] : globalAcct);
+    if (merged.kind === 'google' && (acctForced !== undefined || accountPrefs[merged.id] !== undefined || globalAcct !== 0 || acctSwap)) {
+      const a = uIdx(acctForced !== undefined ? acctForced : (accountPrefs[merged.id] !== undefined ? accountPrefs[merged.id] : globalAcct));
       merged.web = applyAccountToUrl(merged.web, a);
       merged.alt = applyAccountToUrl(merged.alt, a);
       if (Array.isArray(merged.shortcuts)) {
@@ -3223,6 +3226,17 @@
     $('lightBtn').textContent = next.label;
   };
   setInterval(() => { const p = periodOf(hour); if ($('lightBtn').textContent !== p) $('lightBtn').textContent = p; }, 400);
+
+  $('swapAcctBtn').setAttribute('aria-pressed', String(acctSwap));
+  $('swapAcctBtn').onclick = () => {
+    acctSwap = !acctSwap;
+    try { localStorage.setItem('isocity-acct-swap', acctSwap ? '1' : '0'); } catch (e) { /* ignore */ }
+    $('swapAcctBtn').setAttribute('aria-pressed', String(acctSwap));
+    syncAcctUI();
+    if (selectedTile) renderInspect();
+    notify(acctSwap ? 'Personal now opens your 2nd Google sign-in (u/1), School your 1st (u/0).' : 'Personal opens your 1st Google sign-in (u/0), School your 2nd (u/1).', 3600);
+    audio.sfx('tap');
+  };
 
   // Register offline PWA service worker
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
