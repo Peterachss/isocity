@@ -3180,9 +3180,14 @@
     }
     const gh = document.createElement('a');
     gh.className = 'chip small link-btn';
-    gh.textContent = 'GitHub'; gh.href = 'https://github.com/Peterachss/isocity'; gh.target = '_blank'; gh.rel = 'noopener noreferrer';
-    gh.title = 'This app on GitHub';
+    gh.textContent = 'GitHub'; gh.href = 'https://github.com/Peterachss?tab=repositories'; gh.target = '_blank'; gh.rel = 'noopener noreferrer';
+    gh.title = 'All my repositories on GitHub';
     $('launchGrid').appendChild(gh);
+    const code = document.createElement('a');
+    code.className = 'chip small link-btn';
+    code.textContent = 'App code'; code.href = 'https://github.com/Peterachss/isocity'; code.target = '_blank'; code.rel = 'noopener noreferrer';
+    code.title = 'This app on GitHub';
+    $('launchGrid').appendChild(code);
   }
   $('acctBtn').onclick = () => {
     globalAcct = globalAcct === 1 ? 0 : 1;
