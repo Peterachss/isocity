@@ -1108,6 +1108,13 @@
     }
   }
 
+  const headGlow = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(255,230,160,0.6)'); gr.addColorStop(1, 'rgba(255,230,160,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+    return c;
+  })();
   function drawCar(c, L, headlightsOnly = false) {
     const s = c.kind === 'bike' ? 0.06 : 0.12;
     const dx = c.tx - c.fx, dy = c.ty - c.fy;
@@ -1122,9 +1129,8 @@
       vehicleHits.push({ sx: px(x, y), sy: py(x, y, z0 + 3), car: c });
     } else if (L < 0.5) {
       const hx = px(x + dx * 0.2, y + dy * 0.2), hy = py(x + dx * 0.2, y + dy * 0.2, z0 + 4);
-      const hr = 9 * rcam.z, hg = rctx.createRadialGradient(hx, hy, 0, hx, hy, hr);
-      hg.addColorStop(0, 'rgba(255,230,160,0.6)'); hg.addColorStop(1, 'rgba(255,230,160,0)');
-      rctx.fillStyle = hg; rctx.beginPath(); rctx.arc(hx, hy, hr, 0, 7); rctx.fill();
+      const hr = 9 * rcam.z;
+      rctx.drawImage(headGlow, hx - hr, hy - hr, hr * 2, hr * 2);
     }
   }
 
@@ -1608,11 +1614,14 @@
       for (let i = 0; i < winSprites.length; i++) {
         const ws = winSprites[i];
         const winThresh = 0.22 + ((ws.x * 13 + ws.y * 7) % 24) * 0.015;
-        if ((1 - L) <= winThresh) continue;
+        const fade = Math.min(1, ((1 - L) - winThresh) / 0.07); // smooth switch-on over a short span of dusk
+        if (fade <= 0) continue;
         const sx = cam.x + (ws.left - OX) * cam.z, sy = cam.y + (ws.top - OY) * cam.z;
         if (sx > W || sy > H || sx + ws.w * cam.z < 0 || sy + ws.h * cam.z < 0) continue;
+        ctx.globalAlpha = fade;
         ctx.drawImage(ws.c, sx, sy, ws.w * cam.z, ws.h * cam.z);
       }
+      ctx.globalAlpha = 1;
     }
     if (L < 0.5 && cars.length && showAgents) {
       for (const it of ov) if (it.k === 1) drawCar(it.c, L, true);
@@ -3169,6 +3178,11 @@
       a.textContent = label; a.href = it.web || '#'; a.target = '_blank'; a.rel = 'noopener noreferrer';
       $('launchGrid').appendChild(a);
     }
+    const gh = document.createElement('a');
+    gh.className = 'chip small link-btn';
+    gh.textContent = 'GitHub'; gh.href = 'https://github.com/Peterachss/isocity'; gh.target = '_blank'; gh.rel = 'noopener noreferrer';
+    gh.title = 'This app on GitHub';
+    $('launchGrid').appendChild(gh);
   }
   $('acctBtn').onclick = () => {
     globalAcct = globalAcct === 1 ? 0 : 1;
