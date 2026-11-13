@@ -351,7 +351,7 @@
     pins = (Array.isArray(d.pins) && d.pins.length === N)
       ? d.pins.map((row) => Array.isArray(row) ? Array.from({ length: N }, (_, j) => (row[j] && typeof row[j] === 'string') ? row[j] : null) : Array(N).fill(null))
       : makePins();
-    pins = pins.map((row) => row.map((v) => (v === 'co-bo-u' ? 'uni-plan' : v))); // renamed building
+    pins = pins.map((row) => row.map((v) => (v === 'co-bo-u' ? 'uni-plan' : (v === 'pomodoro' || v === 'quick-notes') ? null : v)));
     rotSteps = Number.isInteger(d.rotSteps) ? ((d.rotSteps % 4) + 4) % 4 : 0;
 
     themeId = D.THEMES[d.themeId] ? d.themeId : 'autumn';

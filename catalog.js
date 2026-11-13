@@ -193,16 +193,6 @@ window.ISOCITY_DATA = (() => {
         { label: 'Agenda list', url: 'https://calendar.google.com/calendar/u/0/r/agenda', sub: 'Upcoming schedule' },
       ],
     },
-    {
-      id: 'pomodoro', kind: 'google', name: 'Pomodoro Studio', cat: 'Study', study: true, localTool: 'pomodoro',
-      desc: 'Focused 25/5 study timer that logs completed focus blocks to your study streak.',
-      web: '', shortcuts: [],
-    },
-    {
-      id: 'quick-notes', kind: 'google', name: 'Quick Notes', cat: 'Study', study: true, localTool: 'notes',
-      desc: 'Persistent study scratchpad and task checklist saved locally in your browser.',
-      web: '', shortcuts: [],
-    },
   ];
 
   // North District (y = 3..15): GitHub City grouped cleanly
@@ -230,8 +220,6 @@ window.ISOCITY_DATA = (() => {
     { id: 'google-slides',   x: 21, y: 24, t: 'wheel',    lv: 1 },
     { id: 'mybib',           x: 11, y: 27, t: 'shop',     lv: 2 },
     { id: 'google-calendar', x: 17, y: 27, t: 'plaza',    lv: 1 },
-    { id: 'pomodoro',        x: 21, y: 27, t: 'windmill', lv: 1 },
-    { id: 'quick-notes',     x: 7,  y: 27, t: 'house',    lv: 2 },
     { id: 'toddle',          x: 14, y: 27, t: 'school',   lv: 1 },
   ];
 
