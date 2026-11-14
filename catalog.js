@@ -143,6 +143,16 @@ window.ISOCITY_DATA = (() => {
       ],
     },
     {
+      id: 'goodnotes', kind: 'google', name: 'Goodnotes', cat: 'Study', study: true,
+      desc: 'Digital notebooks and shared notes: open your shared Goodnotes documents.',
+      web: 'https://web.goodnotes.com/shared',
+      alt: 'https://web.goodnotes.com/', altLabel: 'Goodnotes home',
+      shortcuts: [
+        { label: 'Shared with me', url: 'https://web.goodnotes.com/shared', sub: 'Notebooks shared with you' },
+        { label: 'Goodnotes home', url: 'https://web.goodnotes.com/', sub: 'All your notebooks' },
+      ],
+    },
+    {
       id: 'blooket', kind: 'google', name: 'Blooket', cat: 'Study', study: true,
       desc: 'Study games and quiz sets: open your Blooket sets dashboard.',
       web: 'https://dashboard.blooket.com/my-sets',
