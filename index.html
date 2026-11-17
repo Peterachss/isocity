@@ -20,7 +20,7 @@
   <link rel="dns-prefetch" href="https://github.com" />
   <link rel="dns-prefetch" href="https://econ-app-bice.vercel.app" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="city.css?v=87" />
+  <link rel="stylesheet" href="city.css?v=88" />
 </head>
 <body>
   <main class="app">
@@ -412,12 +412,10 @@
       <div id="helpList" class="detail-list"></div>
     </section>
 
-    <section id="wsPop" class="pop ui-chrome ws-pop" role="dialog" aria-label="Workspaces" data-open="false">
-      <div class="inspect-head">
-        <h2>Workspaces</h2>
-        <span class="ws-head-btns"><button id="wsPalBtn" class="chip tiny" type="button" title="Command palette (Ctrl+K)">Ctrl+K</button><button id="wsClose" class="chip icon tiny" type="button" aria-label="Close workspaces">x</button></span>
-      </div>
-      <div id="wsBody" class="ws-body"></div>
+    <section id="wsPop" class="wsn" role="dialog" aria-label="Workspaces" data-open="false">
+      <aside id="wsSide" class="wsn-side"></aside>
+      <div class="wsn-mainwrap"><div id="wsBody" class="wsn-body"></div></div>
+      <button id="wsClose" class="wsn-close" type="button" aria-label="Close workspaces">x</button>
     </section>
     <div id="wsPalette" class="ws-palette" hidden role="dialog" aria-label="Command palette">
       <div class="ws-palbox ui-chrome">
@@ -429,8 +427,8 @@
     <div id="carToast" class="car-toast ui-chrome" role="status" hidden></div>
     <div id="tip" class="tip ui-chrome" role="status" hidden></div>
   </main>
-  <script src="catalog.js?v=87"></script>
-  <script src="city.js?v=87"></script>
-  <script src="workspaces.js?v=87"></script>
+  <script src="catalog.js?v=88"></script>
+  <script src="city.js?v=88"></script>
+  <script src="workspaces.js?v=88"></script>
 </body>
 </html>

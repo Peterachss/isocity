@@ -12,9 +12,9 @@
   const seed = () => ({
     v: 1, active: 'school', recent: [],
     spaces: [
-      { id: 'school', name: 'School', acct: 1, notes: '', tasks: [], res: ['seqta', 'toddle', 'gmail', 'google-docs', 'google-slides', 'google-sheets', 'google-drive', 'goodnotes', 'blooket', 'mybib'].map((r, i) => ({ id: uid(), kind: 'b', ref: r, pin: i < 3 })) },
-      { id: 'personal', name: 'Personal', acct: 0, notes: '', tasks: [], res: ['google-calendar', 'gmail', 'google-drive', 'github-hub', 'econ-app', 'uni-plan'].map((r, i) => ({ id: uid(), kind: 'b', ref: r, pin: i < 2 })) },
-      { id: 'cham', name: 'Chạm', acct: 0, notes: '', tasks: [], res: ['cham-merch-design', 'notion-widget'].map((r) => ({ id: uid(), kind: 'b', ref: r, pin: false })) },
+      { id: 'school', name: 'School', acct: 1, notes: '', tasks: [], res: ['seqta', 'toddle', 'gmail', 'google-docs', 'google-slides', 'google-sheets', 'google-drive', 'goodnotes', 'blooket', 'mybib'].map((r, i) => ({ id: uid(), kind: 'b', ref: r, pin: i < 3, keep: true })) },
+      { id: 'personal', name: 'Personal', acct: 0, notes: '', tasks: [], res: ['google-calendar', 'gmail', 'google-drive', 'github-hub', 'econ-app', 'uni-plan'].map((r, i) => ({ id: uid(), kind: 'b', ref: r, pin: i < 2, keep: true })) },
+      { id: 'cham', name: 'Chạm', acct: 0, notes: '', tasks: [], res: ['cham-merch-design', 'notion-widget'].map((r) => ({ id: uid(), kind: 'b', ref: r, pin: false, keep: true })) },
     ],
   });
   let st;
@@ -60,174 +60,227 @@
     API.notify(ok >= list.length ? `Opened all ${ok} in ${sp.name}` : `Opened ${ok} of ${list.length}. Allow pop-ups for this site to open them all.`, 3600);
   }
 
-  // ---- panel ----
+  // ---- workspace screen (Workona-style: sidebar of spaces, Tabs / Notes / Tasks, Resources with sections) ----
   const pop = $('wsPop');
+  const side = $('wsSide');
   const body = $('wsBody');
-  let q = '';
+  let view = 'tabs', filterQ = '', showArchive = false;
+  const sel = new Set();
+  const wide = () => innerWidth >= 900;
+  const inset = () => (pop.dataset.open === 'true' && wide() ? pop.offsetWidth : 0);
+  const syncInset = () => { if (API.setInset) API.setInset(inset()); };
   function setOpen(o) {
-    pop.dataset.open = String(o); pop.inert = !o; $('wsBtn').setAttribute('aria-expanded', String(o));
+    pop.dataset.open = String(o); pop.inert = !o; document.body.classList.toggle('ws-open', o); $('wsBtn').setAttribute('aria-expanded', String(o));
     if (o) render();
+    requestAnimationFrame(syncInset);
   }
-  function btn(label, fn, cls = 'chip small', title) { const b = el('button', cls, label); b.type = 'button'; if (title) b.title = title; b.onclick = fn; return b; }
+  addEventListener('resize', () => { if (pop.dataset.open === 'true') syncInset(); });
+  function btn(label, fn, cls = 'wsn-btn', title) { const b = el('button', cls, label); b.type = 'button'; if (title) b.title = title; b.onclick = fn; return b; }
+  const initial = (s) => (String(s || '?').trim()[0] || '?').toUpperCase();
+  const shades = ['#0a3324', '#0a2f1e', '#0d2a18', '#0c2412', '#004225'];
+  const matches = (r, sp) => { if (!filterQ) return true; const i = resInfo(r, sp); return `${i.title} ${i.sub}`.toLowerCase().includes(filterQ); };
+
+  function renderSide() {
+    side.textContent = '';
+    const brand = el('div', 'wsn-brand'); brand.appendChild(el('span', 'wsn-logo', 'W')); brand.appendChild(el('span', '', 'workspaces'));
+    side.appendChild(brand);
+    side.appendChild(btn('Jump to... (Ctrl+K)', () => palOpen(), 'wsn-nav', 'Command palette'));
+    const head = el('div', 'wsn-sidehead'); head.appendChild(el('span', '', 'Spaces'));
+    head.appendChild(btn('+', () => {
+      const n = (prompt('Name the new workspace') || '').trim(); if (!n) return;
+      const s = { id: uid(), name: n.slice(0, 24), acct: null, notes: '', tasks: [], res: [], secs: [] };
+      st.spaces.push(s); st.active = s.id; sel.clear(); save(); render();
+    }, 'wsn-plus', 'New workspace'));
+    side.appendChild(head);
+    const list = el('div', 'wsn-spaces');
+    for (const s of live()) {
+      const b = btn(s.name, () => { st.active = s.id; sel.clear(); filterQ = ''; save(); render(); }, 'wsn-space');
+      b.setAttribute('aria-current', String(s.id === space().id));
+      list.appendChild(b);
+    }
+    side.appendChild(list);
+    const arch = st.spaces.filter((s) => s.archived);
+    side.appendChild(btn(`Archive${arch.length ? ` (${arch.length})` : ''}`, () => { showArchive = !showArchive; renderSide(); }, 'wsn-nav'));
+    if (showArchive) {
+      const al = el('div', 'wsn-spaces');
+      if (!arch.length) al.appendChild(el('p', 'wsn-empty', 'Nothing archived'));
+      for (const s of arch) al.appendChild(btn(`Restore ${s.name}`, () => { s.archived = false; st.active = s.id; save(); render(); }, 'wsn-space dim'));
+      side.appendChild(al);
+    }
+    const foot = el('div', 'wsn-sidefoot');
+    foot.appendChild(btn('Export backup', exportBackup, 'wsn-nav small'));
+    foot.appendChild(btn('Import backup', importBackup, 'wsn-nav small'));
+    side.appendChild(foot);
+  }
 
   function render() {
+    renderSide();
     const sp = space();
-    body.textContent = '';
-    // tabs
-    const tabs = el('div', 'ws-tabs');
-    for (const s of live()) {
-      const b = btn(s.name, () => { st.active = s.id; save(); render(); }, 'chip small ws-tab');
-      b.setAttribute('aria-pressed', String(s.id === sp.id));
-      tabs.appendChild(b);
-    }
-    tabs.appendChild(btn('+', () => {
-      const n = (prompt('Name the new workspace') || '').trim(); if (!n) return;
-      const s = { id: uid(), name: n.slice(0, 24), acct: null, notes: '', tasks: [], res: [] };
-      st.spaces.push(s); st.active = s.id; save(); render();
-    }, 'chip small', 'New workspace'));
-    body.appendChild(tabs);
-
-    // actions
-    const act = el('div', 'ws-actions');
-    act.appendChild(btn(`Open all (${sp.res.length})`, () => openAll(sp), 'chip small primary'));
-    act.appendChild(btn(sp.acct == null ? 'Account: default' : sp.acct === 1 ? 'Account: School' : 'Account: Personal', () => {
-      sp.acct = sp.acct == null ? 0 : sp.acct === 0 ? 1 : null; save(); render();
-    }, 'chip small', 'Which Google account this workspace opens with'));
-    act.appendChild(btn('Rename', () => { const n = (prompt('Rename workspace', sp.name) || '').trim(); if (n) { sp.name = n.slice(0, 24); save(); render(); } }));
-    act.appendChild(btn('Duplicate', () => { const s = JSON.parse(JSON.stringify(sp)); s.id = uid(); s.name = (sp.name + ' copy').slice(0, 24); s.res.forEach((r) => { r.id = uid(); }); st.spaces.push(s); st.active = s.id; save(); render(); }, 'chip small', 'Copy this workspace'));
-    act.appendChild(btn('Share', () => share(sp), 'chip small', 'Copy a link that adds this workspace on another device'));
-    act.appendChild(btn(live().length > 1 ? 'Archive' : 'Clear', () => {
-      if (live().length > 1) { sp.archived = true; st.active = live()[0].id; API.notify(`${sp.name} archived (Ctrl+K, "restore")`); } else { sp.res = []; sp.tasks = []; sp.notes = ''; }
-      save(); render();
-    }));
-    body.appendChild(act);
-
-    // add
-    const add = el('form', 'ws-add');
-    const inp = el('input'); inp.type = 'text'; inp.placeholder = 'Paste a link or type a building name, press Enter'; inp.autocomplete = 'off'; inp.setAttribute('aria-label', 'Add a resource');
-    add.appendChild(inp);
-    add.onsubmit = (e) => {
-      e.preventDefault();
-      const v = inp.value.trim(); if (!v) return;
-      if (/^(https?:\/\/|[a-z0-9-]+\.[a-z]{2,}(\/|$))/i.test(v)) {
-        const url = /^https?:/i.test(v) ? v : 'https://' + v;
-        if (API.safeHref(url) === '#') return API.notify('That link is not valid');
-        sp.res.push({ id: uid(), kind: 'u', url, title: '', pin: false });
-      } else {
-        const m = API.allItems().find((i) => i.name.toLowerCase().includes(v.toLowerCase()) || i.id.includes(v.toLowerCase()));
-        if (!m) return API.notify('No building matches that. Paste a link instead.');
-        sp.res.push({ id: uid(), kind: 'b', ref: m.id, pin: false });
-      }
-      save(); render(); const n = body.querySelector('.ws-add input'); if (n) n.focus();
-    };
-    body.appendChild(add);
-
-    // resources, grouped into sections (drag a row to reorder or onto a section to move it)
     sp.secs = sp.secs || [];
+    body.textContent = '';
     const drag = { r: null };
-    const dropOn = (r, sec) => {
-      if (!drag.r || drag.r === r) return;
-      sp.res = sp.res.filter((x) => x !== drag.r);
-      drag.r.sec = sec || '';
-      const at = r ? sp.res.indexOf(r) : -1;
-      if (at >= 0) sp.res.splice(at, 0, drag.r); else sp.res.push(drag.r);
+
+    // ---- header ----
+    const top = el('div', 'wsn-top');
+    const title = el('h2', 'wsn-title', sp.name); title.title = 'Click to rename';
+    title.onclick = () => { const n = (prompt('Rename workspace', sp.name) || '').trim(); if (n) { sp.name = n.slice(0, 24); save(); render(); } };
+    top.appendChild(title);
+    const search = el('input', 'wsn-search'); search.type = 'search'; search.placeholder = 'Search'; search.value = filterQ; search.setAttribute('aria-label', 'Search this workspace');
+    search.oninput = () => { filterQ = search.value.trim().toLowerCase(); const p = search.selectionStart; renderBodyOnly(); };
+    top.appendChild(search);
+    top.appendChild(btn(sp.acct == null ? 'Account: default' : sp.acct === 1 ? 'School' : 'Personal', () => { sp.acct = sp.acct == null ? 0 : sp.acct === 0 ? 1 : null; save(); render(); }, 'wsn-chipbtn', 'Which Google account this workspace opens with'));
+    top.appendChild(btn(`Open all (${sp.res.length})`, () => openAll(sp), 'wsn-btn primary'));
+    top.appendChild(btn('Share', () => share(sp), 'wsn-btn'));
+    const menu = el('details', 'wsn-menu'); menu.appendChild(el('summary', '', '...'));
+    const mi = el('div', 'wsn-menulist');
+    mi.appendChild(btn('Duplicate', () => { const s = JSON.parse(JSON.stringify(sp)); s.id = uid(); s.name = (sp.name + ' copy').slice(0, 24); s.res.forEach((r) => { r.id = uid(); }); (s.secs || []).forEach((x) => { const o = x.id; x.id = uid(); s.res.forEach((r) => { if (r.sec === o) r.sec = x.id; }); }); st.spaces.push(s); st.active = s.id; save(); render(); }, 'wsn-menuitem'));
+    mi.appendChild(btn(live().length > 1 ? 'Archive' : 'Clear all', () => {
+      if (live().length > 1) { sp.archived = true; st.active = live()[0].id; } else { sp.res = []; sp.tasks = []; sp.notes = ''; sp.secs = []; }
+      sel.clear(); save(); render();
+    }, 'wsn-menuitem'));
+    menu.appendChild(mi); top.appendChild(menu);
+    body.appendChild(top);
+
+    // ---- tabs row ----
+    const tabs = el('div', 'wsn-tabs'); tabs.setAttribute('role', 'tablist');
+    for (const [id, label] of [['tabs', 'Tabs'], ['notes', 'Notes'], ['tasks', `Tasks${sp.tasks.filter((t) => !t.d).length ? ` (${sp.tasks.filter((t) => !t.d).length})` : ''}`]]) {
+      const b = btn(label, () => { view = id; render(); }, 'wsn-tab'); b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(view === id)); tabs.appendChild(b);
+    }
+    body.appendChild(tabs);
+    const content = el('div', 'wsn-content'); body.appendChild(content);
+
+    // ---- helpers ----
+    const dropOn = (target, secId, keep) => {
+      const r = drag.r; if (!r || r === target) return;
+      sp.res = sp.res.filter((x) => x !== r);
+      r.sec = secId || ''; r.keep = !!keep || !!secId;
+      const at = target ? sp.res.indexOf(target) : -1;
+      if (at >= 0) sp.res.splice(at, 0, r); else sp.res.push(r);
       drag.r = null; save(); render();
     };
-    const allow = (node, fn) => { node.ondragover = (e) => { if (drag.r) { e.preventDefault(); node.classList.add('drop'); } }; node.ondragleave = () => node.classList.remove('drop'); node.ondrop = (e) => { e.preventDefault(); node.classList.remove('drop'); fn(); }; };
-    const rowFor = (r) => {
+    const allow = (node, fn) => { node.ondragover = (e) => { if (drag.r) { e.preventDefault(); node.classList.add('drop'); } }; node.ondragleave = () => node.classList.remove('drop'); node.ondrop = (e) => { e.preventDefault(); e.stopPropagation(); node.classList.remove('drop'); fn(); }; };
+    const icon = (r, i) => { const a = el('span', 'wsn-ico', initial(i.title)); a.style.background = shades[(i.title.length + (r.kind === 'b' ? 1 : 0)) % shades.length]; return a; };
+    const rowFor = (r, inTabs) => {
       const i = resInfo(r, sp);
-      const row = el('div', 'ws-row'); row.draggable = true;
+      const row = el('div', 'wsn-row'); row.draggable = true;
       row.ondragstart = (e) => { drag.r = r; e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', i.title); } catch (x) { /* ignore */ } row.classList.add('dragging'); };
       row.ondragend = () => { drag.r = null; row.classList.remove('dragging'); };
-      allow(row, () => dropOn(r, r.sec));
-      const main = el('button', 'ws-main'); main.type = 'button';
-      main.appendChild(el('span', 'ws-title', i.title));
-      main.appendChild(el('span', 'ws-sub', i.sub));
+      allow(row, () => dropOn(r, r.sec, !inTabs));
+      if (inTabs) { const cb = el('input'); cb.type = 'checkbox'; cb.checked = sel.has(r.id); cb.setAttribute('aria-label', 'Select'); cb.onchange = () => { cb.checked ? sel.add(r.id) : sel.delete(r.id); renderBodyOnly(); }; row.appendChild(cb); }
+      row.appendChild(icon(r, i));
+      const main = el('button', 'wsn-main'); main.type = 'button';
+      main.appendChild(el('span', 'wsn-rt', i.title)); main.appendChild(el('span', 'wsn-rs', i.sub));
       main.onclick = () => openRes(r, sp);
       main.onmouseenter = () => API.warmUrl(i.url);
       row.appendChild(main);
-      if (r.kind === 'b') row.appendChild(btn('Map', () => { setOpen(false); API.focus(r.ref); }, 'chip tiny', 'Show this building on the map'));
-      if (sp.secs.length) {
-        const sel = el('select', 'ws-sec'); sel.setAttribute('aria-label', 'Move to section');
-        const o0 = el('option', '', 'No section'); o0.value = ''; sel.appendChild(o0);
-        for (const s of sp.secs) { const o = el('option', '', s.name); o.value = s.id; sel.appendChild(o); }
-        sel.value = r.sec || '';
-        sel.onchange = () => { r.sec = sel.value; save(); render(); };
-        row.appendChild(sel);
-      }
-      row.appendChild(btn(r.pin ? 'Pinned' : 'Pin', () => { r.pin = !r.pin; save(); render(); }, 'chip tiny', 'Pin to top'));
-      row.appendChild(btn('x', () => { sp.res = sp.res.filter((x) => x !== r); save(); render(); }, 'chip tiny', 'Remove'));
+      const acts = el('span', 'wsn-acts');
+      acts.appendChild(btn('Open', () => openRes(r, sp), 'wsn-mini', 'Open'));
+      if (r.kind === 'b') acts.appendChild(btn('Map', () => API.focus(r.ref), 'wsn-mini', 'Show on the map'));
+      acts.appendChild(btn(r.pin ? 'Unpin' : 'Pin', () => { r.pin = !r.pin; save(); render(); }, 'wsn-mini', 'Pin to top'));
+      acts.appendChild(btn(inTabs ? 'Save' : 'Unsave', () => { r.keep = inTabs; if (!inTabs) r.sec = ''; save(); render(); }, 'wsn-mini', inTabs ? 'Move to Resources' : 'Move back to Tabs'));
+      acts.appendChild(btn('x', () => { sp.res = sp.res.filter((x) => x !== r); sel.delete(r.id); save(); render(); }, 'wsn-mini', 'Remove'));
+      row.appendChild(acts);
       return row;
     };
-    const inSec = (id) => sp.res.filter((r) => (r.sec || '') === id && (id === '' || sp.secs.some((s) => s.id === id)) ).sort((x, y) => (y.pin ? 1 : 0) - (x.pin ? 1 : 0));
-    const orphan = sp.res.filter((r) => r.sec && !sp.secs.some((s) => s.id === r.sec));
-    orphan.forEach((r) => { r.sec = ''; });
-    const top = el('div', 'ws-list');
-    allow(top, () => dropOn(null, ''));
-    const loose = inSec('');
-    if (!sp.res.length) top.appendChild(el('p', 'ws-empty', 'Empty. Add links above, or Ctrl+K to jump anywhere.'));
-    loose.forEach((r) => top.appendChild(rowFor(r)));
-    body.appendChild(top);
-    for (const s of sp.secs) {
-      const head = el('div', 'ws-sechead');
-      allow(head, () => dropOn(null, s.id));
-      const t = btn(`${s.collapsed ? '+' : '-'} ${s.name} (${inSec(s.id).length})`, () => { s.collapsed = !s.collapsed; save(); render(); }, 'ws-sectitle');
-      head.appendChild(t);
-      head.appendChild(btn('Open', () => { const l = inSec(s.id).map((r) => resInfo(r, sp).url).filter(Boolean); l.forEach((u) => window.open(API.safeHref(u), '_blank', 'noopener,noreferrer')); API.notify(`Opened ${l.length} from ${s.name}`, 1600); }, 'chip tiny', 'Open this section'));
-      head.appendChild(btn('Rename', () => { const n = (prompt('Rename section', s.name) || '').trim(); if (n) { s.name = n.slice(0, 24); save(); render(); } }, 'chip tiny'));
-      head.appendChild(btn('x', () => { if (!confirm(`Remove the section "${s.name}"? Its links move out of it.`)) return; sp.secs = sp.secs.filter((z) => z !== s); sp.res.forEach((r) => { if (r.sec === s.id) r.sec = ''; }); save(); render(); }, 'chip tiny', 'Remove section'));
-      body.appendChild(head);
-      if (!s.collapsed) {
-        const l = el('div', 'ws-list'); allow(l, () => dropOn(null, s.id));
-        const rs = inSec(s.id);
-        if (!rs.length) l.appendChild(el('p', 'ws-empty', 'Drag links here'));
-        rs.forEach((r) => l.appendChild(rowFor(r)));
-        body.appendChild(l);
+    const addBar = (ph, onAdd) => {
+      const f = el('form', 'wsn-add'); const inp = el('input'); inp.type = 'text'; inp.placeholder = ph; inp.autocomplete = 'off'; inp.setAttribute('aria-label', ph);
+      f.appendChild(inp);
+      f.onsubmit = (e) => { e.preventDefault(); const v = inp.value.trim(); if (!v) return; if (onAdd(v) !== false) { save(); render(); } };
+      return f;
+    };
+    const addResource = (keep, secId) => (v) => {
+      if (/^(https?:\/\/|[a-z0-9-]+\.[a-z]{2,}(\/|$))/i.test(v)) {
+        const url = /^https?:/i.test(v) ? v : 'https://' + v;
+        if (API.safeHref(url) === '#') { API.notify('That link is not valid'); return false; }
+        sp.res.push({ id: uid(), kind: 'u', url, title: '', pin: false, keep, sec: secId || '' });
+      } else {
+        const m = API.allItems().find((i) => i.name.toLowerCase().includes(v.toLowerCase()) || i.id.includes(v.toLowerCase()));
+        if (!m) { API.notify('No building matches that. Paste a link instead.'); return false; }
+        sp.res.push({ id: uid(), kind: 'b', ref: m.id, pin: false, keep, sec: secId || '' });
       }
-    }
-    body.appendChild(btn('+ Add section', () => { const n = (prompt('Section name') || '').trim(); if (!n) return; sp.secs.push({ id: uid(), name: n.slice(0, 24), collapsed: false }); save(); render(); }, 'chip tiny'));
+      return true;
+    };
+    const sortPin = (a) => [...a].sort((x, y) => (y.pin ? 1 : 0) - (x.pin ? 1 : 0));
+    const inRes = (r) => !!r.keep || (r.sec && sp.secs.some((s) => s.id === r.sec));
 
-    // tasks
-    body.appendChild(el('h3', 'ws-h', 'Tasks'));
-    const tf = el('form', 'ws-add');
-    const ti = el('input'); ti.type = 'text'; ti.placeholder = 'Add a task, press Enter'; ti.autocomplete = 'off'; ti.setAttribute('aria-label', 'Add a task');
-    tf.appendChild(ti);
-    tf.onsubmit = (e) => { e.preventDefault(); const v = ti.value.trim(); if (!v) return; sp.tasks.push({ id: uid(), t: v.slice(0, 140), d: false }); save(); render(); const n = body.querySelectorAll('.ws-add input')[1]; if (n) n.focus(); };
-    body.appendChild(tf);
-    const tl = el('div', 'ws-list');
-    for (const t of sp.tasks) {
-      const row = el('div', 'ws-row');
-      const cb = el('input'); cb.type = 'checkbox'; cb.checked = t.d; cb.setAttribute('aria-label', 'Done');
-      cb.onchange = () => { t.d = cb.checked; save(); render(); };
-      const lab = el('span', 'ws-task' + (t.d ? ' done' : ''), t.t);
-      row.append(cb, lab, btn('x', () => { sp.tasks = sp.tasks.filter((x) => x !== t); save(); render(); }, 'chip tiny', 'Delete'));
-      tl.appendChild(row);
-    }
-    body.appendChild(tl);
-    if (sp.tasks.some((t) => t.d)) body.appendChild(btn('Clear finished', () => { sp.tasks = sp.tasks.filter((t) => !t.d); save(); render(); }, 'chip tiny'));
-
-    // notes
-    body.appendChild(el('h3', 'ws-h', 'Notes'));
-    const ta = el('textarea', 'ws-notes'); ta.rows = 4; ta.placeholder = 'Notes for this workspace'; ta.value = sp.notes || ''; ta.setAttribute('aria-label', 'Workspace notes');
-    ta.oninput = () => { sp.notes = ta.value.slice(0, 20000); save(); };
-    body.appendChild(ta);
-
-    // recent
-    const recent = st.recent.filter((x) => st.spaces.some((s) => s.id === x.sid && s.res.some((r) => r.id === x.rid)));
-    if (recent.length) {
-      body.appendChild(el('h3', 'ws-h', 'Recent'));
-      const rl = el('div', 'ws-actions');
-      for (const x of recent.slice(0, 6)) {
-        rl.appendChild(btn(x.title, () => { const s = st.spaces.find((z) => z.id === x.sid); const r = s && s.res.find((z) => z.id === x.rid); if (r) openRes(r, s); }, 'chip tiny'));
+    function renderBodyOnly() {
+      content.textContent = '';
+      if (view === 'notes') {
+        const ta = el('textarea', 'wsn-notes'); ta.placeholder = 'Notes for this workspace'; ta.value = sp.notes || ''; ta.setAttribute('aria-label', 'Workspace notes');
+        ta.oninput = () => { sp.notes = ta.value.slice(0, 20000); save(); };
+        content.appendChild(ta); return;
       }
-      body.appendChild(rl);
+      if (view === 'tasks') {
+        const box = el('div', 'wsn-col wsn-single');
+        box.appendChild(addBar('Add a task, press Enter', (v) => { sp.tasks.push({ id: uid(), t: v.slice(0, 140), d: false }); }));
+        const tl = el('div', 'wsn-list');
+        if (!sp.tasks.length) tl.appendChild(el('p', 'wsn-empty', 'No tasks yet.'));
+        for (const t of sp.tasks) {
+          const row = el('div', 'wsn-row');
+          const cb = el('input'); cb.type = 'checkbox'; cb.checked = t.d; cb.setAttribute('aria-label', 'Done'); cb.onchange = () => { t.d = cb.checked; save(); render(); };
+          row.append(cb, el('span', 'wsn-task' + (t.d ? ' done' : ''), t.t), btn('x', () => { sp.tasks = sp.tasks.filter((x) => x !== t); save(); render(); }, 'wsn-mini', 'Delete'));
+          tl.appendChild(row);
+        }
+        box.appendChild(tl);
+        if (sp.tasks.some((t) => t.d)) box.appendChild(btn('Clear finished', () => { sp.tasks = sp.tasks.filter((t) => !t.d); save(); render(); }, 'wsn-btn'));
+        content.appendChild(box); return;
+      }
+      // Tabs + Resources columns
+      const cols = el('div', 'wsn-cols');
+      // Tabs column
+      const tc = el('div', 'wsn-col'); allow(tc, () => dropOn(null, '', false));
+      const tabsList = sortPin(sp.res.filter((r) => !inRes(r) && matches(r, sp)));
+      const th = el('div', 'wsn-colhead'); th.appendChild(el('h3', '', `Tabs (${tabsList.length})`));
+      tc.appendChild(th);
+      tc.appendChild(addBar('Paste a link or building name', addResource(false, '')));
+      const picked = tabsList.filter((r) => sel.has(r.id));
+      if (picked.length) {
+        const bar = el('div', 'wsn-bulk');
+        bar.appendChild(el('span', '', `${picked.length} selected`));
+        bar.appendChild(btn('Open', () => { picked.forEach((r) => openRes(r, sp)); }, 'wsn-mini'));
+        bar.appendChild(btn('Save to Resources', () => { picked.forEach((r) => { r.keep = true; }); sel.clear(); save(); render(); }, 'wsn-mini'));
+        bar.appendChild(btn('Remove', () => { sp.res = sp.res.filter((r) => !sel.has(r.id)); sel.clear(); save(); render(); }, 'wsn-mini'));
+        tc.appendChild(bar);
+      }
+      const tl = el('div', 'wsn-list');
+      if (!tabsList.length) tl.appendChild(el('p', 'wsn-empty', filterQ ? 'No match.' : 'No tabs here. Use the Chrome extension to save your open tabs, or add a link.'));
+      tabsList.forEach((r) => tl.appendChild(rowFor(r, true)));
+      tc.appendChild(tl);
+      cols.appendChild(tc);
+      // Resources column
+      const rc = el('div', 'wsn-col'); allow(rc, () => dropOn(null, '', true));
+      const rh = el('div', 'wsn-colhead'); rh.appendChild(el('h3', '', 'Resources'));
+      rh.appendChild(btn('+ Section', () => { const n = (prompt('Section name') || '').trim(); if (!n) return; sp.secs.push({ id: uid(), name: n.slice(0, 24), collapsed: false }); save(); render(); }, 'wsn-mini'));
+      rc.appendChild(rh);
+      rc.appendChild(addBar('Add a resource', addResource(true, '')));
+      const loose = sortPin(sp.res.filter((r) => inRes(r) && !r.sec && matches(r, sp)));
+      const ll = el('div', 'wsn-list');
+      if (!loose.length && !sp.secs.length) ll.appendChild(el('p', 'wsn-empty', 'Organize important docs and links here. Drag a tab across, or press Save.'));
+      loose.forEach((r) => ll.appendChild(rowFor(r, false)));
+      rc.appendChild(ll);
+      for (const s of sp.secs) {
+        const rs = sortPin(sp.res.filter((r) => r.sec === s.id && matches(r, sp)));
+        const card = el('div', 'wsn-sec');
+        const hd = el('div', 'wsn-sechead'); allow(hd, () => dropOn(null, s.id, true));
+        hd.appendChild(btn(`${s.collapsed ? '+' : '-'} ${s.name} (${rs.length})`, () => { s.collapsed = !s.collapsed; save(); render(); }, 'wsn-sectitle'));
+        hd.appendChild(btn('Open', () => { rs.forEach((r) => openRes(r, sp)); }, 'wsn-mini'));
+        hd.appendChild(btn('Rename', () => { const n = (prompt('Rename section', s.name) || '').trim(); if (n) { s.name = n.slice(0, 24); save(); render(); } }, 'wsn-mini'));
+        hd.appendChild(btn('x', () => { if (!confirm(`Remove the section "${s.name}"? Its links move out of it.`)) return; sp.secs = sp.secs.filter((z) => z !== s); sp.res.forEach((r) => { if (r.sec === s.id) r.sec = ''; }); save(); render(); }, 'wsn-mini', 'Remove section'));
+        card.appendChild(hd);
+        if (!s.collapsed) {
+          const sl = el('div', 'wsn-list'); allow(sl, () => dropOn(null, s.id, true));
+          if (!rs.length) sl.appendChild(el('p', 'wsn-empty', 'Drag links here'));
+          rs.forEach((r) => sl.appendChild(rowFor(r, false)));
+          card.appendChild(sl);
+          card.appendChild(addBar('Add to this section', addResource(true, s.id)));
+        }
+        rc.appendChild(card);
+      }
+      rc.appendChild(btn('+ Resource section', () => { const n = (prompt('Section name') || '').trim(); if (!n) return; sp.secs.push({ id: uid(), name: n.slice(0, 24), collapsed: false }); save(); render(); }, 'wsn-dashed'));
+      cols.appendChild(rc);
+      content.appendChild(cols);
     }
-
-    // backup
-    const bk = el('div', 'ws-actions ws-foot');
-    bk.appendChild(btn('Export backup', exportBackup, 'chip tiny'));
-    bk.appendChild(btn('Import backup', importBackup, 'chip tiny'));
-    body.appendChild(bk);
+    renderBodyOnly();
   }
 
   // ---- share / backup ----
@@ -324,7 +377,6 @@
   // ---- wiring ----
   $('wsBtn').onclick = (e) => { e.stopPropagation(); setOpen(pop.dataset.open !== 'true'); };
   $('wsClose').onclick = () => setOpen(false);
-  $('wsPalBtn').onclick = (e) => { e.stopPropagation(); palOpen(); };
   pop.inert = true;
   // Bridge to the Workspaces browser extension (saves open tabs into these spaces)
   addEventListener('message', (e) => {

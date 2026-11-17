@@ -669,9 +669,9 @@
   function flyToTile(x, y, targetZ = null, withDrawer = true) {
     if (!finiteCam()) center(false);
     const tz = Math.max(0.45, Math.min(MAX_ZOOM, targetZ || Math.max(cam.z, W >= 760 ? 1.05 : 0.9)));
-    const offsetX = (withDrawer && W >= 760) ? -150 : 0;
+    const offsetX = (withDrawer && W >= 760 && !viewInset) ? -150 : 0;
     const centerY = (withDrawer && W < 760) ? H * 0.34 : H * 0.54;
-    const tx = W / 2 + offsetX - ((x + 0.5) - (y + 0.5)) * (TW / 2) * tz;
+    const tx = viewInset + (W - viewInset) / 2 + offsetX - ((x + 0.5) - (y + 0.5)) * (TW / 2) * tz;
     const ty = centerY - ((x + 0.5) + (y + 0.5)) * (TH / 2) * tz + 28 * tz;
     if (!Number.isFinite(tx) || !Number.isFinite(ty) || !Number.isFinite(tz)) return;
     if (reduceMotion) { cam.x = tx; cam.y = ty; cam.z = tz; camAnim = null; return; }
@@ -2972,9 +2972,11 @@
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
     labelCanvas.width = canvas.width; labelCanvas.height = canvas.height; labelKey = '';
   }
+  let viewInset = 0; // pixels of the screen covered on the left by the workspace screen
   function center(animateMove = false) {
-    const tz = Math.max(0.45, Math.min(0.95, W / (N * TW) * 1.12, H / (N * TH + 150) * 1.12));
-    const tx = W / 2, ty = H / 2 - (N * TH / 2) * tz + 26;
+    const VW = Math.max(240, W - viewInset);
+    const tz = Math.max(0.35, Math.min(0.95, VW / (N * TW) * 1.12, H / (N * TH + 150) * 1.12));
+    const tx = viewInset + VW / 2, ty = H / 2 - (N * TH / 2) * tz + 26;
     if (!animateMove || reduceMotion) { cam.x = tx; cam.y = ty; cam.z = tz; camAnim = null; return; }
     camAnim = { sx: cam.x, sy: cam.y, sz: cam.z, tx, ty, tz, start: performance.now(), dur: 360 };
   }
@@ -3403,6 +3405,7 @@
     acctUrl: (url, la) => applyAccountToUrl(url, uIdx(la), la === 1 ? acctEmails.school : acctEmails.personal),
     acct: () => globalAcct,
     setLight: () => $('lightBtn').click(),
+    setInset: (px) => { viewInset = Math.max(0, Math.round(px || 0)); center(true); },
   };
 
 
