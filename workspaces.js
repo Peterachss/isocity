@@ -125,20 +125,20 @@
     const title = el('h2', 'wsn-title', sp.name); title.title = 'Click to rename';
     title.onclick = () => { const n = (prompt('Rename workspace', sp.name) || '').trim(); if (n) { sp.name = n.slice(0, 24); save(); render(); } };
     top.appendChild(title);
-    const search = el('input', 'wsn-search'); search.type = 'search'; search.placeholder = 'Search'; search.value = filterQ; search.setAttribute('aria-label', 'Search this workspace');
-    search.oninput = () => { filterQ = search.value.trim().toLowerCase(); const p = search.selectionStart; renderBodyOnly(); };
+    const search = el('input', 'wsn-search'); search.type = 'search'; search.placeholder = 'Search across spaces & apps'; search.setAttribute('aria-label', 'Search across spaces and apps');
+    search.onfocus = () => { search.blur(); palOpen(); };
     top.appendChild(search);
-    top.appendChild(btn(sp.acct == null ? 'Account: default' : sp.acct === 1 ? 'School' : 'Personal', () => { sp.acct = sp.acct == null ? 0 : sp.acct === 0 ? 1 : null; save(); render(); }, 'wsn-chipbtn', 'Which Google account this workspace opens with'));
-    top.appendChild(btn(`Open all (${sp.res.length})`, () => openAll(sp), 'wsn-btn primary'));
-    top.appendChild(btn('Share', () => share(sp), 'wsn-btn'));
-    const menu = el('details', 'wsn-menu'); menu.appendChild(el('summary', '', '...'));
-    const mi = el('div', 'wsn-menulist');
-    mi.appendChild(btn('Duplicate', () => { const s = JSON.parse(JSON.stringify(sp)); s.id = uid(); s.name = (sp.name + ' copy').slice(0, 24); s.res.forEach((r) => { r.id = uid(); }); (s.secs || []).forEach((x) => { const o = x.id; x.id = uid(); s.res.forEach((r) => { if (r.sec === o) r.sec = x.id; }); }); st.spaces.push(s); st.active = s.id; save(); render(); }, 'wsn-menuitem'));
-    mi.appendChild(btn(live().length > 1 ? 'Archive' : 'Clear all', () => {
-      if (live().length > 1) { sp.archived = true; st.active = live()[0].id; } else { sp.res = []; sp.tasks = []; sp.notes = ''; sp.secs = []; }
-      sel.clear(); save(); render();
-    }, 'wsn-menuitem'));
-    menu.appendChild(mi); top.appendChild(menu);
+    const cm = el('details', 'wsn-menu wsn-create'); cm.appendChild(el('summary', '', 'CREATE'));
+    const cl = el('div', 'wsn-menulist');
+    for (const [label, url] of [['New Google Doc', 'https://docs.new'], ['New Google Sheet', 'https://sheets.new'], ['New Google Slides', 'https://slides.new'], ['New Google Form', 'https://forms.new'], ['New Google Site', 'https://sites.new'], ['New Gmail email', 'https://mail.google.com/mail/?view=cm&fs=1'], ['New GitHub repository', 'https://github.com/new']]) {
+      cl.appendChild(btn(label, () => {
+        cm.open = false;
+        let u = url;
+        if (sp.acct != null && /^https:\/\/(docs|sheets|slides|forms|sites)\.new$|mail\.google\.com/.test(url)) u += (u.includes('?') ? '&' : '?') + 'authuser=' + sp.acct;
+        window.open(API.safeHref(u), '_blank', 'noopener,noreferrer');
+      }, 'wsn-menuitem'));
+    }
+    cm.appendChild(cl); top.appendChild(cm);
     body.appendChild(top);
 
     // ---- tabs row ----
@@ -146,6 +146,19 @@
     for (const [id, label] of [['tabs', 'Tabs'], ['notes', 'Notes'], ['tasks', `Tasks${sp.tasks.filter((t) => !t.d).length ? ` (${sp.tasks.filter((t) => !t.d).length})` : ''}`]]) {
       const b = btn(label, () => { view = id; render(); }, 'wsn-tab'); b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(view === id)); tabs.appendChild(b);
     }
+    const act = el('div', 'wsn-tabright');
+    act.appendChild(btn(sp.acct == null ? 'Account: default' : sp.acct === 1 ? 'School account' : 'Personal account', () => { sp.acct = sp.acct == null ? 0 : sp.acct === 0 ? 1 : null; save(); render(); }, 'wsn-chipbtn', 'Which Google account this workspace opens with'));
+    act.appendChild(btn(`Open all (${sp.res.length})`, () => openAll(sp), 'wsn-chipbtn'));
+    act.appendChild(btn('Share', () => share(sp), 'wsn-chipbtn'));
+    const menu = el('details', 'wsn-menu'); menu.appendChild(el('summary', '', '...'));
+    const mi = el('div', 'wsn-menulist');
+    mi.appendChild(btn('Duplicate', () => { const s = JSON.parse(JSON.stringify(sp)); s.id = uid(); s.name = (sp.name + ' copy').slice(0, 24); s.res.forEach((r) => { r.id = uid(); }); (s.secs || []).forEach((x) => { const o = x.id; x.id = uid(); s.res.forEach((r) => { if (r.sec === o) r.sec = x.id; }); }); st.spaces.push(s); st.active = s.id; save(); render(); }, 'wsn-menuitem'));
+    mi.appendChild(btn(live().length > 1 ? 'Archive' : 'Clear all', () => {
+      if (live().length > 1) { sp.archived = true; st.active = live()[0].id; } else { sp.res = []; sp.tasks = []; sp.notes = ''; sp.secs = []; }
+      sel.clear(); save(); render();
+    }, 'wsn-menuitem'));
+    menu.appendChild(mi); act.appendChild(menu);
+    tabs.appendChild(act);
     body.appendChild(tabs);
     const content = el('div', 'wsn-content'); body.appendChild(content);
 
@@ -159,7 +172,20 @@
       drag.r = null; save(); render();
     };
     const allow = (node, fn) => { node.ondragover = (e) => { if (drag.r) { e.preventDefault(); node.classList.add('drop'); } }; node.ondragleave = () => node.classList.remove('drop'); node.ondrop = (e) => { e.preventDefault(); e.stopPropagation(); node.classList.remove('drop'); fn(); }; };
-    const icon = (r, i) => { const a = el('span', 'wsn-ico', initial(i.title)); a.style.background = shades[(i.title.length + (r.kind === 'b' ? 1 : 0)) % shades.length]; return a; };
+    const brand = (u) => {
+      let x = null; try { x = new URL(u); } catch (e) { /* ignore */ }
+      const h = x ? x.host.replace(/^www\./, '') : ''; const pa = x ? x.pathname : '';
+      if (h === 'docs.google.com') return pa.includes('/spreadsheets') ? ['#0f9d58', 'S'] : pa.includes('/presentation') ? ['#f4b400', 'P'] : pa.includes('/forms') ? ['#673ab7', 'F'] : ['#4285f4', 'D'];
+      if (h === 'mail.google.com') return ['#ea4335', 'M'];
+      if (h === 'drive.google.com') return ['#1fa463', 'D'];
+      if (h === 'calendar.google.com') return ['#4285f4', 'C'];
+      if (h === 'meet.google.com') return ['#00897b', 'M'];
+      if (/blooket/.test(h)) return ['#00bcd4', 'B'];
+      if (/github/.test(h)) return ['#24292f', 'G'];
+      if (/notion/.test(h)) return ['#111111', 'N'];
+      return null;
+    };
+    const icon = (r, i) => { const b = brand(i.url); const a = el('span', 'wsn-ico', b ? b[1] : initial(i.title)); a.style.background = b ? b[0] : '#6b7785'; return a; };
     const rowFor = (r, inTabs) => {
       const i = resInfo(r, sp);
       const row = el('div', 'wsn-row'); row.draggable = true;
