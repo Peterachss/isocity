@@ -23,7 +23,9 @@
   // one-time: add Drive to the starter School and Personal spaces
   if (!st.drive) { st.drive = 1; for (const id of ['school', 'personal']) { const s = st.spaces.find((z) => z.id === id); if (s && !s.res.some((r) => r.ref === 'google-drive')) s.res.push({ id: uid(), kind: 'b', ref: 'google-drive', pin: false }); } }
   let saveT = 0;
-  const save = () => { clearTimeout(saveT); saveT = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { /* ignore */ } }, 200); };
+  const post = (type) => { try { window.postMessage({ src: 'isocity-page', type, state: st }, location.origin); } catch (e) { /* ignore */ } };
+  const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { /* ignore */ } };
+  const save = () => { st.ts = Date.now(); clearTimeout(saveT); saveT = setTimeout(() => { persist(); post('state'); }, 200); };
   const space = () => st.spaces.find((s) => s.id === st.active) || st.spaces[0];
   const live = () => st.spaces.filter((s) => !s.archived);
 
@@ -279,6 +281,18 @@
   $('wsClose').onclick = () => setOpen(false);
   $('wsPalBtn').onclick = (e) => { e.stopPropagation(); palOpen(); };
   pop.inert = true;
+  // Bridge to the Workspaces browser extension (saves open tabs into these spaces)
+  addEventListener('message', (e) => {
+    if (e.source !== window || e.origin !== location.origin || !e.data || e.data.src !== 'isocity-ext') return;
+    if (e.data.type === 'hello') { post('state'); return; }
+    if (e.data.type === 'set') {
+      const o = e.data.state;
+      if (!o || !Array.isArray(o.spaces) || !o.spaces.length || !(o.ts > (st.ts || 0))) return;
+      st = o; persist(); if (pop.dataset.open === 'true') render();
+      API.notify('Workspaces updated from your extension', 1800);
+    }
+  });
+  post('state');
   importShared();
   addEventListener('hashchange', importShared);
 })();

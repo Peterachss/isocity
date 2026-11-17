@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>City Workspaces</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <select id="space" aria-label="Workspace"></select>
+    <button id="newSpace" title="New workspace">+</button>
+  </header>
+  <p id="hint" class="muted"></p>
+  <div class="grid">
+    <button id="saveWin" class="primary">Save all tabs</button>
+    <button id="saveTab">Save this tab</button>
+    <button id="openAll">Open workspace</button>
+    <button id="suspend">Suspend other tabs</button>
+  </div>
+  <label class="check"><input type="checkbox" id="closeAfter" /> Close tabs after saving</label>
+  <input id="filter" type="search" placeholder="Search this workspace" aria-label="Search this workspace" />
+  <div id="list" class="list"></div>
+  <p class="muted foot">Syncs with your city when it is open. Alt+Shift+S saves this window.</p>
+  <script src="popup.js"></script>
+</body>
+</html>
