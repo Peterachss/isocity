@@ -2868,12 +2868,7 @@
     if (!drag) canvas.style.cursor = (lbl || (t && pins[t[0]]?.[t[1]])) ? 'pointer' : 'grab';
 
     const tip = $('tip');
-    if (t && !drag && pins[t[0]]?.[t[1]]) {
-      const item = getItem(pins[t[0]][t[1]]);
-      tip.textContent = `${item.name} (${item.lang || item.cat || 'App'}) · Click to open`;
-      tip.hidden = false;
-      tip.style.transform = `translate3d(${Math.min(W - 260, e.clientX + 16)}px, ${e.clientY + 16}px, 0)`;
-    } else if (!tip.hidden) { tip.hidden = true; }
+    if (!tip.hidden) tip.hidden = true;
   });
 
   const end = (e) => {
