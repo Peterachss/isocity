@@ -155,7 +155,7 @@ window.ISOCITY_DATA = (() => {
     },
     {
       id: 'blooket', kind: 'google', name: 'Blooket', cat: 'Study', study: true,
-      desc: 'Study games and quiz sets: open your Blooket sets dashboard.',
+      desc: 'Booklet (Blooket) study games and quiz sets: open your sets dashboard.',
       web: 'https://dashboard.blooket.com/my-sets',
       alt: 'https://dashboard.blooket.com/', altLabel: 'Dashboard',
       shortcuts: [
