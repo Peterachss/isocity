@@ -1,4 +1,4 @@
-const CACHE = 'workspace-city-v97';
+const CACHE = 'workspace-city-v98';
 const ASSETS = [
   './',
   './index.html',
