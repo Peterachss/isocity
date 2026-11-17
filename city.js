@@ -2484,6 +2484,7 @@
     $('searchResults').hidden = true;
     $('clearSearch').hidden = true;
     if (keepFocus && document.activeElement === $('repoSearch')) $('repoSearch').select();
+    center(true); // back to the default overview once the search is finished
   }
   $('repoSearch').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
