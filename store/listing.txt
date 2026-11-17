@@ -1,0 +1,22 @@
+NAME: City Workspaces
+CATEGORY: Productivity
+SUMMARY (132 chars max): Save your open tabs into workspaces, reopen them in one click, and suspend idle tabs. Syncs with your isocity city.
+
+DESCRIPTION:
+City Workspaces turns your open tabs into saved workspaces, like School and Personal.
+- Save all tabs or just this tab into a workspace, and optionally close them.
+- Open a whole workspace in a new window with one click.
+- Suspend tabs you are not using to free memory.
+- Search your saved links. Alt+W opens the popup, Alt+Shift+S saves the current window.
+- Syncs with your isocity workspace city (isocity-mu.vercel.app) whenever it is open.
+Your data stays in your browser. Nothing is sent to any server.
+
+SINGLE PURPOSE: Save, reopen and suspend browser tabs as workspaces.
+
+PERMISSION JUSTIFICATIONS:
+- tabs: read the title and address of your open tabs to save them, open saved links, and suspend (discard) background tabs.
+- storage: keep your workspaces on this device.
+- Host access (isocity-mu.vercel.app): lets the extension sync workspaces with the city page when it is open.
+Remote code: none. Data use: no personal data collected, nothing transmitted off the device.
+
+PRIVACY POLICY: not needed if you choose "does not collect user data" (still tick the three data-use certifications).

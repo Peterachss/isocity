@@ -3,18 +3,49 @@
   "name": "City Workspaces",
   "version": "1.0.0",
   "description": "Save your open tabs into your isocity workspaces, reopen them in one click, and suspend idle tabs.",
-  "permissions": ["tabs", "storage"],
-  "action": { "default_popup": "popup.html", "default_title": "City Workspaces" },
-  "background": { "service_worker": "background.js" },
+  "permissions": [
+    "tabs",
+    "storage"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "City Workspaces",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
   "commands": {
-    "_execute_action": { "suggested_key": { "default": "Alt+W" }, "description": "Open City Workspaces" },
-    "save-window": { "suggested_key": { "default": "Alt+Shift+S" }, "description": "Save all tabs in this window to the active workspace" }
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+W"
+      },
+      "description": "Open City Workspaces"
+    },
+    "save-window": {
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
+      "description": "Save all tabs in this window to the active workspace"
+    }
   },
   "content_scripts": [
     {
-      "matches": ["https://isocity-mu.vercel.app/*", "http://localhost/*", "http://127.0.0.1/*"],
-      "js": ["content.js"],
+      "matches": [
+        "https://isocity-mu.vercel.app/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
 }
