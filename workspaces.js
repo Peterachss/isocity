@@ -122,13 +122,24 @@
     };
     body.appendChild(add);
 
-    // resources: pinned first
-    const list = el('div', 'ws-list');
-    const sorted = [...sp.res].sort((a, b) => (b.pin ? 1 : 0) - (a.pin ? 1 : 0));
-    if (!sorted.length) list.appendChild(el('p', 'ws-empty', 'Empty. Add links above, or Ctrl+K to jump anywhere.'));
-    for (const r of sorted) {
+    // resources, grouped into sections (drag a row to reorder or onto a section to move it)
+    sp.secs = sp.secs || [];
+    const drag = { r: null };
+    const dropOn = (r, sec) => {
+      if (!drag.r || drag.r === r) return;
+      sp.res = sp.res.filter((x) => x !== drag.r);
+      drag.r.sec = sec || '';
+      const at = r ? sp.res.indexOf(r) : -1;
+      if (at >= 0) sp.res.splice(at, 0, drag.r); else sp.res.push(drag.r);
+      drag.r = null; save(); render();
+    };
+    const allow = (node, fn) => { node.ondragover = (e) => { if (drag.r) { e.preventDefault(); node.classList.add('drop'); } }; node.ondragleave = () => node.classList.remove('drop'); node.ondrop = (e) => { e.preventDefault(); node.classList.remove('drop'); fn(); }; };
+    const rowFor = (r) => {
       const i = resInfo(r, sp);
-      const row = el('div', 'ws-row');
+      const row = el('div', 'ws-row'); row.draggable = true;
+      row.ondragstart = (e) => { drag.r = r; e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', i.title); } catch (x) { /* ignore */ } row.classList.add('dragging'); };
+      row.ondragend = () => { drag.r = null; row.classList.remove('dragging'); };
+      allow(row, () => dropOn(r, r.sec));
       const main = el('button', 'ws-main'); main.type = 'button';
       main.appendChild(el('span', 'ws-title', i.title));
       main.appendChild(el('span', 'ws-sub', i.sub));
@@ -136,11 +147,45 @@
       main.onmouseenter = () => API.warmUrl(i.url);
       row.appendChild(main);
       if (r.kind === 'b') row.appendChild(btn('Map', () => { setOpen(false); API.focus(r.ref); }, 'chip tiny', 'Show this building on the map'));
+      if (sp.secs.length) {
+        const sel = el('select', 'ws-sec'); sel.setAttribute('aria-label', 'Move to section');
+        const o0 = el('option', '', 'No section'); o0.value = ''; sel.appendChild(o0);
+        for (const s of sp.secs) { const o = el('option', '', s.name); o.value = s.id; sel.appendChild(o); }
+        sel.value = r.sec || '';
+        sel.onchange = () => { r.sec = sel.value; save(); render(); };
+        row.appendChild(sel);
+      }
       row.appendChild(btn(r.pin ? 'Pinned' : 'Pin', () => { r.pin = !r.pin; save(); render(); }, 'chip tiny', 'Pin to top'));
       row.appendChild(btn('x', () => { sp.res = sp.res.filter((x) => x !== r); save(); render(); }, 'chip tiny', 'Remove'));
-      list.appendChild(row);
+      return row;
+    };
+    const inSec = (id) => sp.res.filter((r) => (r.sec || '') === id && (id === '' || sp.secs.some((s) => s.id === id)) ).sort((x, y) => (y.pin ? 1 : 0) - (x.pin ? 1 : 0));
+    const orphan = sp.res.filter((r) => r.sec && !sp.secs.some((s) => s.id === r.sec));
+    orphan.forEach((r) => { r.sec = ''; });
+    const top = el('div', 'ws-list');
+    allow(top, () => dropOn(null, ''));
+    const loose = inSec('');
+    if (!sp.res.length) top.appendChild(el('p', 'ws-empty', 'Empty. Add links above, or Ctrl+K to jump anywhere.'));
+    loose.forEach((r) => top.appendChild(rowFor(r)));
+    body.appendChild(top);
+    for (const s of sp.secs) {
+      const head = el('div', 'ws-sechead');
+      allow(head, () => dropOn(null, s.id));
+      const t = btn(`${s.collapsed ? '+' : '-'} ${s.name} (${inSec(s.id).length})`, () => { s.collapsed = !s.collapsed; save(); render(); }, 'ws-sectitle');
+      head.appendChild(t);
+      head.appendChild(btn('Open', () => { const l = inSec(s.id).map((r) => resInfo(r, sp).url).filter(Boolean); l.forEach((u) => window.open(API.safeHref(u), '_blank', 'noopener,noreferrer')); API.notify(`Opened ${l.length} from ${s.name}`, 1600); }, 'chip tiny', 'Open this section'));
+      head.appendChild(btn('Rename', () => { const n = (prompt('Rename section', s.name) || '').trim(); if (n) { s.name = n.slice(0, 24); save(); render(); } }, 'chip tiny'));
+      head.appendChild(btn('x', () => { if (!confirm(`Remove the section "${s.name}"? Its links move out of it.`)) return; sp.secs = sp.secs.filter((z) => z !== s); sp.res.forEach((r) => { if (r.sec === s.id) r.sec = ''; }); save(); render(); }, 'chip tiny', 'Remove section'));
+      body.appendChild(head);
+      if (!s.collapsed) {
+        const l = el('div', 'ws-list'); allow(l, () => dropOn(null, s.id));
+        const rs = inSec(s.id);
+        if (!rs.length) l.appendChild(el('p', 'ws-empty', 'Drag links here'));
+        rs.forEach((r) => l.appendChild(rowFor(r)));
+        body.appendChild(l);
+      }
     }
-    body.appendChild(list);
+    body.appendChild(btn('+ Add section', () => { const n = (prompt('Section name') || '').trim(); if (!n) return; sp.secs.push({ id: uid(), name: n.slice(0, 24), collapsed: false }); save(); render(); }, 'chip tiny'));
 
     // tasks
     body.appendChild(el('h3', 'ws-h', 'Tasks'));

@@ -798,3 +798,10 @@ body:has(.pop[data-open="true"]) .build-bar { visibility: hidden; }
 .pal-g { font-size: 11px; opacity: .7; white-space: nowrap; }
 @media (max-width: 760px) { .ws-pop { left: 12px; right: 12px; width: auto; top: 90px; bottom: 120px; max-width: none; } }
 .ws-pop { background: var(--surface); backdrop-filter: none; }
+
+.ws-row[draggable="true"] { cursor: grab; }
+.ws-row.dragging { opacity: .45; }
+.ws-row.drop, .ws-list.drop, .ws-sechead.drop { outline: 2px dashed var(--accent); outline-offset: 2px; border-radius: 10px; }
+.ws-sechead { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.ws-sectitle { flex: 1; text-align: left; background: transparent; border: 0; color: var(--ink-muted); font: inherit; font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; cursor: pointer; padding: 4px 2px; }
+.ws-sec { max-width: 92px; font: inherit; font-size: 11px; padding: 4px; border-radius: 8px; border: 1px solid var(--surface-3); background: var(--surface-2); color: var(--ink); }
