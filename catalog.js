@@ -60,7 +60,6 @@ window.ISOCITY_DATA = (() => {
 
   const DEFAULT_REPOS = [
     { id: 'isocity', kind: 'github', name: 'isocity', lang: 'JavaScript', desc: 'Interactive isometric city workspace and live repository explorer.', web: 'https://isocity-mu.vercel.app', git: 'https://github.com/Peterachss/isocity' },
-    { id: '3d-shirt-and-hoodie', kind: 'github', name: '3d-shirt-and-hoodie', lang: 'Python', desc: 'Interactive 3D Blender crewneck T-shirt and pullover hoodie studio.', web: 'https://peterachss.github.io/3d-shirt-and-hoodie/', git: 'https://github.com/Peterachss/3d-shirt-and-hoodie' },
     { id: 'finance-tracker', kind: 'github', name: 'finance-tracker', lang: 'JavaScript', desc: 'Personal finance tracker with a spreadsheet-first workflow.', web: 'https://finance-tracker-phi-ashen.vercel.app', git: 'https://github.com/Peterachss/finance-tracker', isPrivate: true },
     { id: 'maths-ia-explorer', kind: 'github', name: 'maths-ia-explorer', lang: 'TypeScript', desc: 'Interactive explorer for an IB Maths AA SL IA on income and life expectancy.', web: 'https://peterachss.github.io/maths-ia-explorer/', git: 'https://github.com/Peterachss/maths-ia-explorer' },
     { id: 'greenkeep', kind: 'github', name: 'greenkeep', lang: 'HTML', desc: 'Greenkeep notes web app.', web: 'https://peterachss.github.io/greenkeep/', git: 'https://github.com/Peterachss/greenkeep' },
@@ -221,7 +220,6 @@ window.ISOCITY_DATA = (() => {
   const GITHUB_LANDMARKS = [
     { id: 'isocity',                  x: 8,  y: 4,  t: 'office',   lv: 3 },
     { id: 'finance-tracker',          x: 21, y: 7,  t: 'apt',      lv: 2 },
-    { id: '3d-shirt-and-hoodie',      x: 5,  y: 13, t: 'wheel',    lv: 1 },
     { id: 'maths-ia-explorer',        x: 4,  y: 8,  t: 'school',   lv: 1 },
     { id: 'greenkeep',                x: 10, y: 11, t: 'clinic',   lv: 1 },
     { id: 'cham-hq',                  x: 14, y: 13, t: 'plaza',    lv: 1 },
