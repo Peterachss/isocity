@@ -156,12 +156,12 @@
     } catch (e) { return url; }
   }
 
-  function getItem(id) {
+  function getItem(id, acctOv) {
     const base = repoMap.get(id) || googleMap.get(id) || customItems.find((c) => c.id === id) || REPOS[0];
     const merged = { ...base, ...(overrides[base.id] || {}) };
     const acctForced = FORCED_ACCT[merged.id];
-    if (merged.kind === 'google' && (acctForced !== undefined || accountPrefs[merged.id] !== undefined || globalAcct !== 0 || acctSwap || acctEmails.personal || acctEmails.school)) {
-      const la = acctForced !== undefined ? acctForced : (accountPrefs[merged.id] !== undefined ? accountPrefs[merged.id] : globalAcct);
+    if (merged.kind === 'google' && (acctOv !== undefined || acctForced !== undefined || accountPrefs[merged.id] !== undefined || globalAcct !== 0 || acctSwap || acctEmails.personal || acctEmails.school)) {
+      const la = acctForced !== undefined ? acctForced : (acctOv !== undefined ? acctOv : (accountPrefs[merged.id] !== undefined ? accountPrefs[merged.id] : globalAcct));
       const a = uIdx(la);
       const em = la === 1 ? acctEmails.school : acctEmails.personal;
       merged.web = applyAccountToUrl(merged.web, a, em);
@@ -3396,6 +3396,14 @@
     }
   });
   syncAcctUI();
+  // Small API for workspaces.js (Workona-style spaces, command palette)
+  window.ISOCITY_API = {
+    allItems, getItem, notify, safeHref, warmUrl,
+    focus: (id) => focusItemById(id),
+    acctUrl: (url, la) => applyAccountToUrl(url, uIdx(la), la === 1 ? acctEmails.school : acctEmails.personal),
+    acct: () => globalAcct,
+    setLight: () => $('lightBtn').click(),
+  };
 
 
   // ---------- Dusk / Day / Night button ----------
