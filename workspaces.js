@@ -70,7 +70,7 @@
   const inset = () => (pop.dataset.open === 'true' && wide() ? pop.offsetWidth : 0);
   const syncInset = () => { if (API.setInset) API.setInset(inset()); };
   function setOpen(o) {
-    pop.dataset.open = String(o); pop.inert = !o; document.body.classList.toggle('ws-open', o); $('wsBtn').setAttribute('aria-expanded', String(o));
+    pop.dataset.open = String(o); pop.inert = !o; document.body.classList.toggle('ws-open', o); $('wsBtn').setAttribute('aria-expanded', String(o)); $('wsTopBtn').setAttribute('aria-expanded', String(o));
     if (o) render();
     requestAnimationFrame(syncInset);
   }
@@ -375,7 +375,7 @@
   });
 
   // ---- wiring ----
-  $('wsBtn').onclick = (e) => { e.stopPropagation(); setOpen(pop.dataset.open !== 'true'); };
+  $('wsBtn').onclick = $('wsTopBtn').onclick = (e) => { e.stopPropagation(); setOpen(pop.dataset.open !== 'true'); };
   $('wsClose').onclick = () => setOpen(false);
   pop.inert = true;
   // Bridge to the Workspaces browser extension (saves open tabs into these spaces)

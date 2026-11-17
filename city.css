@@ -886,3 +886,6 @@ body.ws-open .sim-pill { left: calc(min(800px, 56vw) + 12px); max-width: calc(10
   .wsn-cols { grid-template-columns: 1fr; }
   body.ws-open .sim-pill { display: none; }
 }
+
+.ws-top{background:#004225;color:#e8efe4;font-weight:600}
+body.ws-open .sim-pill{z-index:60}
