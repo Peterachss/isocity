@@ -3349,7 +3349,7 @@
 
 
   // ---------- quick account switch + app launcher (bottom bar) ----------
-  const LAUNCH = [['google-slides', 'Slides'], ['google-docs', 'Docs'], ['google-sheets', 'Sheets'], ['gmail', 'Gmail'], ['google-calendar', 'Calendar'], ['seqta', 'SEQTA']];
+  const LAUNCH = [['google-slides', 'Slides'], ['google-docs', 'Docs'], ['google-sheets', 'Sheets'], ['google-drive', 'Drive'], ['gmail', 'Gmail'], ['google-calendar', 'Calendar'], ['seqta', 'SEQTA']];
   function syncAcctUI() {
     const school = globalAcct === 1;
     $('acctBtn').textContent = school ? 'School' : 'Personal';

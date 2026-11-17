@@ -12,14 +12,16 @@
   const seed = () => ({
     v: 1, active: 'school', recent: [],
     spaces: [
-      { id: 'school', name: 'School', acct: 1, notes: '', tasks: [], res: ['seqta', 'toddle', 'gmail', 'google-docs', 'google-slides', 'google-sheets', 'goodnotes', 'blooket', 'mybib'].map((r, i) => ({ id: uid(), kind: 'b', ref: r, pin: i < 3 })) },
-      { id: 'personal', name: 'Personal', acct: 0, notes: '', tasks: [], res: ['google-calendar', 'gmail', 'github-hub', 'econ-app', 'uni-plan'].map((r, i) => ({ id: uid(), kind: 'b', ref: r, pin: i < 2 })) },
+      { id: 'school', name: 'School', acct: 1, notes: '', tasks: [], res: ['seqta', 'toddle', 'gmail', 'google-docs', 'google-slides', 'google-sheets', 'google-drive', 'goodnotes', 'blooket', 'mybib'].map((r, i) => ({ id: uid(), kind: 'b', ref: r, pin: i < 3 })) },
+      { id: 'personal', name: 'Personal', acct: 0, notes: '', tasks: [], res: ['google-calendar', 'gmail', 'google-drive', 'github-hub', 'econ-app', 'uni-plan'].map((r, i) => ({ id: uid(), kind: 'b', ref: r, pin: i < 2 })) },
       { id: 'cham', name: 'Chạm', acct: 0, notes: '', tasks: [], res: ['cham-merch-design', 'notion-widget'].map((r) => ({ id: uid(), kind: 'b', ref: r, pin: false })) },
     ],
   });
   let st;
   try { st = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { st = null; }
   if (!st || !Array.isArray(st.spaces) || !st.spaces.length) st = seed();
+  // one-time: add Drive to the starter School and Personal spaces
+  if (!st.drive) { st.drive = 1; for (const id of ['school', 'personal']) { const s = st.spaces.find((z) => z.id === id); if (s && !s.res.some((r) => r.ref === 'google-drive')) s.res.push({ id: uid(), kind: 'b', ref: 'google-drive', pin: false }); } }
   let saveT = 0;
   const save = () => { clearTimeout(saveT); saveT = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { /* ignore */ } }, 200); };
   const space = () => st.spaces.find((s) => s.id === st.active) || st.spaces[0];
@@ -90,6 +92,7 @@
       sp.acct = sp.acct == null ? 0 : sp.acct === 0 ? 1 : null; save(); render();
     }, 'chip small', 'Which Google account this workspace opens with'));
     act.appendChild(btn('Rename', () => { const n = (prompt('Rename workspace', sp.name) || '').trim(); if (n) { sp.name = n.slice(0, 24); save(); render(); } }));
+    act.appendChild(btn('Duplicate', () => { const s = JSON.parse(JSON.stringify(sp)); s.id = uid(); s.name = (sp.name + ' copy').slice(0, 24); s.res.forEach((r) => { r.id = uid(); }); st.spaces.push(s); st.active = s.id; save(); render(); }, 'chip small', 'Copy this workspace'));
     act.appendChild(btn('Share', () => share(sp), 'chip small', 'Copy a link that adds this workspace on another device'));
     act.appendChild(btn(live().length > 1 ? 'Archive' : 'Clear', () => {
       if (live().length > 1) { sp.archived = true; st.active = live()[0].id; API.notify(`${sp.name} archived (Ctrl+K, "restore")`); } else { sp.res = []; sp.tasks = []; sp.notes = ''; }

@@ -173,6 +173,18 @@ window.ISOCITY_DATA = (() => {
       ],
     },
     {
+      id: 'google-drive', kind: 'google', name: 'Google Drive', cat: 'Google', study: true,
+      desc: 'Files and folders. Opens with your personal or school account.',
+      web: 'https://drive.google.com/drive/u/0/my-drive',
+      alt: 'https://drive.google.com/drive/u/0/shared-with-me', altLabel: 'Shared with me',
+      shortcuts: [
+        { label: 'My Drive', url: 'https://drive.google.com/drive/u/0/my-drive', sub: 'All your files' },
+        { label: 'Shared with me', url: 'https://drive.google.com/drive/u/0/shared-with-me', sub: 'Files others shared' },
+        { label: 'Recent', url: 'https://drive.google.com/drive/u/0/recent', sub: 'Recently opened' },
+        { label: 'Starred', url: 'https://drive.google.com/drive/u/0/starred', sub: 'Starred files' },
+      ],
+    },
+    {
       id: 'google-sheets', kind: 'google', name: 'Google Sheets', cat: 'Google', study: true,
       desc: 'Spreadsheets, data tables, and budgets. Opens with your personal or school account.',
       web: 'https://docs.google.com/spreadsheets/u/0/',
@@ -232,6 +244,7 @@ window.ISOCITY_DATA = (() => {
     { id: 'mybib',           x: 11, y: 27, t: 'shop',     lv: 2 },
     { id: 'google-calendar', x: 17, y: 27, t: 'plaza',    lv: 1 },
     { id: 'toddle',          x: 14, y: 27, t: 'school',   lv: 1 },
+    { id: 'google-drive',    x: 20, y: 27, t: 'office',   lv: 2 },
   ];
 
   const SCENIC_PARKS = [
