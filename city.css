@@ -904,6 +904,6 @@ body.ws-open .sim-pill { left: calc(min(900px, 60vw) + 12px); max-width: calc(10
 .ws-top{background:#004225;color:#e8efe4;font-weight:600}
 body.ws-open .sim-pill{z-index:60}
 
-.ws-dock{position:fixed;top:calc(max(12px, env(safe-area-inset-top)) + 70px);left:12px;z-index:9;background:#0a3324;color:#e8efe4;font-weight:600;padding:8px 16px}
+.ws-dock{justify-self:start;background:#0a3324;color:#e8efe4;font-weight:600;padding:8px 18px}
 .ws-dock:hover{background:#0f4331}
 body.ws-open .ws-dock{display:none}
