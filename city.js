@@ -2476,6 +2476,15 @@
   $('repoSearch').addEventListener('focus', () => { renderSearchResults(); $('searchResults').hidden = false; });
   $('repoSearch').addEventListener('input', () => { renderSearchResults(); $('searchResults').hidden = false; });
   let enterState = { id: '', q: '', t: 0 };
+  // After a page has been opened, clear the search so it's ready for the next one (the building stays selected and highlighted).
+  function resetSearchAfterOpen(keepFocus = true) {
+    enterState = { id: '', q: '', t: 0 };
+    $('repoSearch').value = '';
+    renderSearchResults();
+    $('searchResults').hidden = true;
+    $('clearSearch').hidden = true;
+    if (keepFocus && document.activeElement === $('repoSearch')) $('repoSearch').select();
+  }
   $('repoSearch').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -2486,8 +2495,8 @@
       if (enterState.id === first.id && enterState.q === q && now - enterState.t < 8000) {
         // second Enter: go straight to the page
         const url = getItem(first.id).web || getItem(first.id).git;
-        enterState.id = '';
-        if (url) { window.open(safeHref(url), '_blank', 'noopener,noreferrer'); notify(`Opening ${first.name}...`, 1400); }
+        if (url) { window.open(safeHref(url), '_blank', 'noopener,noreferrer'); notify(`Opened ${first.name}`, 1400); }
+        resetSearchAfterOpen();
       } else {
         focusItemById(first.id);
         enterState = { id: first.id, q, t: now };
@@ -2495,6 +2504,10 @@
       }
     }
   });
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest && e.target.closest('#inspectCard a[href], #launchPop a[href]');
+    if (a && $('repoSearch').value) resetSearchAfterOpen(false);
+  }, true);
   $('clearSearch').onclick = () => { $('repoSearch').value = ''; renderSearchResults(); $('repoSearch').focus(); };
   document.querySelectorAll('.filter-chip').forEach((btn) => {
     btn.onclick = () => {
