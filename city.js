@@ -363,7 +363,7 @@
     pins = (Array.isArray(d.pins) && d.pins.length === N)
       ? d.pins.map((row) => Array.isArray(row) ? Array.from({ length: N }, (_, j) => (row[j] && typeof row[j] === 'string') ? row[j] : null) : Array(N).fill(null))
       : makePins();
-    pins = pins.map((row) => row.map((v) => (v === 'co-bo-u' ? 'uni-plan' : (v === 'pomodoro' || v === 'quick-notes') ? null : v)));
+    pins = pins.map((row) => row.map((v) => (v === 'co-bo-u' ? 'uni-plan' : v === 'cham-merch-designs' ? 'cham-merch-design' : (v === 'pomodoro' || v === 'quick-notes') ? null : v)));
     rotSteps = Number.isInteger(d.rotSteps) ? ((d.rotSteps % 4) + 4) % 4 : 0;
 
     themeId = D.THEMES[d.themeId] ? d.themeId : 'autumn';
@@ -1856,7 +1856,7 @@
     let added = false;
     for (const r of list) {
       if (!r || !r.name) continue;
-      if (r.name === 'co-bo-u') continue;
+      if (r.name === 'co-bo-u' || r.name === 'cham-merch-designs') continue;
       const existing = repoMap.get(r.name);
       const webUrl = r.homepage && r.homepage.startsWith('http')
         ? r.homepage
@@ -1893,7 +1893,7 @@
 
     // Seed bottom commit ticker from top 4 updated public repos
     tickerQueue.length = 0;
-    const topRepos = list.filter((r) => r && r.name && r.name !== 'co-bo-u').slice(0, 4);
+    const topRepos = list.filter((r) => r && r.name && r.name !== 'co-bo-u' && r.name !== 'cham-merch-designs').slice(0, 4);
     await Promise.all(topRepos.map(async (r) => {
       const commits = await fetchJsonTimed(`https://api.github.com/repos/${GITHUB_OWNER}/${r.name}/commits?per_page=2`);
       if (Array.isArray(commits)) {
