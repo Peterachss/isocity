@@ -173,6 +173,18 @@
     return merged;
   }
 
+  // Opens the network connection to a site early (DNS, TCP, TLS), so the page loads sooner when you click.
+  const warmedOrigins = new Set();
+  function warmUrl(u) {
+    try {
+      const o = new URL(u, location.href).origin;
+      if (!/^https?:/.test(o) || o === location.origin || warmedOrigins.has(o)) return;
+      warmedOrigins.add(o);
+      const l = document.createElement('link'); l.rel = 'preconnect'; l.href = o;
+      document.head.appendChild(l);
+    } catch (e) { /* ignore */ }
+  }
+  let lastWarmId = '';
   let toastTimer = 0;
   function notify(msg, ms = 2600) {
     const t = $('carToast'); if (!t) return;
@@ -2298,7 +2310,7 @@
     $('inspDesc').textContent = item.desc || item.web || '';
 
     $('inspWeb').hidden = !item.web;
-    if (item.web) { $('inspWeb').href = safeHref(item.web); $('inspWeb').textContent = isGit ? 'Open live site' : `Open ${item.name}`; }
+    if (item.web) { $('inspWeb').href = safeHref(item.web); $('inspWeb').textContent = isGit ? 'Open live site' : `Open ${item.name}`; warmUrl(item.web); }
 
     $('inspEditor').hidden = !(isGit || item.alt);
     if (isGit) {
@@ -2444,6 +2456,7 @@
       boxEl.innerHTML = '<div class="detail-row"><div class="detail-sub">No matching places or commits.</div></div>';
       return;
     }
+    warmUrl(getItem(matches[0].id).web);
     for (const item of matches) {
       const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'search-item';
       const dot = document.createElement('span'); dot.className = 'search-dot' + (item.isPrivate ? ' priv' : '');
@@ -2462,11 +2475,24 @@
 
   $('repoSearch').addEventListener('focus', () => { renderSearchResults(); $('searchResults').hidden = false; });
   $('repoSearch').addEventListener('input', () => { renderSearchResults(); $('searchResults').hidden = false; });
+  let enterState = { id: '', q: '', t: 0 };
   $('repoSearch').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
+      e.preventDefault();
       const q = ($('repoSearch').value || '').trim().toLowerCase();
       const first = allItems().find((r) => matchesFilter(r, q));
-      if (first) focusItemById(first.id);
+      if (!first) return;
+      const now = Date.now();
+      if (enterState.id === first.id && enterState.q === q && now - enterState.t < 8000) {
+        // second Enter: go straight to the page
+        const url = getItem(first.id).web || getItem(first.id).git;
+        enterState.id = '';
+        if (url) { window.open(safeHref(url), '_blank', 'noopener,noreferrer'); notify(`Opening ${first.name}...`, 1400); }
+      } else {
+        focusItemById(first.id);
+        enterState = { id: first.id, q, t: now };
+        notify('Press Enter again to open the page', 1800);
+      }
     }
   });
   $('clearSearch').onclick = () => { $('repoSearch').value = ''; renderSearchResults(); $('repoSearch').focus(); };
@@ -2821,6 +2847,7 @@
 
     const lbl = hitLabel(e.clientX, e.clientY);
     hoveredLabel = lbl ? lbl.id : null;
+    if (lbl && lbl.id !== lastWarmId) { lastWarmId = lbl.id; warmUrl(getItem(lbl.id).web); }
     const t = lbl ? [lbl.x, lbl.y] : pick(e.clientX, e.clientY);
     hover = t;
     if (toolsActive()) { $('tip').hidden = true; return; }
@@ -3320,7 +3347,7 @@
       const it = getItem(id);
       const a = document.createElement('a');
       a.className = 'chip small link-btn';
-      a.textContent = label; a.href = it.web || '#'; a.target = '_blank'; a.rel = 'noopener noreferrer';
+      a.textContent = label; a.href = it.web || '#'; a.target = '_blank'; a.rel = 'noopener noreferrer'; warmUrl(it.web);
       $('launchGrid').appendChild(a);
     }
     const gh = document.createElement('a');
