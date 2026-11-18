@@ -2973,7 +2973,7 @@
     const tz = Math.max(0.35, Math.min(0.95, VW / (N * TW) * 1.12, H / (N * TH + 150) * 1.12));
     const tx = viewInset + VW / 2, ty = H / 2 - (N * TH / 2) * tz + 26;
     if (!animateMove || reduceMotion) { cam.x = tx; cam.y = ty; cam.z = tz; camAnim = null; return; }
-    camAnim = { sx: cam.x, sy: cam.y, sz: cam.z, tx, ty, tz, start: performance.now(), dur: 360 };
+    camAnim = { sx: cam.x, sy: cam.y, sz: cam.z, tx, ty, tz, start: performance.now(), dur: 340 };
   }
   addEventListener('resize', resize);
 

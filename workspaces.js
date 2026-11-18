@@ -64,14 +64,14 @@
   const pop = $('wsPop');
   const side = $('wsSide');
   const body = $('wsBody');
-  let view = 'tabs', filterQ = '', showArchive = false;
+  let view = 'tabs', filterQ = '', showArchive = false, enter = false, enterT = 0;
   const sel = new Set();
   const wide = () => innerWidth >= 900;
   const inset = () => (pop.dataset.open === 'true' && wide() ? pop.offsetWidth : 0);
   const syncInset = () => { if (API.setInset) API.setInset(inset()); };
   function setOpen(o) {
     pop.dataset.open = String(o); pop.inert = !o; document.body.classList.toggle('ws-open', o); $('wsBtn').setAttribute('aria-expanded', String(o)); $('wsTopBtn').setAttribute('aria-expanded', String(o));
-    if (o) render();
+    if (o) { enter = true; render(); }
     requestAnimationFrame(syncInset);
   }
   addEventListener('resize', () => { if (pop.dataset.open === 'true') syncInset(); });
@@ -94,7 +94,7 @@
     side.appendChild(head);
     const list = el('div', 'wsn-spaces');
     for (const s of live()) {
-      const b = btn(s.name, () => { st.active = s.id; sel.clear(); filterQ = ''; save(); render(); }, 'wsn-space');
+      const b = btn(s.name, () => { if (st.active !== s.id) enter = true; st.active = s.id; sel.clear(); filterQ = ''; save(); render(); }, 'wsn-space');
       b.setAttribute('aria-current', String(s.id === space().id));
       list.appendChild(b);
     }
@@ -118,6 +118,7 @@
     const sp = space();
     sp.secs = sp.secs || [];
     body.textContent = '';
+    if (enter) { enter = false; body.classList.add('wsn-in'); clearTimeout(enterT); enterT = setTimeout(() => body.classList.remove('wsn-in'), 900); }
     const drag = { r: null };
 
     // ---- header ----
@@ -144,7 +145,7 @@
     // ---- tabs row ----
     const tabs = el('div', 'wsn-tabs'); tabs.setAttribute('role', 'tablist');
     for (const [id, label] of [['tabs', 'Tabs'], ['notes', 'Notes'], ['tasks', `Tasks${sp.tasks.filter((t) => !t.d).length ? ` (${sp.tasks.filter((t) => !t.d).length})` : ''}`]]) {
-      const b = btn(label, () => { view = id; render(); }, 'wsn-tab'); b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(view === id)); tabs.appendChild(b);
+      const b = btn(label, () => { if (view !== id) enter = true; view = id; render(); }, 'wsn-tab'); b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(view === id)); tabs.appendChild(b);
     }
     const act = el('div', 'wsn-tabright');
     act.appendChild(btn(sp.acct == null ? 'Account: default' : sp.acct === 1 ? 'School account' : 'Personal account', () => { sp.acct = sp.acct == null ? 0 : sp.acct === 0 ? 1 : null; save(); render(); }, 'wsn-chipbtn', 'Which Google account this workspace opens with'));
