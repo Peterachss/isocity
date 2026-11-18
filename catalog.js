@@ -102,10 +102,10 @@ window.ISOCITY_DATA = (() => {
     {
       id: 'google-chat', kind: 'google', name: 'Google Chat', cat: 'Google', study: false,
       desc: 'Direct messages, group chats, and shared team spaces.',
-      web: 'https://chat.google.com/',
+      web: 'https://mail.google.com/chat/u/0/#chat/home',
       alt: 'https://mail.google.com/chat/u/0/#chat/spaces', altLabel: 'Spaces',
       shortcuts: [
-        { label: 'Chat Home', url: 'https://chat.google.com/', sub: 'Unread threads and DMs' },
+        { label: 'Chat Home', url: 'https://mail.google.com/chat/u/0/#chat/home', sub: 'Unread threads and DMs' },
         { label: 'Team Spaces', url: 'https://mail.google.com/chat/u/0/#chat/spaces', sub: 'Shared channels' },
       ],
     },
