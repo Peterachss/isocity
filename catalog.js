@@ -162,6 +162,17 @@ window.ISOCITY_DATA = (() => {
       ],
     },
     {
+      id: 'instagram', kind: 'google', name: 'Instagram', cat: 'Social', study: false,
+      desc: 'Instagram feed, messages and profile. Uses whichever account you are signed in to in your browser.',
+      web: 'https://www.instagram.com/',
+      alt: 'https://www.instagram.com/direct/inbox/', altLabel: 'Messages',
+      shortcuts: [
+        { label: 'Feed', url: 'https://www.instagram.com/', sub: 'Home feed' },
+        { label: 'Messages', url: 'https://www.instagram.com/direct/inbox/', sub: 'Direct messages' },
+        { label: 'Explore', url: 'https://www.instagram.com/explore/', sub: 'Discover posts' },
+      ],
+    },
+    {
       id: 'toddle', kind: 'google', name: 'Toddle', cat: 'Study', study: true,
       desc: 'School learning platform: units, assessments, and class updates.',
       web: 'https://web.toddleapp.com/?type=loginHome',
