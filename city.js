@@ -1003,19 +1003,33 @@
   // Better multi-lobe 3x supersampled organic trees
   const SPR_W = 40, SPR_H = 46, SPR_CX = 20, SPR_CY = 16, SPR_S = 3;
   let crownSprites = [];
+  // Each theme colour pair gets three canopy shapes: round, tall and a wide cluster.
+  // crownSprites[colour * CROWN_SHAPES + shape]
+  const CROWN_SHAPES = 3;
   function rebuildCrownSprites() {
-    crownSprites = curTheme().crowns.map(([dark, light]) => {
-      const c = document.createElement('canvas');
-      c.width = SPR_W * SPR_S; c.height = SPR_H * SPR_S;
-      const sc = c.getContext('2d');
-      sc.setTransform(SPR_S, 0, 0, SPR_S, 0, 0);
-      const R = 10;
-      sc.fillStyle = dark;
-      sc.beginPath(); sc.arc(SPR_CX, SPR_CY, R, 0, 7); sc.fill();
-      sc.fillStyle = light;
-      sc.beginPath(); sc.arc(SPR_CX - R * 0.25, SPR_CY - R * 0.3, R * 0.68, 0, 7); sc.fill();
-      return c;
-    });
+    crownSprites = [];
+    for (const [dark, light] of curTheme().crowns) {
+      for (let shape = 0; shape < CROWN_SHAPES; shape++) {
+        const c = document.createElement('canvas');
+        c.width = SPR_W * SPR_S; c.height = SPR_H * SPR_S;
+        const sc = c.getContext('2d');
+        sc.setTransform(SPR_S, 0, 0, SPR_S, 0, 0);
+        const R = 10;
+        if (shape === 0) {
+          sc.fillStyle = dark; sc.beginPath(); sc.arc(SPR_CX, SPR_CY, R, 0, 7); sc.fill();
+          sc.fillStyle = light; sc.beginPath(); sc.arc(SPR_CX - R * 0.25, SPR_CY - R * 0.3, R * 0.68, 0, 7); sc.fill();
+        } else if (shape === 1) {
+          sc.fillStyle = dark; sc.beginPath(); sc.ellipse(SPR_CX, SPR_CY - 2, R * 0.78, R * 1.32, 0, 0, 7); sc.fill();
+          sc.fillStyle = light; sc.beginPath(); sc.ellipse(SPR_CX - R * 0.22, SPR_CY - R * 0.55, R * 0.5, R * 0.85, 0, 0, 7); sc.fill();
+        } else {
+          sc.fillStyle = dark;
+          for (const [ox, oy, r] of [[-6.5, 1.5, 7.2], [6.5, 1.5, 7.2], [0, -3, 8.2]]) { sc.beginPath(); sc.arc(SPR_CX + ox, SPR_CY + oy, r, 0, 7); sc.fill(); }
+          sc.fillStyle = light;
+          for (const [ox, oy, r] of [[-8, -0.5, 4.2], [2.5, -6, 5]]) { sc.beginPath(); sc.arc(SPR_CX + ox, SPR_CY + oy, r, 0, 7); sc.fill(); }
+        }
+        crownSprites.push(c);
+      }
+    }
   }
   rebuildCrownSprites();
 
@@ -1023,7 +1037,8 @@
     box(x - 0.025, y - 0.025, x + 0.025, y + 0.025, 0, 8 * s, '#4a3624', L);
     const cx = px(x, y), cy = py(x, y, 19 * s);
     const k = s * rcam.z;
-    const spr = crownSprites[Math.abs(seed) % crownSprites.length];
+    const nCol = crownSprites.length / CROWN_SHAPES;
+    const spr = crownSprites[(Math.abs(seed) % nCol) * CROWN_SHAPES + ((Math.abs(seed) >>> 5) % CROWN_SHAPES)];
     rctx.drawImage(spr, cx - SPR_CX * k, cy - SPR_CY * k, SPR_W * k, SPR_H * k);
   }
 
@@ -1097,32 +1112,21 @@
     if (!skipGround && t !== 'road' && t !== 'bridge') drawGround(x, y, t, L);
     if (!t || t === 'water') return;
     if (t === 'forest') {
-      // Decorative thinning: clusters of varied height with open lawns, sparser along the water and around
-      // workspace landmarks. Purely visual and seeded by tile position, so it is stable across reloads and rotation.
+      // Full coverage (all five spots, as originally). Variety comes from height, canopy shape, colour and a
+      // small offset. Everything is seeded and positioned in the original map's frame and then turned with
+      // the view, so the same trees stay in the same places across reloads, panning, zoom and rotation.
       const [ux, uy] = unrotPt(x, y);
       const sd = ux * 17 + uy * 31;
-      const hs = (k) => Math.imul(sd + k * 7919, 2654435761) >>> 0;
-      let near = false;
-      for (let k = 0; k < 4 && !near; k++) {
-        const nx = x + NB[k][0], ny = y + NB[k][1];
-        if (!inb(nx, ny)) continue;
-        const nt = grid[nx][ny];
-        if (nt === 'water' || nt === 'bridge' || pins[nx][ny]) near = true;
+      const spots = [];
+      for (let i = 0; i < 5; i++) {
+        const jit = Math.imul(sd + i * 7919, 2654435761) >>> 0;
+        let a = FOREST_SPOTS[i][0] + (((jit >>> 4) % 7) - 3) * 0.018;
+        let b = FOREST_SPOTS[i][1] + (((jit >>> 9) % 7) - 3) * 0.018;
+        for (let r = 0; r < rotSteps; r++) { const t = a; a = 1 - b; b = t; } // original frame -> current view
+        spots.push({ a, b, sc: 0.74 + ((jit >>> 24) % 7) * 0.09, cs: Math.imul(sd + i * 977, 2654435761) >>> 20 });
       }
-      // Density comes from coarse 3x3-tile cells so trees gather into groves with lawns between them
-      const cell = Math.imul(((ux / 3) | 0) * 73 + ((uy / 3) | 0) * 151 + 11, 2654435761) >>> 0;
-      const band = cell % 5; // 0 lawn, 1 scattered, 2-4 grove
-      let count = band === 0 ? (hs(1) % 4 === 0 ? 1 : 0) : band === 1 ? 1 + (hs(2) % 2) : 4 + (hs(2) % 2);
-      if (near) count = Math.min(count, hs(3) % 3);
-      const start = hs(4) % 5;
-      for (let j = 0; j < count; j++) {
-        const i = (start + j * 2) % 5;
-        const [a, b] = FOREST_SPOTS[i];
-        const jit = hs(10 + i);
-        const sc = 0.7 + ((jit >>> 24) % 6) * 0.1;
-        const cs = Math.imul(sd + i * 977, 2654435761) >>> 20;
-        tree(x + a + (((jit >>> 4) % 7) - 3) * 0.02, y + b + (((jit >>> 9) % 7) - 3) * 0.02, sc, L, cs);
-      }
+      spots.sort((p, q) => (p.a + p.b) - (q.a + q.b)); // back to front
+      for (const t2 of spots) tree(x + t2.a, y + t2.b, t2.sc, L, t2.cs);
       return;
     }
     if (t === 'road' || t === 'bridge') {
@@ -1132,10 +1136,13 @@
     if (t === 'park') {
       quadZ(x + 0.12, y + 0.44, x + 0.88, y + 0.56, 0.2, shade('#cfc3aa', 1, L));
       box(x + 0.44, y + 0.36, x + 0.58, y + 0.42, 0.2, 2.5, '#7a5436', L);
-      const sd = x * 7 + y * 3;
-      tree(x + 0.26, y + 0.26, 1, L, 0);
-      tree(x + 0.74, y + 0.65, 0.85, L, 1);
-      if (sd % 2) tree(x + 0.3, y + 0.78, 0.7, L, 0);
+      const [pux, puy] = unrotPt(x, y);
+      const sd = pux * 7 + puy * 3;
+      const pt = [[0.26, 0.26, 1, 0], [0.74, 0.65, 0.85, 1]];
+      if (sd % 2) pt.push([0.3, 0.78, 0.7, 2]);
+      const placed = pt.map(([a, b, sc, k]) => { for (let r = 0; r < rotSteps; r++) { const t = a; a = 1 - b; b = t; } return { a, b, sc, k }; });
+      placed.sort((p, q) => (p.a + p.b) - (q.a + q.b));
+      for (const t2 of placed) tree(x + t2.a, y + t2.b, t2.sc, L, Math.imul(sd + t2.k * 977, 2654435761) >>> 20);
       return;
     }
     if (t === 'plaza') {
@@ -4071,6 +4078,7 @@
       screenOf: (x, y, z = 0) => [px(x, y), py(x, y, z)],
       cam: () => ({ ...cam }),
       setCam: (x, y, z) => { camAnim = null; cam.x = x; cam.y = y; cam.z = z; },
+      worldImage: () => worldCanvas, // the baked map layer (terrain, trees, buildings), for pixel comparisons
     };
   }
 
