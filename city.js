@@ -733,16 +733,16 @@
     poly4(px(x0, y1), py(x0, y1, z0), px(x1, y1), py(x1, y1, z0), px(x1, y1), py(x1, y1, z1), px(x0, y1), py(x0, y1, z1), shade(color, 0.82, L));
     poly4(px(x1, y0), py(x1, y0, z0), px(x1, y1), py(x1, y1, z0), px(x1, y1), py(x1, y1, z1), px(x1, y0), py(x1, y0, z1), shade(color, 0.64, L));
     quadZ(x0, y0, x1, y1, z1, shade(opts.roof || color, 1.05, L));
-    if (opts.windows) windows(x0, y0, x1, y1, z0, z1, L, opts.windows, opts.glass, opts.thresh || 0.35);
+    if (opts.windows) windows(x0, y0, x1, y1, z0, z1, L, opts.windows, opts.glass, opts.thresh || 0.35, opts.startRow || 0);
   }
-  function windows(x0, y0, x1, y1, z0, z1, L, seed, glass = false, thresh = 0.35) {
+  function windows(x0, y0, x1, y1, z0, z1, L, seed, glass = false, thresh = 0.35, startRow = 0) {
     const rows = Math.max(1, Math.floor((z1 - z0) / 14));
     const cols = Math.max(1, Math.round((x1 - x0) * 3));
     const night = 1 - L;
     const dx = x1 - x0, dy = y1 - y0;
     const darkL = shade(glass ? '#486d8a' : '#27333f', 1, L);
     const darkR = shade(glass ? '#37566f' : '#1f2a35', 1, L);
-    for (let r = 0; r < rows; r++) {
+    for (let r = startRow; r < rows; r++) {
       const zz0 = z0 + 6 + r * 14, zz1 = zz0 + (glass ? 8 : 7);
       for (let c = 0; c < cols; c++) {
         const lit = night > thresh && ((seed * 31 + r * 17 + c * 13) % 7) < 4;
@@ -761,9 +761,36 @@
     return Math.round(d.h * (lv === 2 ? 1.32 : 1.68));
   }
 
+  // Ground-floor shopfronts: a recessed frame with two glass panes per street face and a door gap.
+  // Drawn once in daylight colours into the world image and again in warm colours into the night window sprites.
+  const STOREFRONT = { shop: 1, apt: 1, office: 1 };
+  function faceL(x0, x1, y, z0, z1, fill) { poly4(px(x0, y), py(x0, y, z0), px(x1, y), py(x1, y, z0), px(x1, y), py(x1, y, z1), px(x0, y), py(x0, y, z1), fill); }
+  function faceR(x, y0, y1, z0, z1, fill) { poly4(px(x, y0), py(x, y0, z0), px(x, y1), py(x, y1, z0), px(x, y1), py(x, y1, z1), px(x, y0), py(x, y0, z1), fill); }
+  function storefront(x0, y0, x1, y1, frame, glassL, glassR) {
+    const dx = x1 - x0, dy = y1 - y0;
+    if (frame) { faceL(x0 + dx * 0.04, x1 - dx * 0.04, y1, 0.5, 10, frame); faceR(x1, y0 + dy * 0.04, y1 - dy * 0.04, 0.5, 10, frame); }
+    for (const [a, b] of [[0.08, 0.42], [0.58, 0.92]]) {
+      faceL(x0 + dx * a, x0 + dx * b, y1, 1.5, 8.5, glassL);
+      faceR(x1, y0 + dy * a, y0 + dy * b, 1.5, 8.5, glassR);
+    }
+  }
+
   function drawTileNight(x, y, t) {
     if (!t) return;
+    if (STOREFRONT[t] || t === 'house') {
+      // Warm pool of light spilling from the entrance onto the pavement
+      const ax = px(x + 0.5, y + 0.98), ay = py(x + 0.5, y + 0.98, 1);
+      const er = (t === 'house' ? 11 : 17) * rcam.z, eg = rctx.createRadialGradient(ax, ay, 0, ax, ay, er);
+      eg.addColorStop(0, 'rgba(255,205,130,0.42)'); eg.addColorStop(1, 'rgba(255,205,130,0)');
+      rctx.fillStyle = eg; rctx.beginPath(); rctx.ellipse(ax, ay, er, er * 0.55, 0, 0, 7); rctx.fill();
+    }
     if (isRoad(t)) {
+      if (crossings.has(x * N + y)) {
+        const ax = px(x + 0.5, y + 0.5), ay = py(x + 0.5, y + 0.5, 1);
+        const cr = 20 * rcam.z, cg = rctx.createRadialGradient(ax, ay, 0, ax, ay, cr);
+        cg.addColorStop(0, 'rgba(255,226,170,0.3)'); cg.addColorStop(1, 'rgba(255,226,170,0)');
+        rctx.fillStyle = cg; rctx.beginPath(); rctx.ellipse(ax, ay, cr, cr * 0.55, 0, 0, 7); rctx.fill();
+      }
       if ((x + y) % 3 === 0) {
         const z = t === 'bridge' ? 2 : 0;
         const ax = px(x + 0.5, y + 0.5), ay = py(x + 0.5, y + 0.5, z + 6);
@@ -808,7 +835,9 @@
     const rows = Math.max(1, Math.floor(h / 14));
     const cols = Math.max(1, Math.round((x1 - x0) * 3));
     const dx = x1 - x0, dy = y1 - y0;
-    for (let r = 0; r < rows; r++) {
+    const store = STOREFRONT[t] ? 1 : 0;
+    if (store) storefront(x0, y0, x1, y1, 1, '#ffd48a', '#f2b866');
+    for (let r = store; r < rows; r++) {
       const zz0 = 6 + r * 14, zz1 = zz0 + (glass ? 8 : 7);
       for (let c = 0; c < cols; c++) {
         if (((seed * 31 + r * 17 + c * 13) % 7) >= 4) continue;
@@ -865,9 +894,25 @@
 
   function drawWater(x, y, L) {
     const th = curTheme();
-    quadZ(x, y, x + 1, y + 1, -5, shade((x + y) % 2 ? th.waterA : th.waterB, 1, L));
-    if (inb(x - 1, y) && !isWater(grid[x - 1][y])) poly4(px(x, y), py(x, y, 0), px(x, y + 1), py(x, y + 1, 0), px(x, y + 1), py(x, y + 1, -5), px(x, y), py(x, y, -5), shade('#5b4c39', 1, L));
-    if (inb(x, y - 1) && !isWater(grid[x][y - 1])) poly4(px(x, y), py(x, y, 0), px(x + 1, y), py(x + 1, y, 0), px(x + 1, y), py(x + 1, y, -5), px(x, y), py(x, y, -5), shade('#6b5a44', 1, L));
+    const WZ = -7;
+    quadZ(x, y, x + 1, y + 1, WZ, shade((x + y) % 2 ? th.waterA : th.waterB, 1, L));
+    // Recessed canal: stone retaining walls on the far banks, a darker wet band and a pale waterline
+    const wallX = inb(x - 1, y) && !isWater(grid[x - 1][y]);
+    const wallY = inb(x, y - 1) && !isWater(grid[x][y - 1]);
+    if (wallX) {
+      faceR(x, y, y + 1, WZ, 1.2, shade('#8f8b80', 0.92, L));
+      faceR(x, y, y + 1, WZ, WZ + 1.6, shade('#4c4a45', 1, L));
+      faceR(x, y, y + 1, 0.6, 1.2, shade('#cfcabd', 1, L));
+    }
+    if (wallY) {
+      faceL(x, x + 1, y, WZ, 1.2, shade('#a39f93', 0.95, L));
+      faceL(x, x + 1, y, WZ, WZ + 1.6, shade('#55534d', 1, L));
+      faceL(x, x + 1, y, 0.6, 1.2, shade('#ddd8cb', 1, L));
+    }
+    // Soft contact shade on the water under each wall, plus a restrained highlight down the middle
+    if (wallX) quadZ(x, y, x + 0.14, y + 1, WZ + 0.05, 'rgba(10,16,24,0.22)');
+    if (wallY) quadZ(x, y, x + 1, y + 0.14, WZ + 0.05, 'rgba(10,16,24,0.22)');
+    if ((x * 7 + y * 3) % 4 === 0) quadZ(x + 0.35, y + 0.46, x + 0.62, y + 0.52, WZ + 0.1, 'rgba(230,244,248,0.18)');
   }
 
   function drawRoad(x, y, L, bridge = false, skipWater = false) {
@@ -875,16 +920,32 @@
     const z = bridge ? 2 : 0;
     if (bridge) {
       if (!skipWater) drawWater(x, y, L);
-      box(x + 0.12, y + 0.12, x + 0.24, y + 0.24, -5, 0, '#5a4e3f', L);
-      box(x + 0.76, y + 0.76, x + 0.88, y + 0.88, -5, 0, '#5a4e3f', L);
-      box(x + 0.05, y + 0.05, x + 0.95, y + 0.95, -1, z, '#8c806e', L, { roof: th.road });
+      box(x + 0.12, y + 0.12, x + 0.24, y + 0.24, -7, 0, '#6d6a62', L);
+      box(x + 0.76, y + 0.76, x + 0.88, y + 0.88, -7, 0, '#6d6a62', L);
+      // Thicker deck with a stone fascia, then low rails along the two open sides
+      box(x + 0.03, y + 0.03, x + 0.97, y + 0.97, -2.5, z, '#9a958a', L, { roof: th.road });
+      const alongX = (inb(x - 1, y) && isRoad(grid[x - 1][y])) || (inb(x + 1, y) && isRoad(grid[x + 1][y]));
+      if (alongX) {
+        box(x, y + 0.03, x + 1, y + 0.09, z, z + 3.2, '#d8d3c6', L);
+        box(x, y + 0.91, x + 1, y + 0.97, z, z + 3.2, '#d8d3c6', L);
+      } else {
+        box(x + 0.03, y, x + 0.09, y + 1, z, z + 3.2, '#d8d3c6', L);
+        box(x + 0.91, y, x + 0.97, y + 1, z, z + 3.2, '#d8d3c6', L);
+      }
     } else {
-      quadZ(x, y, x + 1, y + 1, 0, shade(th.curb, 1, L));
-      const nX = inb(x - 1, y) && isRoad(grid[x - 1][y]) ? 0 : 0.09;
-      const pX = inb(x + 1, y) && isRoad(grid[x + 1][y]) ? 1 : 0.91;
-      const nY = inb(x, y - 1) && isRoad(grid[x][y - 1]) ? 0 : 0.09;
-      const pY = inb(x, y + 1) && isRoad(grid[x][y + 1]) ? 1 : 0.91;
-      quadZ(x + nX, y + nY, x + pX, y + pY, 0.2, shade(th.road, 1, L));
+      // Raised pavement (SW = 1.4px kerb) with the carriageway sunk to street level
+      const SW = 1.4;
+      const nX = inb(x - 1, y) && isRoad(grid[x - 1][y]) ? 0 : 0.11;
+      const pX = inb(x + 1, y) && isRoad(grid[x + 1][y]) ? 1 : 0.89;
+      const nY = inb(x, y - 1) && isRoad(grid[x][y - 1]) ? 0 : 0.11;
+      const pY = inb(x, y + 1) && isRoad(grid[x][y + 1]) ? 1 : 0.89;
+      quadZ(x, y, x + 1, y + 1, SW, shade(th.curb, 1, L));
+      quadZ(x + nX, y + nY, x + pX, y + pY, 0, shade(th.road, 1, L));
+      // Kerb faces on the far sides of the carriageway catch the light; near-side pavement is redrawn on top
+      if (nY > 0) faceL(x + nX, x + pX, y + nY, 0, SW, shade(th.curb, 0.78, L));
+      if (nX > 0) faceR(x + nX, y + nY, y + pY, 0, SW, shade(th.curb, 0.66, L));
+      if (pY < 1) quadZ(x, y + pY, x + 1, y + 1, SW, shade(th.curb, 1, L));
+      if (pX < 1) quadZ(x + pX, y, x + 1, y + 1, SW, shade(th.curb, 1, L));
     }
 
     // Pedestrian crosswalk stripes at crossings
@@ -943,7 +1004,7 @@
   rebuildCrownSprites();
 
   function tree(x, y, s, L, seed = 0) {
-    if (!seed) box(x - 0.025, y - 0.025, x + 0.025, y + 0.025, 0, 8 * s, '#4a3624', L);
+    box(x - 0.025, y - 0.025, x + 0.025, y + 0.025, 0, 8 * s, '#4a3624', L);
     const cx = px(x, y), cy = py(x, y, 19 * s);
     const k = s * rcam.z;
     const spr = crownSprites[Math.abs(seed) % crownSprites.length];
@@ -1020,12 +1081,31 @@
     if (!skipGround && t !== 'road' && t !== 'bridge') drawGround(x, y, t, L);
     if (!t || t === 'water') return;
     if (t === 'forest') {
-      const sd = x * 17 + y * 31;
-      for (let i = 0; i < 5; i++) {
+      // Decorative thinning: clusters of varied height with open lawns, sparser along the water and around
+      // workspace landmarks. Purely visual and seeded by tile position, so it is stable across reloads and rotation.
+      const [ux, uy] = unrotPt(x, y);
+      const sd = ux * 17 + uy * 31;
+      const hs = (k) => Math.imul(sd + k * 7919, 2654435761) >>> 0;
+      let near = false;
+      for (let k = 0; k < 4 && !near; k++) {
+        const nx = x + NB[k][0], ny = y + NB[k][1];
+        if (!inb(nx, ny)) continue;
+        const nt = grid[nx][ny];
+        if (nt === 'water' || nt === 'bridge' || pins[nx][ny]) near = true;
+      }
+      // Density comes from coarse 3x3-tile cells so trees gather into groves with lawns between them
+      const cell = Math.imul(((ux / 3) | 0) * 73 + ((uy / 3) | 0) * 151 + 11, 2654435761) >>> 0;
+      const band = cell % 5; // 0 lawn, 1 scattered, 2-4 grove
+      let count = band === 0 ? (hs(1) % 4 === 0 ? 1 : 0) : band === 1 ? 1 + (hs(2) % 2) : 4 + (hs(2) % 2);
+      if (near) count = Math.min(count, hs(3) % 3);
+      const start = hs(4) % 5;
+      for (let j = 0; j < count; j++) {
+        const i = (start + j * 2) % 5;
         const [a, b] = FOREST_SPOTS[i];
-        const sc = 0.8 + ((Math.imul(sd + i * 331, 2246822519) >>> 24) % 4) * 0.1;
+        const jit = hs(10 + i);
+        const sc = 0.7 + ((jit >>> 24) % 6) * 0.1;
         const cs = Math.imul(sd + i * 977, 2654435761) >>> 20;
-        tree(x + a, y + b, sc, L, cs);
+        tree(x + a + (((jit >>> 4) % 7) - 3) * 0.02, y + b + (((jit >>> 9) % 7) - 3) * 0.02, sc, L, cs);
       }
       return;
     }
@@ -1079,9 +1159,32 @@
       : t === 'school' ? '#4a6b68'
       : '#4b6c8a';
     const H = Math.max(1, bldHeight(t, lv));
-    if (!skipGround) castShadow(x + i, y + i, x + 1 - i, y + 1 - i, H);
+    const X0 = x + i, Y0 = y + i, X1 = x + 1 - i, Y1 = y + 1 - i;
+    if (!skipGround) {
+      castShadow(X0, Y0, X1, Y1, H);
+      // Cheap contact shadow hugging the footprint
+      quadZ(X0 - 0.05, Y0 - 0.05, X1 + 0.07, Y1 + 0.07, 0.05, 'rgba(12,16,24,0.2)');
+    }
     const thresh = 0.25 + ((x * 13 + y * 7) % 24) * 0.015;
-    box(x + i, y + i, x + 1 - i, y + 1 - i, 0, H, wall, L, { roof, windows: seed, glass: t === 'office', thresh });
+    const store = STOREFRONT[t] ? 1 : 0;
+    box(X0, Y0, X1, Y1, 0, H, wall, L, { roof, windows: seed, glass: t === 'office', thresh, startRow: store });
+    if (store) storefront(X0, Y0, X1, Y1, shade('#2b2824', 1, L), shade('#8fb0bf', 0.95, L), shade('#6f8f9e', 0.95, L));
+    if (t !== 'house') {
+      // Parapet: a lighter coping rim around a slightly darker recessed roof, plus a cornice band under it
+      const pi = 0.05;
+      quadZ(X0 + pi, Y0 + pi, X1 - pi, Y1 - pi, H, shade(roof, 0.86, L));
+      faceL(X0, X1, Y1, H - 2.2, H, shade(wall, 0.62, L));
+      faceR(X1, Y0, Y1, H - 2.2, H, shade(wall, 0.48, L));
+      rctx.strokeStyle = shade(mix(wall, '#ffffff', 0.45), 1, L);
+      rctx.lineWidth = Math.max(0.6, 0.8 * rcam.z);
+      rctx.beginPath();
+      rctx.moveTo(px(X0, Y1), py(X0, Y1, H)); rctx.lineTo(px(X1, Y1), py(X1, Y1, H)); rctx.lineTo(px(X1, Y0), py(X1, Y0, H));
+      rctx.stroke();
+      // A rooftop unit or two on mid-size flat roofs, stable per building
+      if ((t === 'apt' || t === 'shop' || t === 'school') && lv < 2 && seed % 3 !== 1) {
+        box(X0 + 0.16, Y0 + 0.18, X0 + 0.3, Y0 + 0.32, H, H + 3, '#b9b6ae', L, { roof: '#d6d3cb' });
+      }
+    }
 
     if (t === 'shop') {
       poly4(px(x + i, y + 1 - i + 0.04), py(x + i, y + 1 - i + 0.04, 16), px(x + 1 - i, y + 1 - i + 0.04), py(x + 1 - i, y + 1 - i + 0.04, 16),
@@ -1258,10 +1361,10 @@
     const dx = b.tx - b.fx, dy = b.ty - b.fy;
     const x = b.px + 0.5, y = b.py + 0.5;
     const lx = dx ? 0.22 : 0.1, ly = dy ? 0.22 : 0.1;
-    box(x - lx, y - ly, x + lx, y + ly, -5, -1, b.color, L, { roof: '#efe7d6' });
+    box(x - lx, y - ly, x + lx, y + ly, -7, -2, b.color, L, { roof: '#efe7d6' });
     box(x - 0.06, y - 0.06, x + 0.06, y + 0.06, -1, 3, '#f2ece0', L);
     // Ripple wake behind boat
-    const wx = px(x - dx * 0.25, y - dy * 0.25), wy = py(x - dx * 0.25, y - dy * 0.25, -5);
+    const wx = px(x - dx * 0.25, y - dy * 0.25), wy = py(x - dx * 0.25, y - dy * 0.25, -7);
     rctx.strokeStyle = 'rgba(205, 245, 245, 0.35)';
     rctx.lineWidth = 1;
     rctx.beginPath(); rctx.ellipse(wx, wy, (3 + Math.sin(now * 0.008) * 1.5) * rcam.z, 1.5 * rcam.z, 0, 0, 7); rctx.stroke();
@@ -1285,12 +1388,17 @@
   const nctx = nightCanvas.getContext('2d');
 
   function drawSlab(L) {
-    const dep = 26;
+    // A thick miniature base: stone lip, earth body and a dark plinth band
+    const dep = 40, lip = 4, plinth = 8;
     const bx = px(N, 0), by = py(N, 0);
     const cx = px(N, N), cy = py(N, N);
     const dx = px(0, N), dy = py(0, N);
-    poly4(dx, dy, cx, cy, cx, cy + dep, dx, dy + dep, shade('#7a6a55', 0.9, L));
-    poly4(cx, cy, bx, by, bx, by + dep, cx, cy + dep, shade('#675846', 0.9, L));
+    poly4(dx, dy, cx, cy, cx, cy + dep, dx, dy + dep, shade('#5e5244', 0.9, L));
+    poly4(cx, cy, bx, by, bx, by + dep, cx, cy + dep, shade('#4b4136', 0.9, L));
+    poly4(dx, dy, cx, cy, cx, cy + lip, dx, dy + lip, shade('#bdb6a6', 1, L));
+    poly4(cx, cy, bx, by, bx, by + lip, cx, cy + lip, shade('#9d968a', 1, L));
+    poly4(dx, dy + dep - plinth, cx, cy + dep - plinth, cx, cy + dep, dx, dy + dep, shade('#2d2a28', 1, L));
+    poly4(cx, cy + dep - plinth, bx, by + dep - plinth, bx, by + dep, cx, cy + dep, shade('#242220', 1, L));
   }
 
   function buildWorld() {
@@ -1371,7 +1479,7 @@
   // Labels are expensive to lay out, so they are drawn to their own layer and only redrawn when something changes.
   function drawMapLabels(now) {
     const pomoSec = pomo.running ? Math.floor(now / 1000) : 0;
-    const key = [cam.x.toFixed(1), cam.y.toFixed(1), cam.z.toFixed(3), W, H, dpr, selectedTile ? selectedTile.join(',') : '', hover ? hover.join(',') : '', hoveredLabel || '', activeFilter, showLabels, darkMode, cbMode, pomoSec].join('|');
+    const key = [cam.x.toFixed(1), cam.y.toFixed(1), cam.z.toFixed(3), W, H, dpr, selectedTile ? selectedTile.join(',') : '', hover ? hover.join(',') : '', hoveredLabel || '', activeFilter, showLabels, darkMode, cbMode, pomoSec, rotSteps].join('|');
     if (key !== labelKey) {
       labelKey = key;
       const saved = ctx;
@@ -1537,7 +1645,7 @@
       for (let i = 0; i < waterCells.length; i += step) {
         const [wx, wy] = waterCells[i];
         if (Math.sin(t + wx * 2.1 + wy * 3.7) < 0.45) continue;
-        const sx = px(wx + 0.5, wy + 0.5), sy = py(wx + 0.5, wy + 0.5, -5);
+        const sx = px(wx + 0.5, wy + 0.5), sy = py(wx + 0.5, wy + 0.5, -7);
         if (sx >= 0 && sx <= W && sy >= 0 && sy <= H) ctx.fillRect(sx, sy, 5 * cam.z, 1.5 * cam.z);
       }
     }
@@ -1654,13 +1762,14 @@
 
     // Sunrise/sunset & night grading
     if (!transparentBg && (warm > 0.02 || L < 0.98)) {
-      const wa = warm * 0.14;
-      const na = (1 - L) * (weather === 'overcast' ? 0.74 : 0.68);
+      // Blue hour: a cool blue-grey wash (lighter than before so wall and roof faces stay readable)
+      const wa = warm * 0.12;
+      const na = (1 - L) * (weather === 'overcast' ? 0.7 : 0.63);
       const a = wa + na * (1 - wa);
       if (a > 0.004) {
-        const r = Math.round((255 * wa + 10 * na * (1 - wa)) / a);
-        const g = Math.round((155 * wa + 18 * na * (1 - wa)) / a);
-        const b = Math.round((45 * wa + 40 * na * (1 - wa)) / a);
+        const r = Math.round((255 * wa + 16 * na * (1 - wa)) / a);
+        const g = Math.round((155 * wa + 28 * na * (1 - wa)) / a);
+        const b = Math.round((45 * wa + 62 * na * (1 - wa)) / a);
         ctx.fillStyle = `rgba(${r},${g},${b},${a.toFixed(3)})`;
         ctx.fillRect(0, 0, W, H);
       }
