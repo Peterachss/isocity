@@ -915,13 +915,15 @@
     if ((x * 7 + y * 3) % 4 === 0) quadZ(x + 0.35, y + 0.46, x + 0.62, y + 0.52, WZ + 0.1, 'rgba(230,244,248,0.18)');
   }
 
-  function drawRoad(x, y, L, bridge = false, skipWater = false) {
+  function drawRoad(x, y, L, bridge = false, skipWater = false, deckOnly = false) {
     const th = curTheme();
     const z = bridge ? 2 : 0;
     if (bridge) {
       if (!skipWater) drawWater(x, y, L);
-      box(x + 0.12, y + 0.12, x + 0.24, y + 0.24, -7, 0, '#6d6a62', L);
-      box(x + 0.76, y + 0.76, x + 0.88, y + 0.88, -7, 0, '#6d6a62', L);
+      if (!deckOnly) {
+        box(x + 0.12, y + 0.12, x + 0.24, y + 0.24, -7, 0, '#6d6a62', L);
+        box(x + 0.76, y + 0.76, x + 0.88, y + 0.88, -7, 0, '#6d6a62', L);
+      }
       // Thicker deck with a stone fascia, then low rails along the two open sides
       box(x + 0.03, y + 0.03, x + 0.97, y + 0.97, -2.5, z, '#9a958a', L, { roof: th.road });
       const alongX = (inb(x - 1, y) && isRoad(grid[x - 1][y])) || (inb(x + 1, y) && isRoad(grid[x + 1][y]));
@@ -1285,39 +1287,244 @@
     g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
     return c;
   })();
-  function drawCar(c, L, headlightsOnly = false) {
-    const s = c.kind === 'bike' ? 0.06 : 0.12;
-    const dx = c.tx - c.fx, dy = c.ty - c.fy;
-    const ox = -dy * (c.kind === 'bike' ? 0.26 : 0.16), oy = dx * (c.kind === 'bike' ? 0.26 : 0.16);
-    const x = c.px + 0.5 + ox, y = c.py + 0.5 + oy;
-    const z0 = grid[Math.round(c.px)]?.[Math.round(c.py)] === 'bridge' ? 2 : 0;
-    if (!headlightsOnly) {
-      const len = c.kind === 'bus' ? 0.25 : c.kind === 'bike' ? 0.09 : 0.16;
-      const lx = dx ? len : s, ly = dy ? len : s;
-      const h = c.kind === 'bus' ? 9 : c.kind === 'bike' ? 4 : 7;
-      box(x - lx, y - ly, x + lx, y + ly, z0, z0 + h, c.color, L);
-      vehicleHits.push({ sx: px(x, y), sy: py(x, y, z0 + 3), car: c });
-    } else if (L < 0.5) {
-      const hx = px(x + dx * 0.2, y + dy * 0.2), hy = py(x + dx * 0.2, y + dy * 0.2, z0 + 4);
-      const hr = 9 * rcam.z;
-      rctx.drawImage(headGlow, hx - hr, hy - hr, hr * 2, hr * 2);
+  // ---------- agent miniatures (people, cars, boats) ----------
+  // One world scale for everything that moves: a 3.5 m lane is ~14 px wide and a storey is 14 px tall,
+  // so 1 m ~ 4 px of height and a tile edge ~ 9 m. Sizes are in those units and multiplied by rcam.z only
+  // at draw time, so they stay correct at every zoom and rotation.
+  const MZ = 4, MT = 1 / 9;
+  const PERSON_H = 1.8 * MZ; // 7.2 px: ~85% of the 8.5 px shopfront door
+  const SW_Z = 1.4;          // raised pavement height (matches drawRoad)
+  const WATER_Z = -7;        // canal surface (matches drawWater)
+
+  // Height of whatever surface is under a world point: bridge deck, pavement or carriageway.
+  function surfaceZ(x, y) {
+    const tx = Math.floor(x), ty = Math.floor(y);
+    if (!inb(tx, ty)) return 0;
+    const t = grid[tx][ty];
+    if (t === 'bridge') return 2;
+    if (t !== 'road') return 0;
+    const fx = x - tx, fy = y - ty;
+    const nX = inb(tx - 1, ty) && isRoad(grid[tx - 1][ty]) ? 0 : 0.11;
+    const pX = inb(tx + 1, ty) && isRoad(grid[tx + 1][ty]) ? 1 : 0.89;
+    const nY = inb(tx, ty - 1) && isRoad(grid[tx][ty - 1]) ? 0 : 0.11;
+    const pY = inb(tx, ty + 1) && isRoad(grid[tx][ty + 1]) ? 1 : 0.89;
+    return fx >= nX && fx <= pX && fy >= nY && fy <= pY ? 0 : SW_Z;
+  }
+
+  // Facing direction for anything moving along a path. Eases from the previous segment's direction over the
+  // first 30% of a new segment, so turns at junctions read as turns instead of snapping. Render-side only.
+  function heading(e) {
+    const dx = e.tx - e.fx, dy = e.ty - e.fy;
+    if (!dx && !dy) return [e._hx ?? 1, e._hy ?? 0];
+    if (e._dx !== dx || e._dy !== dy) { e._pdx = e._dx ?? dx; e._pdy = e._dy ?? dy; e._dx = dx; e._dy = dy; }
+    const k = Math.min(1, Math.max(0, e.t) / 0.3), s = k * k * (3 - 2 * k);
+    let hx = e._pdx + (dx - e._pdx) * s, hy = e._pdy + (dy - e._pdy) * s;
+    const l = Math.hypot(hx, hy);
+    if (l < 0.3) { hx = dx; hy = dy; } else { hx /= l; hy /= l; }
+    e._hx = hx; e._hy = hy;
+    return [hx, hy];
+  }
+
+  // Oriented box: a along (ux,uy), b along the left-hand perpendicular. Only faces turned toward the camera
+  // are filled, shaded by how much they face the lit (+y) or shaded (+x) side, matching box().
+  function obox(cx, cy, ux, uy, a0, a1, b0, b1, z0, z1, side, top, L) {
+    const vx = -uy, vy = ux;
+    const P = (a, b) => [cx + ux * a + vx * b, cy + uy * a + vy * b];
+    const c = [P(a0, b0), P(a1, b0), P(a1, b1), P(a0, b1)];
+    const nrm = [[-vx, -vy], [ux, uy], [vx, vy], [-ux, -uy]];
+    for (let i = 0; i < 4; i++) {
+      const nx = Math.max(0, nrm[i][0]), ny = Math.max(0, nrm[i][1]);
+      if (nrm[i][0] + nrm[i][1] <= 0.02) continue;
+      const k = (0.64 * nx + 0.82 * ny) / ((nx + ny) || 1);
+      const p = c[i], q = c[(i + 1) % 4];
+      poly4(px(p[0], p[1]), py(p[0], p[1], z0), px(q[0], q[1]), py(q[0], q[1], z0),
+        px(q[0], q[1]), py(q[0], q[1], z1), px(p[0], p[1]), py(p[0], p[1], z1),
+        typeof side === 'function' ? side(i, k) : shade(side, k, L));
     }
+    if (top) poly4(px(c[0][0], c[0][1]), py(c[0][0], c[0][1], z1), px(c[1][0], c[1][1]), py(c[1][0], c[1][1], z1),
+      px(c[2][0], c[2][1]), py(c[2][0], c[2][1], z1), px(c[3][0], c[3][1]), py(c[3][0], c[3][1], z1), shade(top, 1.05, L));
+  }
+  // Soft footprint shadow, nudged away from the light.
+  function footShadow(cx, cy, ux, uy, hl, hw, z, a = 0.24) {
+    const vx = -uy, vy = ux, ox = 0.02, oy = 0.03;
+    const P = (s, t) => [cx + ux * s + vx * t + ox, cy + uy * s + vy * t + oy];
+    const c = [P(-hl, -hw), P(hl, -hw), P(hl, hw), P(-hl, hw)];
+    poly4(px(c[0][0], c[0][1]), py(c[0][0], c[0][1], z), px(c[1][0], c[1][1]), py(c[1][0], c[1][1], z),
+      px(c[2][0], c[2][1]), py(c[2][0], c[2][1], z), px(c[3][0], c[3][1]), py(c[3][0], c[3][1], z), `rgba(10,14,22,${a})`);
+  }
+
+  // ---- people ----
+  // A handful of outfits so a crowd isn't cloned: jacket over a shirt, backpack, light shirt, etc.
+  const LOOKS = [
+    { top: '#34495e', pants: '#2a2d33', jacket: '#e9e4d8' },
+    { top: '#ece6d8', pants: '#4a5a6e' },
+    { top: '#c2553e', pants: '#2f3640', pack: '#5f7350' },
+    { top: '#4f7a6a', pants: '#2a2d33', jacket: '#f0d9a8' },
+    { top: '#d9b45a', pants: '#3d3a36', pack: '#3a4a5e' },
+    { top: '#7c90b2', pants: '#2d3138' },
+    { top: '#8a5a7a', pants: '#3a3d44', jacket: '#e6e0d4' },
+    { top: '#e2ddd0', pants: '#6b5a44', pack: '#a0563a' },
+  ];
+  const SKINS = ['#e7c6a5', '#c99a74', '#8d5f3f', '#f0d2b6', '#b07a52'];
+  const HAIRS = ['#2b211a', '#5a3b22', '#1b1b1b', '#a07a48', '#3a2c24'];
+  const strHash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return h >>> 0; };
+  function lookFor(key) {
+    const h = strHash(String(key));
+    return { ...LOOKS[h % LOOKS.length], skin: SKINS[(h >>> 8) % SKINS.length], hair: HAIRS[(h >>> 16) % HAIRS.length] };
+  }
+
+  // Stride: each step covers ~0.75 m, so the leg cycle is driven by distance actually travelled (no sliding).
+  const STEP_T = 0.75 * MT;
+  function trackStride(e, x, y) {
+    const d = e._lx === undefined ? 0 : Math.hypot(x - e._lx, y - e._ly);
+    e._lx = x; e._ly = y;
+    if (d < 0.5) e._dist = (e._dist || 0) + d;
+    e._moving = d > 0.0004 ? Math.min(1, (e._moving || 0) + 0.25) : Math.max(0, (e._moving || 0) - 0.1);
+    return (e._dist || 0) / STEP_T * Math.PI;
+  }
+
+  // Low-poly person at true scale. (x, y) is the ground point in tiles, z the surface height, (hx, hy) the facing.
+  function drawHuman(x, y, z, hx, hy, look, phase, amp, opts = {}) {
+    const k = rcam.z;
+    const sx = px(x, y), sy = py(x, y, z);
+    // Screen-space forward vector for this facing
+    let fx = px(x + hx * 0.1, y + hy * 0.1) - sx, fy = py(x + hx * 0.1, y + hy * 0.1, z) - sy;
+    const fl = Math.hypot(fx, fy) || 1; fx /= fl; fy /= fl;
+    rctx.fillStyle = 'rgba(10,14,22,0.28)';
+    rctx.beginPath(); rctx.ellipse(sx + 0.4 * k, sy + 0.2 * k, 1.7 * k, 0.85 * k, 0, 0, 7); rctx.fill();
+    // Overview / Smooth: keep the true size and silhouette, drop limbs
+    if (PERSON_H * k < 7 || opts.simple) {
+      rctx.fillStyle = look.pants; rctx.fillRect(sx - 0.7 * k, sy - 3.3 * k, 1.4 * k, 3.3 * k);
+      rctx.fillStyle = look.top; rctx.fillRect(sx - 0.95 * k, sy - 5.9 * k, 1.9 * k, 2.7 * k);
+      rctx.fillStyle = look.skin; rctx.fillRect(sx - 0.6 * k, sy - 7.2 * k, 1.2 * k, 1.2 * k);
+      return;
+    }
+    const seated = !!opts.seated;
+    const hipY = sy - (seated ? 1.9 : 3.3) * k;
+    const sw = Math.sin(phase) * amp;
+    rctx.lineCap = 'round';
+    // Legs: alternate along the facing direction (seated: thighs forward, shins down)
+    rctx.strokeStyle = look.pants; rctx.lineWidth = 0.85 * k;
+    for (const side of [-1, 1]) {
+      const lx = sx + side * 0.45 * k;
+      rctx.beginPath(); rctx.moveTo(lx, hipY);
+      if (seated) { rctx.lineTo(lx + fx * 1.4 * k, hipY + fy * 1.4 * k); rctx.lineTo(lx + fx * 1.5 * k, sy); }
+      else rctx.lineTo(lx + fx * side * sw * 1.1 * k, sy - Math.abs(side * sw) * 0.25 * k);
+      rctx.stroke();
+    }
+    const backFirst = fy < 0; // walking away from camera: pack is in front of the torso on screen
+    const drawPack = () => {
+      if (!look.pack) return;
+      rctx.fillStyle = look.pack;
+      rctx.fillRect(sx - fx * 1.0 * k - 0.75 * k, sy - 5.6 * k - fy * 0.6 * k, 1.5 * k, 2.1 * k);
+    };
+    if (!backFirst) drawPack();
+    // Torso: shoulders wider than hips
+    const top = sy - 5.9 * k - (seated ? 1.4 * k : 0);
+    rctx.fillStyle = look.top;
+    rctx.beginPath();
+    rctx.moveTo(sx - 1.05 * k, top); rctx.lineTo(sx + 1.05 * k, top);
+    rctx.lineTo(sx + 0.75 * k, hipY); rctx.lineTo(sx - 0.75 * k, hipY); rctx.closePath(); rctx.fill();
+    if (look.jacket && fy > -0.2) { rctx.fillStyle = look.jacket; rctx.fillRect(sx + fx * 0.35 * k - 0.22 * k, top + 0.3 * k, 0.44 * k, hipY - top - 0.4 * k); }
+    if (backFirst) drawPack();
+    // Arms swing opposite the legs
+    rctx.strokeStyle = look.top; rctx.lineWidth = 0.6 * k;
+    for (const side of [-1, 1]) {
+      const ax = sx + side * 1.0 * k, ay = top + 0.35 * k;
+      const s2 = opts.holding && side === 1 ? 0 : -side * sw;
+      const hxp = ax + fx * s2 * 1.1 * k + (opts.holding && side === 1 ? fx * 0.9 * k : 0);
+      const hyp = ay + 2.3 * k + fy * s2 * 0.5 * k - (opts.holding && side === 1 ? 0.6 * k : 0);
+      rctx.beginPath(); rctx.moveTo(ax, ay); rctx.lineTo(hxp, hyp); rctx.stroke();
+      rctx.fillStyle = look.skin; rctx.fillRect(hxp - 0.3 * k, hyp - 0.3 * k, 0.6 * k, 0.6 * k);
+      if (opts.holding && side === 1) { rctx.fillStyle = '#5ef2d6'; rctx.fillRect(hxp + fx * 0.3 * k - 0.45 * k, hyp - 0.5 * k, 0.9 * k, 0.65 * k); }
+    }
+    // Head: hair sits toward the back, face toward the facing direction
+    const hy0 = top - 0.95 * k;
+    rctx.fillStyle = look.hair; rctx.beginPath(); rctx.arc(sx - fx * 0.2 * k, hy0 - 0.12 * k, 0.78 * k, 0, 7); rctx.fill();
+    rctx.fillStyle = look.skin; rctx.beginPath(); rctx.arc(sx + fx * 0.22 * k, hy0 + 0.12 * k, 0.62 * k, 0, 7); rctx.fill();
   }
 
   function drawWalker(w, now) {
-    const dx = w.tx - w.fx, dy = w.ty - w.fy;
-    const ox = -dy * 0.34, oy = dx * 0.34;
-    const x = w.px + 0.5 + ox, y = w.py + 0.5 + oy;
-    const z0 = grid[Math.round(w.px)]?.[Math.round(w.py)] === 'bridge' ? 2 : 0;
-    const sx = px(x, y), sy = py(x, y, z0);
-    const sz = rcam.z;
-    rctx.fillStyle = w.color;
-    rctx.fillRect(sx - 1.5 * sz, sy - 5 * sz, 3 * sz, 5 * sz);
-    rctx.fillStyle = '#e7c6a5';
-    rctx.fillRect(sx - 1 * sz, sy - 7 * sz, 2 * sz, 2 * sz);
-    if (w.bench && Math.sin(now * 0.004 + w.px) > 0.7) {
-      rctx.fillRect(sx + 2 * sz, sy - 6 * sz, 1.5 * sz, 1.5 * sz);
+    const [hx, hy] = heading(w);
+    // Walk on the pavement band (centre ~0.445 tile from the road centre line), same side as before
+    const x = w.px + 0.5 - hy * 0.445, y = w.py + 0.5 + hx * 0.445;
+    const z = surfaceZ(x, y);
+    const phase = trackStride(w, w.px, w.py);
+    if (!w._look) w._look = lookFor(w.name || w.color);
+    drawHuman(x, y, z, hx, hy, w._look, phase, (w._moving || 0) * 0.55, { simple: perfLevel >= 2 });
+  }
+
+  // ---- vehicles ----
+  // Dimensions in metres converted to tiles; heights in px. Compact car 3.9 x 1.75 m, truck 5.4 x 2.0 m,
+  // minibus 8 x 2.3 m. Each sits in the right-hand lane (lane centre ~0.19 tile from the centre line).
+  const VEH = {
+    car: { hl: 3.9 * MT / 2, hw: 1.75 * MT / 2 },
+    truck: { hl: 5.4 * MT / 2, hw: 2.0 * MT / 2 },
+    bus: { hl: 8.0 * MT / 2, hw: 2.3 * MT / 2 },
+    bike: { hl: 1.8 * MT / 2, hw: 0.5 * MT / 2 },
+  };
+  const tailGlow = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 32;
+    const g = c.getContext('2d'), gr = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+    gr.addColorStop(0, 'rgba(255,70,60,0.55)'); gr.addColorStop(1, 'rgba(255,70,60,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 32, 32);
+    return c;
+  })();
+  function drawCar(c, L, headlightsOnly = false) {
+    const [ux, uy] = heading(c);
+    const kind = VEH[c.kind] ? c.kind : 'car';
+    const { hl, hw } = VEH[kind];
+    const lane = kind === 'bike' ? 0.3 : 0.19;
+    const x = c.px + 0.5 - uy * lane, y = c.py + 0.5 + ux * lane; // same lane side as before
+    const z0 = grid[Math.round(c.px)]?.[Math.round(c.py)] === 'bridge' ? 2 : 0;
+    if (headlightsOnly) {
+      if (L >= 0.5 || kind === 'bike') return;
+      const hr = 9 * rcam.z, fx = x + ux * (hl + 0.06), fy = y + uy * (hl + 0.06);
+      rctx.drawImage(headGlow, px(fx, fy) - hr, py(fx, fy, z0 + 2) - hr, hr * 2, hr * 2);
+      const tr = 3.5 * rcam.z, bx = x - ux * hl, by = y - uy * hl;
+      rctx.drawImage(tailGlow, px(bx, by) - tr, py(bx, by, z0 + 2.4) - tr, tr * 2, tr * 2);
+      return;
     }
+    const detail = rcam.z >= 0.7 && perfLevel < 2;
+    footShadow(x, y, ux, uy, hl + 0.01, hw + 0.01, z0 + 0.06);
+    if (kind === 'bike') {
+      obox(x, y, ux, uy, -hl, hl, -0.012, 0.012, z0, z0 + 2.4, '#22272d', null, L);
+      if (!c._look) c._look = lookFor('bike' + c.id);
+      drawHuman(x, y, z0 + 1.5, ux, uy, c._look, 0, 0, { seated: true, simple: !detail });
+      vehicleHits.push({ sx: px(x, y), sy: py(x, y, z0 + 3), car: c });
+      return;
+    }
+    const paint = c.color;
+    const glassF = shade('#6f8a99', 1, L), glassS = shade('#33434f', 1, L), glassR = shade('#283540', 1, L);
+    const glassSide = (i, k) => (i === 1 ? glassF : i === 3 ? glassR : glassS);
+    const clr = 0.9; // ground clearance (px)
+    if (detail) {
+      // Wheels peek out under the body at all four corners
+      for (const a of [-hl * 0.62, hl * 0.62]) for (const b of [-hw, hw]) {
+        obox(x + ux * a + -uy * b * 0.92, y + uy * a + ux * b * 0.92, ux, uy, -0.032, 0.032, -0.014, 0.014, z0, z0 + 2.1, '#1c1f23', '#2a2e33', L);
+      }
+    }
+    if (kind === 'bus') {
+      obox(x, y, ux, uy, -hl, hl, -hw, hw, z0 + clr, z0 + 11, paint, '#e9e6de', L);
+      obox(x, y, ux, uy, -hl - 0.002, hl + 0.002, -hw - 0.002, hw + 0.002, z0 + 6, z0 + 9.4, glassSide, null, L);
+      if (detail) obox(x, y, ux, uy, -hl * 0.9, hl * 0.9, -hw - 0.003, hw + 0.003, z0 + 3.2, z0 + 3.9, shade('#2c3238', 1, L), null, L);
+    } else if (kind === 'truck') {
+      obox(x, y, ux, uy, -hl, hl * 0.3, -hw, hw, z0 + clr, z0 + 10, '#e4dfd3', '#f1ede4', L);   // cargo box
+      obox(x, y, ux, uy, hl * 0.34, hl, -hw * 0.95, hw * 0.95, z0 + clr, z0 + 4.2, paint, null, L); // cab lower
+      obox(x, y, ux, uy, hl * 0.34, hl * 0.82, -hw * 0.9, hw * 0.9, z0 + 4.2, z0 + 7.6, glassSide, paint, L); // cab glass
+    } else {
+      obox(x, y, ux, uy, -hl, hl, -hw, hw, z0 + clr, z0 + 3.5, paint, paint, L);                     // body
+      obox(x, y, ux, uy, -hl * 0.62, hl * 0.22, -hw * 0.86, hw * 0.86, z0 + 3.5, z0 + 5.9, glassSide, paint, L); // cabin
+    }
+    if (detail) {
+      // Head- and taillights on the end faces (only the faces turned to the camera actually paint)
+      const lamps = (a0, a1, col) => {
+        for (const b of [-hw * 0.62, hw * 0.62]) obox(x + -uy * b, y + ux * b, ux, uy, a0, a1, -hw * 0.18, hw * 0.18, z0 + 2.2, z0 + 3.0, col, null, L);
+      };
+      lamps(hl - 0.004, hl + 0.004, L < 0.6 ? '#fff6d0' : '#f4efd8');
+      lamps(-hl - 0.004, -hl + 0.004, L < 0.6 ? '#ff5a4a' : '#c0392f');
+    }
+    vehicleHits.push({ sx: px(x, y), sy: py(x, y, z0 + 3), car: c });
   }
 
   function drawBot(b, now, orbit = false) {
@@ -1358,16 +1565,48 @@
   }
 
   function drawBoat(b, L, now) {
-    const dx = b.tx - b.fx, dy = b.ty - b.fy;
+    // Small canal boat, ~6.5 x 2.0 m: tapered bow, square stern, 0.4 m freeboard and a low cabin that
+    // stays under the bridge decks (deck underside is at z -2.5, cabin roof at -3.1).
+    const [ux, uy] = heading(b);
+    const vx = -uy, vy = ux;
     const x = b.px + 0.5, y = b.py + 0.5;
-    const lx = dx ? 0.22 : 0.1, ly = dy ? 0.22 : 0.1;
-    box(x - lx, y - ly, x + lx, y + ly, -7, -2, b.color, L, { roof: '#efe7d6' });
-    box(x - 0.06, y - 0.06, x + 0.06, y + 0.06, -1, 3, '#f2ece0', L);
-    // Ripple wake behind boat
-    const wx = px(x - dx * 0.25, y - dy * 0.25), wy = py(x - dx * 0.25, y - dy * 0.25, -7);
-    rctx.strokeStyle = 'rgba(205, 245, 245, 0.35)';
-    rctx.lineWidth = 1;
-    rctx.beginPath(); rctx.ellipse(wx, wy, (3 + Math.sin(now * 0.008) * 1.5) * rcam.z, 1.5 * rcam.z, 0, 0, 7); rctx.stroke();
+    const hl = 6.5 * MT / 2, hw = 2.0 * MT / 2;
+    const deckZ = WATER_Z + 1.6;
+    const P = (a, s) => [x + ux * a + vx * s, y + uy * a + vy * s];
+    const hull = [P(-hl, -hw * 0.86), P(hl * 0.38, -hw), P(hl, 0), P(hl * 0.38, hw), P(-hl, hw * 0.86)];
+    const moving = trackStride(b, b.px, b.py) >= 0 && (b._moving || 0) > 0.05;
+    // Wake: two thin lines opening out behind the stern, fading as the boat slows
+    if (moving && !reduceMotion && perfLevel < 2) {
+      const a = (0.28 * (b._moving || 0)).toFixed(2);
+      rctx.strokeStyle = `rgba(225,242,246,${a})`; rctx.lineWidth = Math.max(0.6, 0.7 * rcam.z);
+      rctx.beginPath();
+      for (const s of [-1, 1]) {
+        const [sx0, sy0] = P(-hl, s * hw * 0.7), [sx1, sy1] = P(-hl - 0.2, s * hw * 2.2);
+        rctx.moveTo(px(sx0, sy0), py(sx0, sy0, WATER_Z)); rctx.lineTo(px(sx1, sy1), py(sx1, sy1, WATER_Z));
+      }
+      rctx.stroke();
+    }
+    // Waterline shadow
+    const sh = hull.map(([hx, hy]) => [hx + 0.015, hy + 0.02]);
+    rctx.fillStyle = 'rgba(8,16,22,0.22)';
+    rctx.beginPath(); sh.forEach(([hx, hy], i) => (i ? rctx.lineTo(px(hx, hy), py(hx, hy, WATER_Z)) : rctx.moveTo(px(hx, hy), py(hx, hy, WATER_Z)))); rctx.closePath(); rctx.fill();
+    // Hull sides that face the camera, from the waterline up to the deck
+    for (let i = 0; i < hull.length; i++) {
+      const p = hull[i], q = hull[(i + 1) % hull.length];
+      const ex = q[0] - p[0], ey = q[1] - p[1];
+      const nx = ey, ny = -ex; // outward for this winding
+      if (nx + ny <= 0.001) continue;
+      const k = (0.64 * Math.max(0, nx) + 0.82 * Math.max(0, ny)) / ((Math.max(0, nx) + Math.max(0, ny)) || 1);
+      poly4(px(p[0], p[1]), py(p[0], p[1], WATER_Z), px(q[0], q[1]), py(q[0], q[1], WATER_Z),
+        px(q[0], q[1]), py(q[0], q[1], deckZ), px(p[0], p[1]), py(p[0], p[1], deckZ), shade(b.color, k, L));
+    }
+    // Deck with a pale gunwale
+    rctx.beginPath(); hull.forEach(([hx, hy], i) => (i ? rctx.lineTo(px(hx, hy), py(hx, hy, deckZ)) : rctx.moveTo(px(hx, hy), py(hx, hy, deckZ)))); rctx.closePath();
+    rctx.fillStyle = shade('#b89a6e', 1, L); rctx.fill();
+    rctx.strokeStyle = shade('#efe7d6', 1, L); rctx.lineWidth = Math.max(0.5, 0.55 * rcam.z); rctx.stroke();
+    // Low cabin set toward the stern, with a window band
+    obox(x, y, ux, uy, -hl * 0.72, hl * 0.12, -hw * 0.68, hw * 0.68, deckZ, deckZ + 2.5, '#ece6d8', b.color, L);
+    if (rcam.z >= 0.7) obox(x, y, ux, uy, -hl * 0.68, hl * 0.1, -hw * 0.69, hw * 0.69, deckZ + 1.0, deckZ + 1.8, shade('#3b4c58', 1, L), null, L);
   }
 
   // ---------- world cache + sharp zoom pass ----------
@@ -1441,6 +1680,7 @@
 
   const seen = new Uint8Array(N * N);
   const ov = [];
+  const boatsVis = [], bridgesOver = [];
 
   function addOccluders(rx, ry) {
     if (perfLevel >= 1) return;
@@ -1667,6 +1907,7 @@
 
     seen.fill(0);
     ov.length = 0;
+    boatsVis.length = 0; bridgesOver.length = 0;
     vehicleHits.length = 0;
 
     for (let i = 0; i < wheelsList.length; i++) ov.push({ k: 4, s: wheelsList[i][0] + wheelsList[i][1] + 0.1, x: wheelsList[i][0], y: wheelsList[i][1] });
@@ -1691,7 +1932,12 @@
       for (const b of boats) {
         const bx0 = px(b.px + 0.5, b.py + 0.5), by0 = py(b.px + 0.5, b.py + 0.5);
         if (bx0 < -40 || bx0 > W + 40 || by0 < -40 || by0 > H + 40) continue;
-        ov.push({ k: 3, s: b.px + b.py, b }); addOccluders(Math.floor(b.px), Math.floor(b.py));
+        boatsVis.push(b); addOccluders(Math.floor(b.px), Math.floor(b.py));
+        // Bridges the boat is under or about to pass: their decks are redrawn on top of it
+        for (const [tx, ty] of [[b.fx, b.fy], [b.tx, b.ty]]) {
+          if (grid[tx]?.[ty] !== 'bridge' || tx + ty + 0.35 < b.px + b.py) continue; // only bridges level with or in front of the boat
+          if (!bridgesOver.some((q) => q[0] === tx && q[1] === ty)) bridgesOver.push([tx, ty]);
+        }
       }
     }
 
@@ -1711,8 +1957,12 @@
       }
     }
 
-    if (ov.length) {
+    if (ov.length || boatsVis.length) {
       const savedW = warm; warm = 0;
+      // Boats sit lowest (on the water), so they go first; bridge decks over them are then redrawn, and
+      // everything on the banks or on the bridges is drawn after in depth order.
+      for (const b of boatsVis) drawBoat(b, 1, now);
+      for (const [bx, by] of bridgesOver) drawRoad(bx, by, 1, true, true, true);
       if (ov.length > 1) ov.sort((a, b) => a.s - b.s || a.k - b.k);
       for (const it of ov) {
         if (it.k === 1) drawCar(it.c, 1, false);
@@ -3368,21 +3618,21 @@
     }
   }
 
+  // Company workers use the same world-scale person as pedestrians (previously a fixed ~21 px figure, about
+  // 2.5x the height of the 8.5 px ground-floor door). Feet sit on the pavement, floor or ground under them.
   function drawPerson(a, now) {
-    const z = rcam.z * (a.sc || 1);
-    const z0 = a.z0 || 0;
-    const x = px(a.px + 0.5, a.py + 0.5), y = py(a.px + 0.5, a.py + 0.5, z0);
-    const seated = a.desk;
-    const bob = Math.sin(now * 0.008 + a.phase) * (seated ? 0.4 : 1.2) * z;
-    ctx.fillStyle = 'rgba(8,16,18,0.25)'; ctx.beginPath(); ctx.ellipse(x, y, 5 * z, 2.4 * z, 0, 0, 7); ctx.fill();
-    ctx.fillStyle = '#2a2f33'; ctx.fillRect(x - 2.6 * z, y - 5 * z, 2.2 * z, 5 * z); ctx.fillRect(x + 0.4 * z, y - 5 * z, 2.2 * z, 5 * z);
-    ctx.fillStyle = a.color; ctx.beginPath(); ctx.roundRect(x - 3.6 * z, y - 14 * z + bob, 7.2 * z, 9.5 * z, 2 * z); ctx.fill();
-    ctx.fillStyle = '#e7c6a5'; ctx.beginPath(); ctx.arc(x, y - 17.5 * z + bob, 3.3 * z, 0, 7); ctx.fill();
-    ctx.fillStyle = '#3a2a1c'; ctx.beginPath(); ctx.arc(x, y - 18.6 * z + bob, 3.3 * z, Math.PI, 0); ctx.fill();
-    ctx.strokeStyle = a.color; ctx.lineWidth = 1.8 * z; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(x + 3.4 * z, y - 12 * z + bob); ctx.lineTo(x + 6 * z, y - 8.5 * z + (seated ? Math.sin(now * 0.03 + a.phase) * 1.2 * z : Math.sin(now * 0.004 + a.phase) * 2 * z)); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x - 3.4 * z, y - 12 * z + bob); ctx.lineTo(x - 5.8 * z, y - 8 * z); ctx.stroke();
-    if (!a.inside) { ctx.fillStyle = '#5ef2d6'; ctx.fillRect(x + 4 * z, y - 9 * z + bob, 4 * z, 3 * z); }
+    const x = a.px + 0.5, y = a.py + 0.5;
+    const z = a.inside ? (a.z0 || 0) : surfaceZ(x, y);
+    const phase = trackStride(a, x, y);
+    // Face the way they are drifting; keep the last facing when they pause
+    if (a._lpx !== undefined) {
+      const vx = x - a._lpx, vy = y - a._lpy;
+      if (Math.hypot(vx, vy) > 0.0006) { const l = Math.hypot(vx, vy); a._fx = vx / l; a._fy = vy / l; }
+    }
+    a._lpx = x; a._lpy = y;
+    if (!a._look) a._look = lookFor(a.info?.name || a.color);
+    drawHuman(x, y, z, a._fx ?? 0, a._fy ?? 1, a._look, phase, a.desk ? 0 : (a._moving || 0) * 0.5,
+      { seated: !!a.desk, holding: !a.inside, simple: perfLevel >= 2 });
   }
 
   function drawCutaway(now) {
@@ -3416,10 +3666,11 @@
         drawPerson(c, now);
         if (c.desk) {
           const dxp = c.px + 0.5 + 0.05, dyp = c.py + 0.5 + 0.05;
-          const dh = 6 * (c.sc || 1);
-          box(dxp - 0.07, dyp - 0.04, dxp + 0.14, dyp + 0.14, z0, z0 + dh, '#8a6a4a', 1, { roof: '#b08a62' });
-          const mx = px(dxp + 0.03, dyp + 0.02), my = py(dxp + 0.03, dyp + 0.02, z0 + dh + 3 * (c.sc || 1));
-          ctx.fillStyle = '#7ef2de'; ctx.fillRect(mx - 3 * rcam.z * (c.sc || 1), my - 2 * rcam.z * (c.sc || 1), 6 * rcam.z * (c.sc || 1), 4 * rcam.z * (c.sc || 1));
+          // Desk 0.75 m high, ~1.2 x 0.7 m, with a monitor; same world scale as the people
+          const dh = 0.75 * MZ;
+          box(dxp - 0.02, dyp - 0.02, dxp + 0.11, dyp + 0.06, z0, z0 + dh, '#8a6a4a', 1, { roof: '#b08a62' });
+          const mx = px(dxp + 0.04, dyp + 0.01), my = py(dxp + 0.04, dyp + 0.01, z0 + dh + 1.2);
+          ctx.fillStyle = '#7ef2de'; ctx.fillRect(mx - 1.1 * rcam.z, my - 0.8 * rcam.z, 2.2 * rcam.z, 1.6 * rcam.z);
         }
       }
     }
@@ -3512,6 +3763,16 @@
     setInset: (px) => { viewInset = Math.max(0, Math.round(px || 0)); center(true); },
   };
 
+
+  // Read-only hook for visual regression checks; only present with ?debug in the URL.
+  if (/[?&]debug\b/.test(location.search)) {
+    window.__isocityDebug = {
+      agents: () => ({ cars, walkers, boats, crew }),
+      screenOf: (x, y, z = 0) => [px(x, y), py(x, y, z)],
+      cam: () => ({ ...cam }),
+      setCam: (x, y, z) => { camAnim = null; cam.x = x; cam.y = y; cam.z = z; },
+    };
+  }
 
   // ---------- Dusk / Day / Night button ----------
   const LIGHT_MODES = [{ label: 'Dusk', hour: 17.4 }, { label: 'Day', hour: 13.0 }, { label: 'Night', hour: 22.4 }];
