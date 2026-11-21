@@ -665,7 +665,7 @@
     return null;
   }
   const MAX_ZOOM = 2.0;
-  const maxZoom = () => (cutawayGeom() ? 4.0 : MAX_ZOOM); // look closer while an interior is open
+  const maxZoom = () => (cutawayGeom() ? 6.0 : MAX_ZOOM); // look closer while an interior is open
   let preCutCam = null; // city view to return to when the interior is closed
   const finiteCam = () => Number.isFinite(cam.x) && Number.isFinite(cam.y) && Number.isFinite(cam.z) && cam.z > 0;
   function flyToTile(x, y, targetZ = null, withDrawer = true) {
@@ -838,7 +838,7 @@
     const i = TYPES[t].inset;
     const x0 = x + i, y0 = y + i, x1 = x + 1 - i, y1 = y + 1 - i;
     const seed = x * 11 + y * 5;
-    const glass = t === 'office';
+    const glass = t === 'office' || (!!pins[x][y] && t !== 'house'); // matches the day window geometry
     const rows = Math.max(1, Math.floor(h / 14));
     const cols = Math.max(1, Math.round((x1 - x0) * 3));
     const dx = x1 - x0, dy = y1 - y0;
@@ -1229,7 +1229,9 @@
     const store = STOREFRONT[t] ? 1 : 0;
     const dX0 = X0 + (X1 - X0) * 0.42, dX1 = X0 + (X1 - X0) * 0.58; // entrance on the front (y1) face
     if (pinId) quadZ(dX0 - 0.02, Y1, dX1 + 0.02, y + 1, 0.12, shade('#d8cdb6', 1, L)); // paved path to the pavement
-    box(X0, Y0, X1, Y1, 0, H, wall, L, { roof, windows: seed, glass: t === 'office', thresh, startRow: store });
+    const office = !!pinId && t !== 'house';
+    if (office) box(X0 - 0.025, Y0 - 0.025, X1 + 0.025, Y1 + 0.025, 0, 1.6, '#6f6a63', L, { roof: '#8a857c' }); // solid stone base
+    box(X0, Y0, X1, Y1, 0, H, wall, L, { roof, windows: seed, glass: t === 'office' || office, thresh, startRow: store });
     if (store) storefront(X0, Y0, X1, Y1, shade('#2b2824', 1, L), shade('#8fb0bf', 0.95, L), shade('#6f8f9e', 0.95, L));
     if (pinId && t !== 'house') {
       // Recognisable entrance: frame, lobby glass door, canopy in the place's accent colour, steps and planters
@@ -1254,7 +1256,14 @@
       faceL(dX0, dX1, Y1 + 0.003, 0.3, 8.4, shade('#6b4a30', 1, L));
       box(dX0 - 0.03, Y1, dX1 + 0.03, Y1 + 0.04, 0, 0.5, '#cfc6b4', L);
     }
-    if (t !== 'house') {
+    if (office) {
+      // Roof with visible thickness: an overhanging slab, a recessed top and a lit front edge
+      box(X0 - 0.035, Y0 - 0.035, X1 + 0.035, Y1 + 0.035, H, H + 2, '#4e4b47', L, { roof: '#d9d3c6' });
+      quadZ(X0 + 0.03, Y0 + 0.03, X1 - 0.03, Y1 - 0.03, H + 2.02, shade('#8f8a82', 1, L)); // membrane roof
+      rctx.strokeStyle = shade('#f2ece0', 1, L); rctx.lineWidth = Math.max(0.6, 0.8 * rcam.z);
+      rctx.beginPath(); rctx.moveTo(px(X0 - 0.035, Y1 + 0.035), py(X0 - 0.035, Y1 + 0.035, H + 2)); rctx.lineTo(px(X1 + 0.035, Y1 + 0.035), py(X1 + 0.035, Y1 + 0.035, H + 2)); rctx.lineTo(px(X1 + 0.035, Y0 - 0.035), py(X1 + 0.035, Y0 - 0.035, H + 2)); rctx.stroke();
+      if ((t === 'shop' || t === 'school' || t === 'clinic') && lv < 2) box(X0 + 0.14, Y0 + 0.16, X0 + 0.3, Y0 + 0.3, H + 2, H + 4.5, '#b9b6ae', L, { roof: '#d6d3cb' }); // rooftop plant
+    } else if (t !== 'house') {
       // Parapet: a lighter coping rim around a slightly darker recessed roof, plus a cornice band under it
       const pi = 0.05;
       quadZ(X0 + pi, Y0 + pi, X1 - pi, Y1 - pi, H, shade(roof, 0.86, L));
@@ -1271,7 +1280,7 @@
       }
     }
 
-    if (t === 'shop') {
+    if (t === 'shop' && !pinId) {
       poly4(px(x + i, y + 1 - i + 0.04), py(x + i, y + 1 - i + 0.04, 16), px(x + 1 - i, y + 1 - i + 0.04), py(x + 1 - i, y + 1 - i + 0.04, 16),
         px(x + 1 - i, y + 1 - i + 0.13), py(x + 1 - i, y + 1 - i + 0.13, 11), px(x + i, y + 1 - i + 0.13), py(x + i, y + 1 - i + 0.13, 11), shade('#c0463a', 1, L));
     }
@@ -1730,43 +1739,59 @@
     poly4(cx, cy + dep - plinth, bx, by + dep - plinth, bx, by + dep, cx, cy + dep, shade('#242220', 1, L));
   }
 
-  // Low-poly hills framing the town along the two far edges. Seeded, so they look the same every load,
-  // and drawn in screen-relative grid space, so after a rotation they still sit behind the map.
+  // One connected ridge behind the two far map edges: a grass buffer at map level, foothills rising gently,
+  // then two or three broad peaks of different heights. Height comes from a few smooth bumps along the back
+  // boundary, so the silhouette is continuous. Colours cool and soften with height (distance haze), slopes are
+  // shaded from one sun direction, and it is baked once into the cached map image, behind every tile.
   function drawRidge() {
-    let seed = 1337;
-    const rnd = () => ((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 4294967296);
-    const peaks = [];
-    for (const edge of [0, 1]) {
-      let t = -0.5;
-      while (t < N + 0.5) {
-        const w = 4.2 + rnd() * 3.2, end = Math.min(1, Math.sin(Math.PI * Math.max(0, Math.min(1, t / N))) * 1.3 + 0.2);
-        const h = (30 + rnd() * 52) * end;
-        peaks.push({ edge, t: t + w / 2, w, h, j: (rnd() - 0.5) * 1.2, back: 2.2 + rnd() * 1.6, tone: rnd() });
-        t += w * (0.38 + rnd() * 0.18);
+    const th = curTheme();
+    const S = 2 * N;                                   // 0..N along the left far edge, N..2N along the right
+    const peaks = [[0.62 * N, 88, 0.2 * N], [1.18 * N, 62, 0.16 * N], [1.62 * N, 46, 0.15 * N]];
+    const fade = (t) => Math.max(0, Math.min(1, t / (0.2 * S), (S - t) / (0.2 * S))); // taper toward the front corners
+    const height = (t) => {
+      let h = 0;
+      for (const [c, a, w] of peaks) h += a * Math.exp(-((t - c) * (t - c)) / (2 * w * w));
+      h += 6 * Math.sin(t * 0.9) + 3.5 * Math.sin(t * 2.3 + 1);
+      return Math.max(0, h * fade(t));
+    };
+    const BUF = 1.3;                                   // grass buffer between the map and the foothills (tiles)
+    // Ground point `out` tiles beyond the map edge at path position t; the outward direction turns smoothly
+    // through the back corner so the two edges join into one ridge.
+    const at = (t, out) => {
+      const bx = t <= N ? 0 : t - N, by = t <= N ? N - t : 0;
+      const w = 2.2, k = Math.max(0, Math.min(1, (t - (N - w)) / (2 * w))), s2 = k * k * (3 - 2 * k);
+      let dx = -1 + s2, dy = -s2; const l = Math.hypot(dx, dy) || 1;
+      return [bx + (dx / l) * out, by + (dy / l) * out];
+    };
+    const V = (t, out, z) => { const [x, y] = at(t, out); return { sx: px(x, y), sy: py(x, y, z), x, y, z }; };
+    const shadeTri = (A, B, C, base) => {
+      const ux = B.x - A.x, uy = B.y - A.y, uz = (B.z - A.z) / 32, vx = C.x - A.x, vy = C.y - A.y, vz = (C.z - A.z) / 32;
+      let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+      if (nz < 0) { nx = -nx; ny = -ny; nz = -nz; }
+      const l = Math.hypot(nx, ny, nz) || 1;
+      return shade(base, 0.64 + 0.4 * Math.max(0, (-0.25 * nx + 0.55 * ny + 0.8 * nz) / l), 1); // sun from above, toward +y
+    };
+    // Rows from the map edge outward: grass buffer, foothills, mid slopes, crest. Colour cools with height.
+    const ROWS = [[0, 0], [BUF, 0], [BUF + 1.1, 0.22], [BUF + 2.2, 0.56], [BUF + 3.2, 1]];
+    const COL = [shade(th.grassB, 0.92, 1), mix(th.grassB, '#6f7f62', 0.55), '#7f8d86', '#9aa6b2'];
+    const quads = [];
+    const STEP = 0.4;
+    for (let t = 0; t < S - 1e-6; t += STEP) {
+      const t2 = Math.min(S, t + STEP), h1 = height(t), h2 = height(t2), e1 = fade(t), e2 = fade(t2);
+      for (let r = 1; r < ROWS.length; r++) {
+        const [o0, f0] = ROWS[r - 1], [o1, f1] = ROWS[r];
+        // Beyond the buffer, rows pull in toward the corners so the ends stay inside the backdrop
+        const oo0 = r - 1 <= 1 ? o0 : BUF + (o0 - BUF) * Math.max(e1, 0.15), oo0b = r - 1 <= 1 ? o0 : BUF + (o0 - BUF) * Math.max(e2, 0.15);
+        const oo1 = r <= 1 ? o1 : BUF + (o1 - BUF) * Math.max(e1, 0.15), oo1b = r <= 1 ? o1 : BUF + (o1 - BUF) * Math.max(e2, 0.15);
+        const A = V(t, oo0, h1 * f0), B = V(t2, oo0b, h2 * f0), C = V(t2, oo1b, h2 * f1), Dv = V(t, oo1, h1 * f1);
+        quads.push({ d: (Dv.x + Dv.y + C.x + C.y) / 2, A, B, C, Dv, flat: r === 1, base: COL[r - 1] });
       }
     }
-    const pt = (edge, a, b) => (edge === 0 ? [a, -b] : [-b, a]); // along the edge, then outward
-    // Continuous foothill band first, so there are no gaps between peaks
-    for (const edge of [0, 1]) {
-      const q = [pt(edge, -0.3, 0.15), pt(edge, N + 0.3, 0.15), pt(edge, N + 0.3, 1.8), pt(edge, -0.3, 1.8)];
-      const zz = [0, 0, 10, 10];
-      rctx.beginPath(); q.forEach(([a, b], i) => (i ? rctx.lineTo(px(a, b), py(a, b, zz[i])) : rctx.moveTo(px(a, b), py(a, b, zz[i])))); rctx.closePath();
-      rctx.fillStyle = edge === 0 ? '#8a7a5c' : '#6f6249'; rctx.fill();
-    }
-    peaks.sort((p, q) => (pt(p.edge, p.t, p.back)[0] + pt(p.edge, p.t, p.back)[1]) - (pt(q.edge, q.t, q.back)[0] + pt(q.edge, q.t, q.back)[1]));
-    for (const m of peaks) {
-      const L0 = pt(m.edge, m.t - m.w / 2, 0.15), R0 = pt(m.edge, m.t + m.w / 2, 0.15), M0 = pt(m.edge, m.t + m.j, 0.15);
-      const K = pt(m.edge, m.t + m.j * 0.6, m.back);
-      const lit = mix('#b89a74', '#9fa07a', m.tone), dark = mix('#7d6650', '#6a6e52', m.tone);
-      const tri = (a, b, c, fill) => { rctx.beginPath(); rctx.moveTo(px(a[0], a[1]), py(a[0], a[1], a[2])); rctx.lineTo(px(b[0], b[1]), py(b[0], b[1], b[2])); rctx.lineTo(px(c[0], c[1]), py(c[0], c[1], c[2])); rctx.closePath(); rctx.fillStyle = fill; rctx.fill(); };
-      const k3 = [K[0], K[1], m.h];
-      // Edge 0 faces +y (lit side on the left of the peak); edge 1 faces +x (mostly in shade)
-      tri([...L0, 0], [...M0, 0], k3, shade(m.edge === 0 ? lit : mix(lit, dark, 0.35), 1, 1));
-      tri([...M0, 0], [...R0, 0], k3, shade(m.edge === 0 ? mix(lit, dark, 0.45) : dark, 1, 1));
-      if (m.h > 62) { // pale cap on the tallest peaks
-        const cap = (a) => [K[0] + (a[0] - K[0]) * 0.22, K[1] + (a[1] - K[1]) * 0.22, m.h * 0.78];
-        tri(cap(L0), cap(M0), k3, '#efe6d6'); tri(cap(M0), cap(R0), k3, '#d9cfbe');
-      }
+    quads.sort((p, q) => p.d - q.d); // far first
+    for (const q of quads) {
+      const fill1 = q.flat ? q.base : shadeTri(q.A, q.B, q.C, q.base), fill2 = q.flat ? q.base : shadeTri(q.A, q.C, q.Dv, q.base);
+      rctx.beginPath(); rctx.moveTo(q.A.sx, q.A.sy); rctx.lineTo(q.B.sx, q.B.sy); rctx.lineTo(q.C.sx, q.C.sy); rctx.closePath(); rctx.fillStyle = fill1; rctx.fill();
+      rctx.beginPath(); rctx.moveTo(q.A.sx, q.A.sy); rctx.lineTo(q.C.sx, q.C.sy); rctx.lineTo(q.Dv.sx, q.Dv.sy); rctx.closePath(); rctx.fillStyle = fill2; rctx.fill();
     }
   }
 
@@ -3750,24 +3775,21 @@
     const lib = g.t === 'school';
     const items = [], seats = [];
     // Workstation: desk, monitor (facing the worker), lamp, notebook, chair; worker faces -v (toward the back wall)
-    const station = (u, v, accent) => {
-      items.push({ k: 'desk', u0: u - 0.07, v0: v - 0.05, u1: u + 0.07, v1: v + 0.035, accent });
-      items.push({ k: 'chair', u, v: v + 0.1 });
-      seats.push({ u, v: v + 0.095, fx: 0, fy: -1, typing: true });
+    // Workstation: 1.4 x 0.7 m desk, monitor facing the worker, warm lamp, notebook, chair behind it
+    const station = (u, v, accent, occupied) => {
+      items.push({ k: 'desk', u0: u - 0.095, v0: v - 0.05, u1: u + 0.095, v1: v + 0.05, accent });
+      items.push({ k: 'chair', u, v: v + 0.115 });
+      seats.push({ u, v: v + 0.11, fx: 0, fy: -1, typing: true, occupied });
     };
     if (!lib) {
-      station(0.16, 0.26, '#3f7f8a'); station(0.34, 0.26, '#c2553e');
-      station(0.16, 0.6, '#d9b45a'); station(0.34, 0.6, '#3f7f8a');
-      items.push({ k: 'shelf', u0: 0.04, v0: 0.015, u1: 0.42, v1: 0.07, h: 2.0 });
-      items.push({ k: 'table', u0: 0.62, v0: 0.16, u1: 0.86, v1: 0.32, h: DESK_Z, top: '#b07f52' });
-      for (const [u, v, fx, fy] of [[0.66, 0.38, 0, -1], [0.82, 0.38, 0, -1], [0.66, 0.1, 0, 1], [0.82, 0.1, 0, 1]]) items.push({ k: 'chair', u, v, back: fy > 0 ? -1 : 1 });
-      seats.push({ u: 0.66, v: 0.38, fx: 0, fy: -1 });
-      seats.push({ u: 0.82, v: 0.1, fx: 0, fy: 1 });
-      items.push({ k: 'rug', u0: 0.6, v0: 0.56, u1: 0.95, v1: 0.93, c: '#9a5a46' });
-      items.push({ k: 'sofa', u0: 0.64, v0: 0.82, u1: 0.93, v1: 0.93, c: '#4f6f78' });
-      items.push({ k: 'table', u0: 0.7, v0: 0.62, u1: 0.84, v1: 0.72, h: 0.42 * MZ, top: '#8a6a4a' });
-      items.push({ k: 'plant', u: 0.92, v: 0.1, h: 6 });
-      items.push({ k: 'plant', u: 0.61, v: 0.96, h: 4 });
+      // Two workstations against the back, a clear aisle from the door, a small lounge to one side
+      station(0.2, 0.3, '#3f7f8a', true); station(0.43, 0.3, '#c2553e', false);
+      items.push({ k: 'shelf', u0: 0.06, v0: 0.015, u1: 0.56, v1: 0.07, h: 1.9 });
+      items.push({ k: 'rug', u0: 0.64, v0: 0.52, u1: 0.95, v1: 0.9, c: '#9a5a46' });
+      items.push({ k: 'sofa', u0: 0.68, v0: 0.78, u1: 0.93, v1: 0.89, c: '#4f6f78' });
+      items.push({ k: 'table', u0: 0.73, v0: 0.6, u1: 0.87, v1: 0.69, h: 0.42 * MZ, top: '#8a6a4a' });
+      items.push({ k: 'flamp', u: 0.9, v: 0.56 });
+      items.push({ k: 'plant', u: 0.92, v: 0.12, h: 6 });
       items.push({ k: 'plant', u: 0.07, v: 0.93, h: 5 });
     } else {
       items.push({ k: 'shelf', u0: 0.04, v0: 0.015, u1: 0.96, v1: 0.07, h: 2.6 });
@@ -3777,7 +3799,7 @@
       items.push({ k: 'table', u0: 0.58, v0: 0.34, u1: 0.9, v1: 0.56, h: DESK_Z, top: '#a3714a', lamps: true });
       for (const [u, v, fy] of [[0.64, 0.64, -1], [0.82, 0.64, -1], [0.64, 0.27, 1], [0.82, 0.27, 1]]) {
         items.push({ k: 'chair', u, v, back: fy > 0 ? -1 : 1 });
-        seats.push({ u, v, fx: 0, fy, typing: fy < 0 });
+        seats.push({ u, v, fx: 0, fy, typing: fy < 0, occupied: fy < 0 && u < 0.7 });
       }
       items.push({ k: 'rug', u0: 0.55, v0: 0.72, u1: 0.95, v1: 0.95, c: '#5d6e4a' });
       items.push({ k: 'sofa', u0: 0.66, v0: 0.84, u1: 0.92, v1: 0.94, c: '#8a4b3c' });
@@ -3805,11 +3827,12 @@
       const room = roomLayout(g);
       let k = 0;
       for (const s of room.seats) {
+        if (!s.occupied) continue;
         const wx = g.x0 + (g.x1 - g.x0) * s.u, wy = g.y0 + (g.y1 - g.y0) * s.v;
         crew.push(mk(wx, wy, 0.4, k++, { inside: true, floor: 0, desk: true, seat: s, _fx: s.fx, _fy: s.fy }));
       }
-      const ax = g.x0 + (g.x1 - g.x0) * 0.515, ay = g.y0 + (g.y1 - g.y0) * 0.7;
-      crew.push(mk(ax, ay, 0.4, k++, { inside: true, floor: 0, aisle: true }));
+      const ax = g.x0 + (g.x1 - g.x0) * 0.66, ay = g.y0 + (g.y1 - g.y0) * 0.9; // just inside, beside the door
+      crew.push(mk(ax, ay, 0.4, k++, { inside: true, floor: 0, door: true, _fx: -0.6, _fy: 0.8 }));
     } else {
       for (let k = 0; k < 4; k++) { const [ox, oy] = CREW_SPOTS[k]; crew.push(mk(x + ox, y + oy, 0, k, { sc: 1 })); }
     }
@@ -3900,7 +3923,8 @@
         lbox(mu - 0.036, mv - 0.004, mu + 0.036, mv + 0.004, Z0 + DESK_Z + 0.5, Z0 + DESK_Z + 2.1, '#22282e');
         faceV(mu - 0.031, mu + 0.031, mv + 0.0045, Z0 + DESK_Z + 0.65, Z0 + DESK_Z + 1.95, evening > 0.3 ? '#bfe9f2' : '#9fd0dc');
         faceV(mu - 0.026, mu - 0.004, mv + 0.005, Z0 + DESK_Z + 0.85, Z0 + DESK_Z + 1.75, it.accent);
-        lbox(it.u0 + 0.01, it.v0 + 0.008, it.u0 + 0.02, it.v0 + 0.018, Z0 + DESK_Z, Z0 + DESK_Z + 1.8, '#2f3a40', evening > 0.3 ? '#ffd48a' : '#e0c25b');
+        lbox(it.u0 + 0.012, it.v0 + 0.01, it.u0 + 0.018, it.v0 + 0.016, Z0 + DESK_Z, Z0 + DESK_Z + 1.6, '#2f3a40');
+        lbox(it.u0 + 0.004, it.v0 + 0.002, it.u0 + 0.03, it.v0 + 0.024, Z0 + DESK_Z + 1.5, Z0 + DESK_Z + 2.1, '#c9a64a', '#ffd48a');
         quad(it.u1 - 0.04, it.v1 - 0.03, it.u1 - 0.015, it.v1 - 0.008, Z0 + DESK_Z + 0.08, '#efe9dc');
       } });
       else if (it.k === 'chair') {
@@ -3947,6 +3971,11 @@
         lbox(it.u0, it.v0, it.u0 + 0.025, it.v1, Z0 + 1.8, Z0 + 2.6, it.c);
         lbox(it.u1 - 0.025, it.v0, it.u1, it.v1, Z0 + 1.8, Z0 + 2.6, it.c);
       } });
+      else if (it.k === 'flamp') draws.push({ d: depth(it.u, it.v), f: () => {
+        lbox(it.u - 0.012, it.v - 0.012, it.u + 0.012, it.v + 0.012, Z0, Z0 + 0.3, '#2f3a40');
+        lbox(it.u - 0.003, it.v - 0.003, it.u + 0.003, it.v + 0.003, Z0, Z0 + 6, '#2f3a40');
+        lbox(it.u - 0.025, it.v - 0.025, it.u + 0.025, it.v + 0.025, Z0 + 5.6, Z0 + 7, '#e8d9b8', evening > 0.3 ? '#ffd48a' : '#efe3c4');
+      } });
       else if (it.k === 'plant') draws.push({ d: depth(it.u, it.v), f: () => {
         lbox(it.u - 0.02, it.v - 0.02, it.u + 0.02, it.v + 0.02, Z0, Z0 + 1.8, '#b5653f', '#7a5a3e');
         const [cx, cy] = P(it.u, it.v, Z0 + it.h), [bx, by] = P(it.u, it.v, Z0 + 1.8);
@@ -3969,16 +3998,17 @@
     faceV(0.44, 0.6, 1.01, Z0, Z0 + 0.25, '#5a4632');
     for (const u of [0.44, 0.6]) faceV(u - 0.012, u + 0.012, 1.015, Z0, Z0 + 2.3 * MZ, '#3a3029');
 
-    // Evening: dim the room a little, then warm lamp pools on desks, the reading table and the lounge
-    if (evening > 0) {
-      quad(0, 0, 1, 1, Z0 + 0.06, `rgba(20,26,44,${(0.22 * evening).toFixed(3)})`);
+    // Warm lamp pools on desks, reading tables and the lounge: soft by day, stronger in the evening
+    {
+      if (evening > 0) quad(0, 0, 1, 1, Z0 + 0.06, `rgba(20,26,44,${(0.22 * evening).toFixed(3)})`);
+      const glow = 0.35 + 0.65 * evening;
       ctx.globalCompositeOperation = 'lighter';
       for (const it of room.items) {
         if (it.k !== 'desk' && !(it.k === 'table' && it.lamps) && it.k !== 'sofa') continue;
         const u = it.k === 'desk' ? it.u0 + 0.03 : (it.u0 + it.u1) / 2, v = it.k === 'desk' ? it.v0 + 0.04 : (it.v0 + it.v1) / 2;
         const [cx, cy] = P(u, v, Z0 + (it.k === 'sofa' ? 1 : DESK_Z));
         const r = (it.k === 'sofa' ? 16 : 12) * rcam.z, gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-        gr.addColorStop(0, `rgba(255,190,110,${(0.24 * evening).toFixed(3)})`); gr.addColorStop(1, 'rgba(255,190,110,0)');
+        gr.addColorStop(0, `rgba(255,190,110,${(0.24 * glow).toFixed(3)})`); gr.addColorStop(1, 'rgba(255,190,110,0)');
         ctx.fillStyle = gr; ctx.beginPath(); ctx.ellipse(cx, cy, r, r * 0.6, 0, 0, 7); ctx.fill();
       }
       ctx.globalCompositeOperation = 'source-over';
@@ -3999,12 +4029,12 @@
       if (selectedTile) {
         buildCrew();
         const g = cutawayGeom();
-        if (g) { if (!preCutCam) preCutCam = { ...cam }; flyToTile(selectedTile[0], selectedTile[1], Math.max(cam.z, 2.6), true); }
+        if (g) { if (!preCutCam) preCutCam = { ...cam }; flyToTile(selectedTile[0], selectedTile[1], Math.max(cam.z, 3.4), true); }
       } else { crew = []; preCutCam = null; }
     }
     for (const a of crew) {
       if (a.desk) { a.px = a.ox; a.py = a.oy; continue; }                 // seated workers stay on their seat anchor
-      if (a.aisle) { a.px = a.ox; a.py = a.oy + Math.sin(now * 0.0004 + a.phase) * 0.16; continue; } // walks the aisle
+      if (a.door) { a.px = a.ox; a.py = a.oy; continue; } // stands beside the door
       const amp = a.inside ? 0.05 : 0.12;
       a.px = a.ox + Math.sin(now * 0.0006 + a.phase) * amp;
       a.py = a.oy + Math.cos(now * 0.0005 + a.phase * 1.7) * amp * 0.85;
