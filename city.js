@@ -2274,47 +2274,97 @@
     for (const b of boxes) box(b.cx - b.w / 2, b.cy - b.w / 2, b.cx + b.w / 2, b.cy + b.w / 2, 0, b.hgt, far, 1, { roof: '#a3adb5' });
   }
 
-  function buildWorld() {
-    const savedW = warm; warm = 0;
-    rcam = { x: OX, y: OY, z: 1 };
-    const L = daylight(hour);
+  // ---------- time-sliced map bake ----------
+  // Rebuilding the cached map (rotation, cutaway, edits, theme) used to run in one go and froze the frame for
+  // ~170 ms on the New York map. It now runs as a resumable job of whole diagonals, ~9 ms per frame. While a
+  // visible rebuild is in progress the last rendered frame stays on screen, then the new view cross-fades in.
+  // The NYC lit-window layer is only needed toward dusk: daytime rebuilds skip it and it is rebuilt in the
+  // background before windows start to show (or behind the freeze frame if the clock jumps straight to night).
+  let bake = null, litStale = true, fadeFrom = -1e9, drawnOnce = false;
+  const freezeCanvas = document.createElement('canvas');
+  const freezeCtx = freezeCanvas.getContext('2d');
+  const LIT_NEEDED = 0.82;   // build the lit layer once daylight falls below this
+  const LIT_VISIBLE = 0.75;  // lit windows start to show below this (see the dusk blend in draw)
 
-    rctx = wctx;
-    wctx.setTransform(WS, 0, 0, WS, 0, 0);
-    wctx.clearRect(0, 0, WW, WH);
-    if (isNYC) drawShores(); else drawRidge();
-    drawSlab(1);
-
-    rctx = nctx;
-    nctx.setTransform(1, 0, 0, 1, 0, 0);
-    nctx.clearRect(0, 0, WW, WH);
-    if (isNYC) { litCtx.setTransform(1, 0, 0, 1, 0, 0); litCtx.clearRect(0, 0, WW, WH); }
-
-    if (isNYC) railBakePrep();
-    for (let s = 0; s <= 2 * N - 2; s++) {
-      for (let x = Math.max(0, s - N + 1); x <= Math.min(N - 1, s); x++) {
-        const y = s - x;
-        rctx = wctx;
-        if (x === cutX && y === cutY) drawGround(x, y, grid[x][y], 1); // building lifted off for the interior view
-        else drawTile(x, y, grid[x][y], 1, false);
-        if (isNYC) {
-          drawRailForTile(x, y);
-          const tt = grid[x][y];
-          if (tt && tt !== 'water' && !isRoad(tt)) {
-            rctx = litCtx;
-            litCtx.globalCompositeOperation = 'destination-out'; drawTile(x, y, tt, 1, true);
-            litCtx.globalCompositeOperation = 'source-over';
-            if (isBuilding(tt)) drawBuildingNightWindows(x, y, tt, 1, true);
-          }
-        }
-        rctx = nctx;
-        drawTileNight(x, y, grid[x][y], L);
-      }
+  function bakeBegin(world, lit, freeze) {
+    if (freeze && drawnOnce) {
+      if (freezeCanvas.width !== canvas.width || freezeCanvas.height !== canvas.height) { freezeCanvas.width = canvas.width; freezeCanvas.height = canvas.height; }
+      freezeCtx.setTransform(1, 0, 0, 1, 0, 0); freezeCtx.drawImage(canvas, 0, 0);
     }
-    if (isNYC) { rctx = nctx; drawRailNight(); }
-    warm = savedW;
-    worldDirty = false;
-    winDirty = true;
+    const savedR = rctx, savedC = rcam;
+    rcam = { x: OX, y: OY, z: 1 };
+    if (world) {
+      worldDirty = false; // anything that dirties the map again mid-job restarts it
+      rctx = wctx; wctx.setTransform(WS, 0, 0, WS, 0, 0); wctx.clearRect(0, 0, WW, WH);
+      if (isNYC) drawShores(); else drawRidge();
+      drawSlab(1);
+      nctx.setTransform(1, 0, 0, 1, 0, 0); nctx.clearRect(0, 0, WW, WH);
+      if (isNYC) railBakePrep();
+    }
+    if (lit) { litCtx.setTransform(1, 0, 0, 1, 0, 0); litCtx.clearRect(0, 0, WW, WH); }
+    else if (world && isNYC) litStale = true;
+    rctx = savedR; rcam = savedC;
+    bake = { s: 0, world, lit, freeze: freeze && drawnOnce, L: daylight(hour) };
+  }
+  // Runs whole diagonals until the time budget is used; returns true when the job is finished.
+  function bakeStep(budgetMs) {
+    const savedW = warm, savedR = rctx, savedC = rcam;
+    warm = 0; rcam = { x: OX, y: OY, z: 1 };
+    const t0 = performance.now(), last = 2 * N - 2;
+    while (bake.s <= last) {
+      const sd = bake.s;
+      for (let x = Math.max(0, sd - N + 1); x <= Math.min(N - 1, sd); x++) {
+        const y = sd - x, tt = grid[x][y];
+        if (bake.world) {
+          rctx = wctx;
+          if (x === cutX && y === cutY) drawGround(x, y, tt, 1); // building lifted off for the interior view
+          else drawTile(x, y, tt, 1, false);
+          if (isNYC) drawRailForTile(x, y);
+          rctx = nctx;
+          drawTileNight(x, y, tt, bake.L);
+        }
+        if (bake.lit && tt && tt !== 'water' && !isRoad(tt)) {
+          rctx = litCtx;
+          litCtx.globalCompositeOperation = 'destination-out'; drawTile(x, y, tt, 1, true);
+          litCtx.globalCompositeOperation = 'source-over';
+          if (isBuilding(tt) && !(x === cutX && y === cutY)) drawBuildingNightWindows(x, y, tt, 1, true);
+        }
+      }
+      bake.s++;
+      if (performance.now() - t0 > budgetMs) break;
+    }
+    let done = false;
+    if (bake.s > last) {
+      if (bake.world) { if (isNYC) { rctx = nctx; drawRailNight(); } winDirty = true; }
+      if (bake.lit) litStale = false;
+      done = true;
+    }
+    warm = savedW; rctx = savedR; rcam = savedC;
+    return done;
+  }
+  // Synchronous rebuild (startup, exports, and code that needs the map immediately)
+  function buildWorld() {
+    bakeBegin(true, isNYC && daylight(hour) < LIT_NEEDED, false);
+    while (!bakeStep(1e9)) { /* finish in one go */ }
+    bake = null;
+  }
+  // Called at the top of draw(): starts, continues or restarts the job. Returns true if this frame should
+  // show the frozen previous frame instead of the half-built map.
+  function bakeTick(now, synchronous) {
+    const L = daylight(hour);
+    if (worldDirty && (!bake || bake.world)) {
+      bakeBegin(true, isNYC && L < LIT_NEEDED, true);          // new or restarted map rebuild (visible)
+    } else if (!bake && isNYC && litStale && L < LIT_NEEDED) {
+      bakeBegin(false, true, L < LIT_VISIBLE);                   // lit layer: in the background unless already dusk
+    }
+    if (!bake) return false;
+    const freeze = bake.freeze;
+    if (bakeStep(synchronous || !drawnOnce ? 1e9 : 9)) {
+      bake = null;
+      if (freeze) fadeFrom = now;
+      return false;
+    }
+    return freeze;
   }
 
   const vigCanvas = document.createElement('canvas');
@@ -2495,7 +2545,11 @@
       const ck = cg ? cg.x * N + cg.y : -1;
       if (ck !== bakedCut) { bakedCut = ck; worldDirty = true; }
     }
-    if (worldDirty) buildWorld();
+    if (bakeTick(now, transparentBg)) {
+      // A visible rebuild is in progress: keep the last frame on screen (no half-built map, no long stall)
+      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(freezeCanvas, 0, 0);
+      return;
+    }
 
     const th = curTheme();
     rctx = ctx;
@@ -2791,6 +2845,12 @@
       }
     }
     drawExtras(now, transparentBg);
+    // Cross-fade from the frozen frame once a rebuild finishes
+    const fadeT = (now - fadeFrom) / 180;
+    if (fadeT < 1 && !transparentBg) {
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1 - fadeT * fadeT; ctx.drawImage(freezeCanvas, 0, 0); ctx.restore();
+    }
+    drawnOnce = true;
   }
 
   // ---------- rotate ----------
