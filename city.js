@@ -1,6 +1,19 @@
 (() => {
   const D = window.ISOCITY_DATA;
-  const N = 32;
+  const NYC = window.ISOCITY_NYC || null;
+  // Classic cities are 32x32; the New York map is 64x64 and is the default for a fresh city.
+  // Existing saves keep their own size, so old cities load exactly as before.
+  const N = (() => {
+    try {
+      const d = JSON.parse(localStorage.getItem('isocity-workspace-v5'));
+      const n = d && Array.isArray(d.grid) ? d.grid.length : 0;
+      if (n === 32 || (n === 64 && NYC)) return n;
+    } catch (e) { /* no save */ }
+    return NYC ? 64 : 32;
+  })();
+  const isNYC = N === 64;
+  const CLASSIC_KEY = 'workspace-city-classic-backup', NYC_KEY = 'workspace-city-nyc-backup', TRANSFER_KEY = 'isocity-nyc-transfer';
+  let switchingCity = false; // set while reloading into a city of another size, so nothing overwrites the save
   const TW = 64, TH = 32;
   const SAVE_KEY = 'isocity-workspace-v5';
   const LINKS_KEY = 'workspace-city-links-v1';
@@ -245,6 +258,7 @@
     };
   }
   function saveNow() {
+    if (switchingCity) return;
     clearTimeout(saveTimer); saveTimer = 0;
     saveLinksOnly();
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(serializeState())); } catch (e) {}
@@ -279,7 +293,15 @@
   }
 
   // ---------- city builder ----------
+  let nycLots = null;
   function starter() {
+    if (isNYC) {
+      rotSteps = 0; selectedTile = null;
+      const m = NYC.build();
+      grid = m.grid; levels = m.levels; pins = makePins(); nycLots = m.lots;
+      assignUnpinnedItems();
+      return;
+    }
     rotSteps = 0;
     grid = Array.from({ length: N }, () => Array(N).fill('forest'));
     levels = makeLevels();
@@ -321,6 +343,14 @@
   }
 
   function findFreeLot(kind, preferType = null) {
+    if (isNYC) {
+      if (!nycLots) nycLots = NYC.build().lots;
+      for (const [ox, oy] of (kind === 'google' ? nycLots.google : nycLots.github)) {
+        const [sx, sy] = rotPt(ox, oy);
+        if (!pins[sx][sy] && isBuilding(grid[sx][sy])) return { x: sx, y: sy, t: preferType || grid[sx][sy], lv: levels[sx][sy] || 1 };
+      }
+      return null;
+    }
     const pool = kind === 'google' ? D.SPARE_SOUTH : D.SPARE_NORTH;
     for (const [sx0, sy0, st, slv] of pool) {
       const [sx, sy] = rotPt(sx0, sy0);
@@ -479,9 +509,18 @@
     return r;
   }
   function waterTiles() {
-    const w = [];
-    for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) if (isWater(grid[x][y])) w.push([x, y]);
-    return w;
+    // Largest connected body of water only, so boats never spawn in a pond or reservoir
+    const seenW = new Uint8Array(N * N); let best = [];
+    for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
+      if (seenW[x * N + y] || !isWater(grid[x][y])) continue;
+      const comp = [], q = [[x, y]]; seenW[x * N + y] = 1;
+      while (q.length) {
+        const [cx, cy] = q.pop(); comp.push([cx, cy]);
+        for (const [dx, dy] of NB) { const nx = cx + dx, ny = cy + dy; if (inb(nx, ny) && !seenW[nx * N + ny] && isWater(grid[nx][ny])) { seenW[nx * N + ny] = 1; q.push([nx, ny]); } }
+      }
+      if (comp.length > best.length) best = comp;
+    }
+    return best;
   }
 
   function syncAgents() {
@@ -759,6 +798,7 @@
   function bldHeight(t, lv) {
     const d = TYPES[t];
     if (!d || !d.h) return 0;
+    if (isNYC && t === 'house') return 38; // three storeys over a raised basement
     if (!d.grow || lv <= 1) return d.h;
     return Math.round(d.h * (lv === 2 ? 1.32 : 1.68));
   }
@@ -775,6 +815,98 @@
       faceL(x0 + dx * a, x0 + dx * b, y1, 1.5, 8.5, glassL);
       faceR(x1, y0 + dy * a, y0 + dy * b, 1.5, 8.5, glassR);
     }
+  }
+
+  // NYC district look for a tile, read from its original map position so it is stable under rotation
+  function nycInfo(x, y) {
+    if (!isNYC) return null;
+    const [ux, uy] = unrotPt(x, y);
+    return { r: NYC.regionOf(ux, uy), lm: NYC.LANDMARKS[`${ux},${uy}`] || null, h: NYC.hash(ux, uy, 5) };
+  }
+  // Street walls: row houses and Manhattan blocks fill their lots so façades read as continuous
+  function insetFor(x, y, t) {
+    const d = TYPES[t];
+    if (!d) return 0.1;
+    if (!isNYC) return d.inset;
+    const r = nycInfo(x, y).r;
+    if (t === 'house' && (r === 'brooklyn' || r === 'queens' || r === 'bkwater')) return 0.03;
+    if ((t === 'apt' || t === 'shop') && r && r !== 'staten' && r !== 'roosevelt' && r !== 'lic') return 0.04;
+    return d.inset;
+  }
+
+  // ----- NYC landmark shapes and street-level details -----
+  function drawSpireTower(X0, Y0, X1, Y1, L) {
+    // Podium, then a glass shaft that tapers as it rises, a parapet and a slender spire
+    box(X0, Y0, X1, Y1, 0, 16, '#6f7f8c', L, { roof: '#8a98a3' });
+    const steps = 9, top = 230;
+    for (let k = 0; k < steps; k++) {
+      const f0 = k / steps, z0 = 16 + (top - 16) * f0, z1 = 16 + (top - 16) * (k + 1) / steps, ins = 0.04 + f0 * 0.16;
+      box(X0 + ins, Y0 + ins, X1 - ins, Y1 - ins, z0, z1 + 0.5, k % 2 ? '#86a6c0' : '#7c9cb8', L, { roof: '#a9c2d6' });
+    }
+    const cx = (X0 + X1) / 2, cy = (Y0 + Y1) / 2;
+    box(cx - 0.05, cy - 0.05, cx + 0.05, cy + 0.05, top, top + 8, '#b8c4cc', L);
+    rctx.strokeStyle = shade('#e8ecef', 1, L); rctx.lineWidth = Math.max(0.8, 0.9 * rcam.z);
+    rctx.beginPath(); rctx.moveTo(px(cx, cy), py(cx, cy, top + 8)); rctx.lineTo(px(cx, cy), py(cx, cy, top + 70)); rctx.stroke();
+  }
+  function drawSteppedTower(X0, Y0, X1, Y1, L) {
+    // Stone tower with setbacks, a stepped crown and a mast
+    const tiers = [[0, 96, 0], [96, 150, 0.09], [150, 182, 0.17], [182, 198, 0.24], [198, 210, 0.3]];
+    tiers.forEach(([z0, z1, ins], k) => box(X0 + ins, Y0 + ins, X1 - ins, Y1 - ins, z0, z1, k < 3 ? '#cbbfa9' : '#d9cdb5', L, { roof: '#bfb39c', windows: k < 3 ? 31 + k : 0, thresh: 0.3 }));
+    const cx = (X0 + X1) / 2, cy = (Y0 + Y1) / 2;
+    rctx.strokeStyle = shade('#d9d4c9', 1, L); rctx.lineWidth = Math.max(1, 1.2 * rcam.z);
+    rctx.beginPath(); rctx.moveTo(px(cx, cy), py(cx, cy, 210)); rctx.lineTo(px(cx, cy), py(cx, cy, 250)); rctx.stroke();
+  }
+  function drawFlatiron(X0, Y0, X1, Y1, L) {
+    // Wedge on a triangular lot: two street façades meeting at a sharp corner, cornice and window rows
+    const H = 72;
+    faceL(X0, X1, Y1, 0, H, shade('#d6c8ad', 0.86, L));
+    faceR(X1, Y0, Y1, 0, H, shade('#d6c8ad', 0.7, L));
+    poly4(px(X0, Y1), py(X0, Y1, H), px(X1, Y1), py(X1, Y1, H), px(X1, Y0), py(X1, Y0, H), px(X1, Y0), py(X1, Y0, H), shade('#c2b49a', 1.05, L));
+    for (let r = 0; r < 9; r++) {
+      const z0 = 6 + r * 7.2;
+      for (let c = 0; c < 6; c++) {
+        const a = (c + 0.25) / 6, b = (c + 0.75) / 6;
+        faceL(X0 + (X1 - X0) * a, X0 + (X1 - X0) * b, Y1 + 0.002, z0, z0 + 4, shade('#3a4048', 1, L));
+        faceR(X1 + 0.002, Y0 + (Y1 - Y0) * a, Y0 + (Y1 - Y0) * b, z0, z0 + 4, shade('#30363d', 1, L));
+      }
+    }
+    faceL(X0, X1, Y1 + 0.004, H - 3, H, shade('#a89a80', 0.9, L)); faceR(X1 + 0.004, Y0, Y1, H - 3, H, shade('#a89a80', 0.75, L));
+  }
+  function drawRowhouseDetails(X0, Y0, X1, Y1, H, L, ny) {
+    // Cornice, stoop with railings up to a parlour-floor door, basement window, occasional fire escape
+    box(X0 - 0.012, Y0 - 0.012, X1 + 0.012, Y1 + 0.012, H - 1.6, H + 0.6, '#3f3a36', L, { roof: '#5a524c' });
+    const sx0 = X0 + (X1 - X0) * 0.1, sx1 = X0 + (X1 - X0) * 0.32;
+    for (let k = 0; k < 4; k++) box(sx0, Y1, sx1, Y1 + 0.13 - k * 0.03, 0, 1.4 + k * 1.3, '#7a6a5a', L, { roof: '#8d7d6b' });
+    rctx.strokeStyle = shade('#1f1f1f', 1, L); rctx.lineWidth = Math.max(0.5, 0.45 * rcam.z);
+    rctx.beginPath();
+    for (const xx of [sx0, sx1]) { rctx.moveTo(px(xx, Y1 + 0.13), py(xx, Y1 + 0.13, 2.4)); rctx.lineTo(px(xx, Y1 + 0.01), py(xx, Y1 + 0.01, 7.4)); }
+    rctx.stroke();
+    faceL(sx0 + 0.02, sx1 - 0.02, Y1 + 0.003, 5.4, 12.4, shade('#3a2a20', 1, L));                         // door
+    faceL(X0 + (X1 - X0) * 0.55, X0 + (X1 - X0) * 0.85, Y1 + 0.003, 0.6, 3, shade('#2a2f33', 1, L));        // basement window
+    if (ny.h > 0.72) { // fire escape: landings and ladders on the street façade
+      const fx0 = X0 + (X1 - X0) * 0.5, fx1 = X0 + (X1 - X0) * 0.9;
+      rctx.beginPath();
+      for (const z of [16, 26, 36]) { rctx.moveTo(px(fx0, Y1 + 0.04), py(fx0, Y1 + 0.04, z)); rctx.lineTo(px(fx1, Y1 + 0.04), py(fx1, Y1 + 0.04, z)); }
+      rctx.moveTo(px(fx1 - 0.04, Y1 + 0.04), py(fx1 - 0.04, Y1 + 0.04, 16)); rctx.lineTo(px(fx0 + 0.04, Y1 + 0.04), py(fx0 + 0.04, Y1 + 0.04, 26));
+      rctx.moveTo(px(fx0 + 0.04, Y1 + 0.04), py(fx0 + 0.04, Y1 + 0.04, 26)); rctx.lineTo(px(fx1 - 0.04, Y1 + 0.04), py(fx1 - 0.04, Y1 + 0.04, 36));
+      rctx.stroke();
+    }
+  }
+  function drawWaterTower(cx, cy, z, L) {
+    for (const [a, b] of [[-0.05, -0.05], [0.05, -0.05], [-0.05, 0.05], [0.05, 0.05]]) box(cx + a - 0.008, cy + b - 0.008, cx + a + 0.008, cy + b + 0.008, z, z + 4, '#3a3632', L);
+    box(cx - 0.065, cy - 0.065, cx + 0.065, cy + 0.065, z + 4, z + 11, '#7a5a3e', L, { roof: '#6a4c34' });
+    const t = z + 14;
+    poly4(px(cx - 0.065, cy + 0.065), py(cx - 0.065, cy + 0.065, z + 11), px(cx + 0.065, cy + 0.065), py(cx + 0.065, cy + 0.065, z + 11), px(cx, cy), py(cx, cy, t), px(cx, cy), py(cx, cy, t), shade('#4a3a2c', 1, L));
+    poly4(px(cx + 0.065, cy - 0.065), py(cx + 0.065, cy - 0.065, z + 11), px(cx + 0.065, cy + 0.065), py(cx + 0.065, cy + 0.065, z + 11), px(cx, cy), py(cx, cy, t), px(cx, cy), py(cx, cy, t), shade('#3a2c22', 1, L));
+  }
+  function drawFerryTerminal(x, y, L) {
+    // Broad terminal hall with a glass front, deep roof slab, orange signage band and a boarding apron
+    quadZ(x, y, x + 1, y + 1, 0.3, shade('#c9c2b2', 1, L));
+    box(x + 0.1, y + 0.1, x + 0.9, y + 0.78, 0, 18, '#a9b3ba', L, { roof: '#d9d4c9' });
+    faceL(x + 0.14, x + 0.86, y + 0.782, 1, 13, shade('#9cc2cf', 0.9, L));
+    box(x + 0.06, y + 0.06, x + 0.94, y + 0.84, 18, 20.5, '#4e4b47', L, { roof: '#e6e1d6' });
+    faceL(x + 0.06, x + 0.94, y + 0.842, 14.5, 17, shade('#e8762b', 1, L));
+    for (let k = 0; k < 3; k++) faceL(x + 0.3 + k * 0.14, x + 0.38 + k * 0.14, y + 0.785, 1, 9, shade('#2f3a40', 1, L)); // doors
   }
 
   function drawTileNight(x, y, t) {
@@ -835,7 +967,8 @@
     const winThresh = 0.22 + ((x * 13 + y * 7) % 24) * 0.015;
     if (!force && (1 - L) <= winThresh) return;
 
-    const i = TYPES[t].inset;
+    if (isNYC && nycInfo(x, y).lm) return;
+    const i = insetFor(x, y, t);
     const x0 = x + i, y0 = y + i, x1 = x + 1 - i, y1 = y + 1 - i;
     const seed = x * 11 + y * 5;
     const glass = t === 'office' || (!!pins[x][y] && t !== 'house'); // matches the day window geometry
@@ -863,6 +996,7 @@
   let winSprites = [], winDirty = true;
   function buildWinSprites() {
     winDirty = false;
+    if (isNYC) { winSprites = []; return; } // per-building sprites are too heavy for the big map; it bakes lit windows instead
     winSprites = [];
     const savedR = rctx, savedC = rcam, savedW = warm;
     warm = 0;
@@ -1145,6 +1279,17 @@
       for (const t2 of placed) tree(x + t2.a, y + t2.b, t2.sc, L, Math.imul(sd + t2.k * 977, 2654435761) >>> 20);
       return;
     }
+    if (t === 'plaza' && isNYC) {
+      const ny = nycInfo(x, y);
+      if (ny.lm === 'portal' || ny.lm === 'cut') { quadZ(x, y, x + 1, y + 1, 0.3, shade('#b5aea2', 1, L)); return; }
+      if (ny.lm === 'ferryMan' || ny.lm === 'ferrySI') { drawFerryTerminal(x, y, L); return; }
+      if (!ny.r) { // pier over the water: concrete deck on piles, bollards along the edge
+        for (const [a, b] of [[0.1, 0.1], [0.9, 0.1], [0.1, 0.9], [0.9, 0.9]]) box(x + a - 0.03, y + b - 0.03, x + a + 0.03, y + b + 0.03, -7, 1.2, '#5e5a52', L);
+        box(x + 0.04, y + 0.04, x + 0.96, y + 0.96, 0, 1.4, '#a49d90', L, { roof: '#bdb6a8' });
+        for (let k = 0; k < 4; k++) box(x + 0.12 + k * 0.24, y + 0.9, x + 0.16 + k * 0.24, y + 0.94, 1.4, 3, '#3a3632', L);
+        return;
+      }
+    }
     if (t === 'plaza') {
       // Civic square: patterned paving, a tiered fountain, benches facing it, planted corners and lamps
       const cx = x + 0.5, cy = y + 0.5;
@@ -1204,22 +1349,38 @@
     const pinId = pins[x][y];
     const item = pinId ? getItem(pinId) : null;
     const d = TYPES[t];
-    const i = d.inset;
+    const i = insetFor(x, y, t);
+    const ny = nycInfo(x, y);
     const lv = levels[x][y] || 1;
     const seed = x * 11 + y * 5;
     const red = REDS[seed % REDS.length];
-    const wall = item?.customColor || (t === 'house' ? WALLS[seed % WALLS.length]
+    let wall = item?.customColor || (t === 'house' ? WALLS[seed % WALLS.length]
       : t === 'clinic' ? '#f2efe8'
       : t === 'school' ? '#c87c5d'
       : d.color);
-    const roof = t === 'house' ? red
+    let roof = t === 'house' ? red
       : t === 'apt' ? '#a2432f'
       : t === 'shop' ? red
       : t === 'clinic' ? '#e5dfd3'
       : t === 'school' ? '#4a6b68'
       : '#4b6c8a';
+    const brownstone = !!ny && t === 'house' && ny.r !== 'staten';
+    if (ny && !item?.customColor) {
+      const hh = ny.h;
+      const BRICK = ['#8a4a36', '#7a4434', '#94573f', '#6f3f30', '#a06048'], BROWN = ['#6e4a3a', '#7a5341', '#5f4033', '#84604c', '#8a6a52'];
+      if (t === 'house') { wall = (ny.r === 'brooklyn' || ny.r === 'bkwater') ? BROWN[Math.floor(hh * BROWN.length)] : ny.r === 'queens' ? BRICK[Math.floor(hh * BRICK.length)] : WALLS[seed % WALLS.length]; if (brownstone) roof = '#4b4440'; }
+      else if (t === 'apt') { wall = ny.r === 'lic' ? '#7f9bb0' : ny.r === 'roosevelt' ? '#c9c2b4' : hh < 0.5 ? '#d8cfbd' : BRICK[Math.floor(hh * 10) % BRICK.length]; roof = '#6d6a66'; }
+      else if (t === 'office') { wall = hh < 0.55 ? '#6f8ca3' : hh < 0.8 ? '#c8bfae' : '#4f5f6c'; roof = '#5a5f63'; }
+      else if (t === 'shop') { wall = ny.r === 'bkwater' ? BRICK[Math.floor(hh * BRICK.length)] : hh < 0.5 ? '#e6dcc6' : '#b9653f'; roof = '#5d5954'; }
+    }
     const H = Math.max(1, bldHeight(t, lv));
     const X0 = x + i, Y0 = y + i, X1 = x + 1 - i, Y1 = y + 1 - i;
+    if (ny && ny.lm && !pinId) {
+      if (!skipGround) castShadow(X0, Y0, X1, Y1, ny.lm === 'flatiron' ? 70 : 160);
+      if (ny.lm === 'spire') return drawSpireTower(X0, Y0, X1, Y1, L);
+      if (ny.lm === 'stepped') return drawSteppedTower(X0, Y0, X1, Y1, L);
+      if (ny.lm === 'flatiron') return drawFlatiron(X0, Y0, X1, Y1, L);
+    }
     if (!skipGround) {
       castShadow(X0, Y0, X1, Y1, H);
       // Cheap contact shadow hugging the footprint
@@ -1280,11 +1441,16 @@
       }
     }
 
+    if (t === 'shop' && ny && !pinId) {
+      faceL(X0 + (X1 - X0) * 0.06, X1 - (X1 - X0) * 0.06, Y1 + 0.003, 0.6, 9, shade('#8a8f94', 0.85, L)); // roll-up shutter band
+    }
     if (t === 'shop' && !pinId) {
       poly4(px(x + i, y + 1 - i + 0.04), py(x + i, y + 1 - i + 0.04, 16), px(x + 1 - i, y + 1 - i + 0.04), py(x + 1 - i, y + 1 - i + 0.04, 16),
         px(x + 1 - i, y + 1 - i + 0.13), py(x + 1 - i, y + 1 - i + 0.13, 11), px(x + i, y + 1 - i + 0.13), py(x + i, y + 1 - i + 0.13, 11), shade('#c0463a', 1, L));
     }
-    if (t === 'house') {
+    if (brownstone) drawRowhouseDetails(X0, Y0, X1, Y1, H, L, ny);
+    else if (ny && t === 'apt' && (ny.r === 'uptown' || ny.r === 'midtown' || ny.r === 'brooklyn' || ny.r === 'bkwater') && lv <= 2 && ny.h > 0.35) drawWaterTower(X0 + (X1 - X0) * 0.62, Y0 + (Y1 - Y0) * 0.38, H + 2, L);
+    if (t === 'house' && !brownstone) {
       const r0x = px(x + i, y + 0.5), r0y = py(x + i, y + 0.5, H + 10);
       const r1x = px(x + 1 - i, y + 0.5), r1y = py(x + 1 - i, y + 0.5, H + 10);
       poly4(px(x + i, y + i), py(x + i, y + i, H), px(x + 1 - i, y + i), py(x + 1 - i, y + i, H), r1x, r1y, r0x, r0y, shade(red, 1.0, L));
@@ -1669,7 +1835,7 @@
     const [ux, uy] = heading(b);
     const vx = -uy, vy = ux;
     const x = b.px + 0.5, y = b.py + 0.5;
-    const hl = 6.5 * MT / 2, hw = 2.0 * MT / 2;
+    const hl = 6.5 * MT / 2 * (b.scale || 1), hw = 2.0 * MT / 2 * (b.scale || 1);
     const deckZ = WATER_Z + 1.6;
     const P = (a, s) => [x + ux * a + vx * s, y + uy * a + vy * s];
     const hull = [P(-hl, -hw * 0.86), P(hl * 0.38, -hw), P(hl, 0), P(hl * 0.38, hw), P(-hl, hw * 0.86)];
@@ -1708,18 +1874,305 @@
     if (rcam.z >= 0.7) obox(x, y, ux, uy, -hl * 0.68, hl * 0.1, -hw * 0.69, hw * 0.69, deckZ + 1.0, deckZ + 1.8, shade('#3b4c58', 1, L), null, L);
   }
 
+  // ---------- railway & ferry (NYC map) ----------
+  // Lines come from nyc.js in the original map frame. Each is smoothed (Chaikin) and resampled every 0.1 tile
+  // so trains follow curves and grades. Trains run on simClock time (simDt), never on frame time: speed,
+  // braking, dwell and reversal are identical at any frame rate or quality setting.
+  const TRAIN = { VMAX: 1.5, ACC: 0.55, DWELL: 5, CARS: 3, CAR: 0.62, GAP: 0.07, SIDE: 0.11 };
+  TRAIN.LEN = TRAIN.CARS * TRAIN.CAR + (TRAIN.CARS - 1) * TRAIN.GAP;
+  const rail = { lines: [], trains: [], ferry: null };
+  // Continuous point / direction from the original frame into the current rotated view
+  const rotC = (x, y) => { for (let i = 0; i < (rotSteps & 3); i++) { const t = x; x = N - y; y = t; } return [x, y]; };
+  const rotV = (dx, dy) => { for (let i = 0; i < (rotSteps & 3); i++) { const t = dx; dx = -dy; dy = t; } return [dx, dy]; };
+  function railInit() {
+    if (!isNYC) return;
+    rail.lines = NYC.LINES.map((L) => {
+      let pts = L.pts.map((p) => p.slice());
+      for (let it = 0; it < 3; it++) {
+        const o = [pts[0]];
+        for (let i = 0; i < pts.length - 1; i++) { const a = pts[i], b = pts[i + 1]; o.push(a.map((v, k) => v * 0.75 + b[k] * 0.25), a.map((v, k) => v * 0.25 + b[k] * 0.75)); }
+        o.push(pts[pts.length - 1]); pts = o;
+      }
+      const cum = [0];
+      for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+      const len = cum[cum.length - 1];
+      const raw = (s) => {
+        s = Math.max(0, Math.min(len, s));
+        let lo = 0, hi = cum.length - 1;
+        while (hi - lo > 1) { const m = (lo + hi) >> 1; if (cum[m] <= s) lo = m; else hi = m; }
+        const f = (s - cum[lo]) / ((cum[hi] - cum[lo]) || 1), a = pts[lo], b = pts[hi];
+        return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+      };
+      const samples = [];
+      for (let s = 0; s <= len + 1e-6; s += 0.1) samples.push({ s, p: raw(s) });
+      const near = (q) => { let best = 0, bd = 1e9; for (const sm of samples) { const d = Math.hypot(sm.p[0] - q[0], sm.p[1] - q[1]); if (d < bd) { bd = d; best = sm.s; } } return best; };
+      const stops = L.stations.map((st) => ({ ...st, s: near(st.at) })).sort((a, b) => a.s - b.s);
+      return { ...L, len, raw, samples, stops };
+    });
+    rail.trains = [];
+    rail.lines.forEach((ln, li) => {
+      for (let k = 0; k < ln.trains; k++) {
+        const atStart = k % 2 === 0, st = atStart ? ln.stops[0] : ln.stops[ln.stops.length - 1];
+        rail.trains.push({ li, s: st.s, dir: atStart ? 1 : -1, v: 0, state: 'dwell', wait: 1.5 + k * 2.5, at: st });
+      }
+    });
+    rail.ferry = { s: 0, dir: 1, state: 'dwell', wait: 2, v: 0 };
+  }
+  function stepTrains(dt) {
+    if (!isNYC || !rail.lines.length) return;
+    const T = TRAIN;
+    for (const tr of rail.trains) {
+      const ln = rail.lines[tr.li];
+      if (tr.state === 'dwell') {
+        tr.wait -= dt;
+        if (tr.wait > 0) continue;
+        if (tr.at === ln.stops[0] || tr.at === ln.stops[ln.stops.length - 1]) tr.dir = tr.at === ln.stops[0] ? 1 : -1; // terminal reversal
+        tr.state = 'run';
+      }
+      const next = tr.dir > 0 ? ln.stops.find((st) => st.s > tr.s + 0.02) : [...ln.stops].reverse().find((st) => st.s < tr.s - 0.02);
+      if (!next) { tr.dir = -tr.dir; continue; }
+      let dist = Math.abs(next.s - tr.s);
+      // Keep a safe gap behind any train ahead on the same track (same line, same direction)
+      for (const o of rail.trains) {
+        if (o === tr || o.li !== tr.li || o.dir !== tr.dir) continue;
+        const gap = (o.s - tr.s) * tr.dir;
+        if (gap > 0) dist = Math.min(dist, gap - (T.LEN + 0.7));
+      }
+      const target = Math.max(0, Math.min(T.VMAX, Math.sqrt(2 * T.ACC * Math.max(0, dist))));
+      tr.v = tr.v < target ? Math.min(target, tr.v + T.ACC * dt) : target;
+      tr.s += tr.v * dt * tr.dir;
+      if ((next.s - tr.s) * tr.dir <= 0.02) { tr.s = next.s; tr.v = 0; tr.state = 'dwell'; tr.wait = T.DWELL; tr.at = next; }
+    }
+    // Ferry: across the harbour and back, with a dwell at each terminal
+    const f = rail.ferry;
+    if (f) {
+      const [ax, ay] = NYC.FERRY.from, [bx, by] = NYC.FERRY.to, flen = Math.hypot(bx - ax, by - ay);
+      if (f.state === 'dwell') { f.wait -= dt; if (f.wait <= 0) { f.state = 'run'; } }
+      else {
+        const remain = f.dir > 0 ? flen - f.s : f.s;
+        const target = Math.min(0.55, Math.sqrt(2 * 0.25 * Math.max(0, remain)));
+        f.v = f.v < target ? Math.min(target, f.v + 0.25 * dt) : target;
+        f.s += f.v * dt * f.dir;
+        if (remain <= 0.02) { f.s = f.dir > 0 ? flen : 0; f.v = 0; f.dir = -f.dir; f.state = 'dwell'; f.wait = 6; }
+      }
+    }
+  }
+  // Ferry as a boat entity for the existing boat renderer (scaled up, in the current view frame)
+  function ferryBoat() {
+    const f = rail.ferry; if (!f) return null;
+    const [ax, ay] = NYC.FERRY.from, [bx, by] = NYC.FERRY.to, flen = Math.hypot(bx - ax, by - ay);
+    const k = Math.max(0, Math.min(1, f.s / flen));
+    const [cx, cy] = rotC(ax + (bx - ax) * k, ay + (by - ay) * k);
+    const [hx, hy] = rotV((bx - ax) * f.dir, (by - ay) * f.dir);
+    const fb = ferryBoat.obj || (ferryBoat.obj = { color: '#e8762b', scale: 2.1, t: 1 });
+    fb.px = cx - 0.5; fb.py = cy - 0.5; fb.fx = fb.px; fb.fy = fb.py; fb.tx = fb.px + Math.sign(hx) * (Math.abs(hx) > Math.abs(hy) ? 1 : 0); fb.ty = fb.py + Math.sign(hy) * (Math.abs(hy) >= Math.abs(hx) ? 1 : 0);
+    fb._hx = hx / flen; fb._hy = hy / flen; fb._dx = undefined;
+    return fb;
+  }
+
+  // Car geometry along the line at arc length s (original frame -> view frame)
+  function railPose(ln, s, side) {
+    const p = ln.raw(s), q = ln.raw(s + 0.05), r0 = ln.raw(s - 0.05);
+    let tx = q[0] - r0[0], ty = q[1] - r0[1]; const l = Math.hypot(tx, ty) || 1; tx /= l; ty /= l;
+    const ox = p[0] - ty * side, oy = p[1] + tx * side;
+    const [vx, vy] = rotC(ox, oy), [ux, uy] = rotV(tx, ty);
+    return { x: vx, y: vy, z: p[2], ux, uy };
+  }
+  // Visible train cars this frame (for depth sorting with everything else)
+  function trainCars() {
+    const out = [];
+    for (const tr of rail.trains) {
+      const ln = rail.lines[tr.li], T = TRAIN;
+      for (let i = 0; i < T.CARS; i++) {
+        const sc = tr.s - tr.dir * (T.CAR / 2 + i * (T.CAR + T.GAP));
+        const pose = railPose(ln, sc, T.SIDE * tr.dir);
+        if (pose.z < -3) continue;                 // underground: not drawn
+        out.push({ tr, ln, i, pose });
+      }
+    }
+    return out;
+  }
+  function drawTrainCar(c, L, lightsOnly = false) {
+    const { pose, tr, ln, i } = c, T = TRAIN;
+    const dir = tr.dir, ux = pose.ux * dir, uy = pose.uy * dir;
+    const hl = T.CAR / 2, hw = 0.13, z = pose.z + 0.5;
+    const front = i === 0, rear = i === T.CARS - 1, open = tr.state === 'dwell' && tr.wait < T.DWELL - 0.6 && tr.wait > 0.6;
+    if (lightsOnly) {
+      if (L >= 0.6) return;
+      rctx.globalAlpha = Math.min(1, (0.6 - L) * 3);
+      obox(pose.x, pose.y, ux, uy, -hl + 0.02, hl - 0.02, -hw - 0.003, hw + 0.003, z + 5.2, z + 7.6, '#ffd98a', null, 1);
+      if (front) { const hr = 8 * rcam.z, fx = pose.x + ux * (hl + 0.05), fy = pose.y + uy * (hl + 0.05); rctx.drawImage(headGlow, px(fx, fy) - hr, py(fx, fy, z + 3) - hr, hr * 2, hr * 2); }
+      rctx.globalAlpha = 1;
+      return;
+    }
+    footShadow(pose.x, pose.y, ux, uy, hl, hw, z - 0.3, 0.2);
+    const steel = '#c3c8cd', endDark = '#2c3238';
+    obox(pose.x, pose.y, ux, uy, -hl, hl, -hw, hw, z + 0.8, z + 10.5, (fi, k) => {
+      if ((fi === 1 && front) || (fi === 3 && rear)) return shade(endDark, 1, 1);
+      return shade(steel, k + 0.06, 1);
+    }, '#9ea4aa', 1);
+    // Window band, paired doors (lit doorways while stopped at a platform), roof line
+    obox(pose.x, pose.y, ux, uy, -hl + 0.03, hl - 0.03, -hw - 0.002, hw + 0.002, z + 5.2, z + 7.6, shade('#3a4650', 1, 1), null, 1);
+    for (const a of [-hl * 0.5, hl * 0.5]) obox(pose.x, pose.y, ux, uy, a - 0.045, a + 0.045, -hw - 0.004, hw + 0.004, z + 1.2, z + 8.6, open ? '#ffe2a8' : shade('#8c939a', 1, 1), null, 1);
+    if (front) {
+      const fx = pose.x + ux * hl, fy = pose.y + uy * hl;
+      obox(fx, fy, ux, uy, -0.004, 0.006, -0.05, 0.05, z + 8.4, z + 9.6, '#ffb648', null, 1);           // destination display
+      for (const b of [-0.08, 0.08]) obox(fx - uy * b, fy + ux * b, ux, uy, -0.004, 0.006, -0.018, 0.018, z + 2.2, z + 3.2, L < 0.6 ? '#fff6d0' : '#e9e4cf', null, 1);
+      // Route bullet on the front, in the line colour
+      const [bx, by] = [px(fx, fy), py(fx, fy, z + 6.4)];
+      rctx.fillStyle = ln.color; rctx.beginPath(); rctx.arc(bx, by, 1.4 * rcam.z, 0, 7); rctx.fill();
+    }
+  }
+
+  // Static railway structures, baked with the city: grouped by the tile each piece belongs to so they are
+  // drawn in the same back-to-front order as buildings (correct overlaps without per-frame work).
+  let railBake = null;
+  function railBakePrep() {
+    railBake = new Map();
+    if (!isNYC) return;
+    const add = (x, y, f) => { const k = Math.floor(x) * N + Math.floor(y); if (!railBake.has(k)) railBake.set(k, []); railBake.get(k).push(f); };
+    for (const ln of rail.lines) {
+      const sm = ln.samples;
+      for (let i = 0; i < sm.length - 1; i++) {
+        const a = sm[i].p, b = sm[i + 1].p, z = (a[2] + b[2]) / 2;
+        if (z < -10) continue;
+        let tx = b[0] - a[0], ty = b[1] - a[1]; const l = Math.hypot(tx, ty) || 1; tx /= l; ty /= l;
+        const P = (p, off, dz = 0) => { const [vx, vy] = rotC(p[0] - ty * off, p[1] + tx * off); return [vx, vy, p[2] + dz]; };
+        const mid = rotC((a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
+        const groundUnder = grid[Math.floor(mid[0])]?.[Math.floor(mid[1])];
+        const overWater = groundUnder === 'water' || groundUnder === 'bridge';
+        add(mid[0], mid[1], () => {
+          const quad = (q, fill) => { rctx.beginPath(); q.forEach(([x, y, zz], j) => (j ? rctx.lineTo(px(x, y), py(x, y, zz)) : rctx.moveTo(px(x, y), py(x, y, zz)))); rctx.closePath(); rctx.fillStyle = fill; rctx.fill(); };
+          if (z < 0) { // open cut down to the tunnel: dark trench with concrete lips
+            quad([P(a, -0.3, -a[2] + 0.1), P(b, -0.3, -b[2] + 0.1), P(b, 0.3, -b[2] + 0.1), P(a, 0.3, -a[2] + 0.1)], 'rgba(20,22,26,0.85)');
+            quad([P(a, -0.34, -a[2] + 0.6), P(b, -0.34, -b[2] + 0.6), P(b, -0.3, -b[2] + 0.6), P(a, -0.3, -a[2] + 0.6)], '#b9b2a4');
+            quad([P(a, 0.3, -a[2] + 0.6), P(b, 0.3, -b[2] + 0.6), P(b, 0.34, -b[2] + 0.6), P(a, 0.34, -a[2] + 0.6)], '#b9b2a4');
+            return;
+          }
+          const elev = z > 2;
+          if (elev) { // deck fascia then deck
+            quad([P(a, 0.3, -1.8), P(b, 0.3, -1.8), P(b, 0.3, 0), P(a, 0.3, 0)], shade('#56636a', 0.9, 1));
+            quad([P(a, -0.3, -1.8), P(b, -0.3, -1.8), P(b, -0.3, 0), P(a, -0.3, 0)], shade('#56636a', 0.75, 1));
+          }
+          quad([P(a, -0.3, 0), P(b, -0.3, 0), P(b, 0.3, 0), P(a, 0.3, 0)], elev ? '#6f777b' : '#8a7d6c');
+          if (i % 2 === 0) for (const side of [-1, 1]) quad([P(a, side * 0.11 - 0.06, 0.2), P(b, side * 0.11 - 0.06, 0.2), P(b, side * 0.11 + 0.06, 0.2), P(a, side * 0.11 + 0.06, 0.2)], '#5a4a3a'); // sleepers
+          rctx.strokeStyle = '#a7adb2'; rctx.lineWidth = Math.max(0.5, 0.35 * rcam.z);
+          rctx.beginPath();
+          for (const off of [-0.145, -0.075, 0.075, 0.145]) { const p0 = P(a, off, 0.5), p1 = P(b, off, 0.5); rctx.moveTo(px(p0[0], p0[1]), py(p0[0], p0[1], p0[2])); rctx.lineTo(px(p1[0], p1[1]), py(p1[0], p1[1], p1[2])); }
+          rctx.stroke();
+          // Steel columns with a cross-beam every tile under elevated track over land (clear of the carriageway)
+          if (elev && !overWater && i % 10 === 0) {
+            for (const side of [-0.27, 0.27]) { const c = P(a, side); box(c[0] - 0.025, c[1] - 0.025, c[0] + 0.025, c[1] + 0.025, 0, z - 1.8, '#4b5a5e', 1); }
+            const c0 = P(a, -0.29, -1.8), c1 = P(a, 0.29, -1.8);
+            rctx.strokeStyle = '#4b5a5e'; rctx.lineWidth = Math.max(0.8, 0.7 * rcam.z);
+            rctx.beginPath(); rctx.moveTo(px(c0[0], c0[1]), py(c0[0], c0[1], c0[2] - 1)); rctx.lineTo(px(c1[0], c1[1]), py(c1[0], c1[1], c1[2] - 1)); rctx.stroke();
+          }
+        });
+      }
+      // Stations: elevated/surface platforms with edges, canopies and stairs; underground stations get entrances
+      for (const st of ln.stops) {
+        const p = ln.raw(st.s);
+        if (p[2] < -2) {
+          const [ex0, ey0] = st.entrance || st.at;
+          const [ex, ey] = rotC(ex0, ey0);
+          add(ex, ey, () => {
+            box(ex - 0.06, ey - 0.1, ex + 0.06, ey + 0.1, 0, 0.3, '#3b3f44', 1, { roof: '#1e2226' }); // stairwell opening
+            rctx.strokeStyle = '#2f7a4e'; rctx.lineWidth = Math.max(0.7, 0.55 * rcam.z);
+            rctx.beginPath();
+            for (const [qx, qy] of [[ex - 0.07, ey - 0.11], [ex + 0.07, ey - 0.11], [ex + 0.07, ey + 0.11], [ex - 0.07, ey + 0.11], [ex - 0.07, ey - 0.11]]) rctx.lineTo(px(qx, qy), py(qx, qy, 2.6));
+            rctx.stroke();
+            for (const [qx, qy] of [[ex - 0.07, ey + 0.11], [ex + 0.07, ey + 0.11]]) {
+              rctx.beginPath(); rctx.moveTo(px(qx, qy), py(qx, qy, 0)); rctx.lineTo(px(qx, qy), py(qx, qy, 5)); rctx.stroke();
+              rctx.fillStyle = '#e8f4d8'; rctx.beginPath(); rctx.arc(px(qx, qy), py(qx, qy, 5.6), 0.9 * rcam.z, 0, 7); rctx.fill();
+            }
+            rctx.fillStyle = ln.color; rctx.beginPath(); rctx.arc(px(ex, ey - 0.12), py(ex, ey - 0.12, 3.4), 1.1 * rcam.z, 0, 7); rctx.fill();
+          });
+          continue;
+        }
+        const half = TRAIN.LEN / 2 + 0.15;
+        for (let s = st.s - half; s < st.s + half; s += 0.1) {
+          const a = ln.raw(s), b = ln.raw(s + 0.1);
+          let tx = b[0] - a[0], ty = b[1] - a[1]; const l = Math.hypot(tx, ty) || 1; tx /= l; ty /= l;
+          const P = (q, off, dz = 0) => { const [vx, vy] = rotC(q[0] - ty * off, q[1] + tx * off); return [vx, vy, q[2] + dz]; };
+          const mid = rotC((a[0] + b[0]) / 2, (a[1] + b[1]) / 2), first = s < st.s - half + 0.05;
+          add(mid[0] + 0.01, mid[1] + 0.01, () => {
+            const quad = (q, fill) => { rctx.beginPath(); q.forEach(([x, y, zz], j) => (j ? rctx.lineTo(px(x, y), py(x, y, zz)) : rctx.moveTo(px(x, y), py(x, y, zz)))); rctx.closePath(); rctx.fillStyle = fill; rctx.fill(); };
+            for (const side of [-1, 1]) {
+              quad([P(a, side * 0.26, 2.2), P(b, side * 0.26, 2.2), P(b, side * 0.44, 2.2), P(a, side * 0.44, 2.2)], '#b7b2a8');       // platform
+              quad([P(a, side * 0.26, 2.25), P(b, side * 0.26, 2.25), P(b, side * 0.29, 2.25), P(a, side * 0.29, 2.25)], '#e2b93b'); // edge strip
+              quad([P(a, side * 0.44, 0), P(b, side * 0.44, 0), P(b, side * 0.44, 2.2), P(a, side * 0.44, 2.2)], shade('#8f8a80', 0.8, 1));
+              quad([P(a, side * 0.25, 14.5), P(b, side * 0.25, 14.5), P(b, side * 0.47, 15.5), P(a, side * 0.47, 15.5)], '#3f6f6a'); // canopy
+              if (first || Math.round((s - st.s) * 10) % 6 === 0) { const c = P(a, side * 0.43); box(c[0] - 0.012, c[1] - 0.012, c[0] + 0.012, c[1] + 0.012, a[2] + 2.2, a[2] + 14.6, '#3f6f6a', 1); }
+            }
+            if (first && a[2] > 2) { // stairs down to the street at one end
+              const s0 = P(a, 0.46, 2.2), s1 = P(a, 0.62, 0);
+              const [sx0, sy0] = [Math.min(s0[0], s1[0]) - 0.02, Math.min(s0[1], s1[1]) - 0.02];
+              rctx.strokeStyle = '#3f6f6a'; rctx.lineWidth = Math.max(0.8, 0.8 * rcam.z);
+              rctx.beginPath(); rctx.moveTo(px(s0[0], s0[1]), py(s0[0], s0[1], s0[2])); rctx.lineTo(px(s1[0], s1[1]), py(s1[0], s1[1], 0)); rctx.stroke();
+              box(sx0, sy0, sx0 + 0.06, sy0 + 0.06, 0, 1, '#6b6f73', 1);
+            }
+          });
+        }
+      }
+    }
+    // Manhattan Bridge-style rail crossing: steel towers with an arched portal and suspension cables
+    const bridgeLn = rail.lines.find((l) => l.id === 'B');
+    if (bridgeLn) {
+      const towerAt = [20.85, 22.95].map((x) => [x, 43.5]);
+      for (const [tx0, ty0] of towerAt) {
+        const [vx, vy] = rotC(tx0, ty0);
+        add(vx + 0.02, vy + 0.02, () => {
+          for (const side of [-0.36, 0.36]) { const [cx, cy] = rotC(tx0, ty0 + side); box(cx - 0.05, cy - 0.05, cx + 0.05, cy + 0.05, -7, 46, '#5e7d86', 1, { roof: '#7d9aa2' }); }
+          const [ax0, ay0] = rotC(tx0, ty0 - 0.36), [ax1, ay1] = rotC(tx0, ty0 + 0.36);
+          rctx.strokeStyle = '#5e7d86'; rctx.lineWidth = Math.max(1, 1.4 * rcam.z);
+          rctx.beginPath(); rctx.moveTo(px(ax0, ay0), py(ax0, ay0, 40)); rctx.quadraticCurveTo(px((ax0 + ax1) / 2, (ay0 + ay1) / 2), py((ax0 + ax1) / 2, (ay0 + ay1) / 2, 50), px(ax1, ay1), py(ax1, ay1, 40)); rctx.stroke();
+          rctx.beginPath(); rctx.moveTo(px(ax0, ay0), py(ax0, ay0, 24)); rctx.lineTo(px(ax1, ay1), py(ax1, ay1, 24)); rctx.stroke();
+        });
+      }
+      // Main cables: tower tops sagging to just above the deck mid-span, then down to the anchorages
+      const [m0x, m0y] = rotC(18.9, 43.5);
+      add(m0x, m0y, () => {
+        rctx.strokeStyle = 'rgba(70,92,100,0.9)'; rctx.lineWidth = Math.max(0.7, 0.6 * rcam.z);
+        for (const side of [-0.34, 0.34]) {
+          const P = (x, z) => { const [vx, vy] = rotC(x, 43.5 + side); return [px(vx, vy), py(vx, vy, z)]; };
+          const pa = P(19.2, 18), t0 = P(20.85, 46), mid = P(21.9, 24), t1 = P(22.95, 46), pb = P(24.6, 16);
+          rctx.beginPath(); rctx.moveTo(...pa); rctx.lineTo(...t0); rctx.quadraticCurveTo(mid[0], mid[1] + (mid[1] - (t0[1] + t1[1]) / 2) * 0.2, ...t1); rctx.lineTo(...pb); rctx.stroke();
+        }
+      });
+    }
+  }
+  function drawRailForTile(x, y) {
+    const list = railBake && railBake.get(x * N + y);
+    if (list) for (const f of list) f();
+  }
+  // Night layer: warm pools on platforms, green-white globes at subway entrances
+  function drawRailNight() {
+    if (!isNYC) return;
+    for (const ln of rail.lines) for (const st of ln.stops) {
+      const p = ln.raw(st.s), under = p[2] < -2;
+      const [qx, qy] = rotC(...(under ? (st.entrance || st.at) : st.at));
+      const ax = px(qx, qy), ay = py(qx, qy, under ? 2 : p[2] + 4), r = (under ? 12 : 26) * rcam.z, g = rctx.createRadialGradient(ax, ay, 0, ax, ay, r);
+      g.addColorStop(0, under ? 'rgba(210,255,220,0.5)' : 'rgba(255,220,150,0.5)'); g.addColorStop(1, 'rgba(255,220,150,0)');
+      rctx.fillStyle = g; rctx.beginPath(); rctx.ellipse(ax, ay, r, r * 0.6, 0, 0, 7); rctx.fill();
+    }
+  }
+
   // ---------- world cache + sharp zoom pass ----------
-  const PAD_X = 64, OY = 220;
+  const PAD_X = isNYC ? 230 : 64, OY = isNYC ? 300 : 220;
   const OX = N * (TW / 2) + PAD_X;
   const WW = N * TW + PAD_X * 2;
   const WH = OY + N * TH + 48;
-  let WS = 1.5; // supersampling of the cached world image (kept modest so each frame is cheap to draw)
+  let WS = isNYC ? 1.25 : 1.5; // supersampling of the cached world image (kept modest so each frame is cheap to draw)
 
   const worldCanvas = document.createElement('canvas');
   worldCanvas.width = Math.round(WW * WS);
   worldCanvas.height = Math.round(WH * WS);
   const wctx = worldCanvas.getContext('2d');
 
+  // NYC: windows lit at night, baked once per map build in back-to-front order (each later tile erases what it hides)
+  const litCanvas = document.createElement('canvas');
+  if (isNYC) { litCanvas.width = WW; litCanvas.height = WH; }
+  const litCtx = litCanvas.getContext('2d');
   const nightCanvas = document.createElement('canvas');
   nightCanvas.width = WW;
   nightCanvas.height = WH;
@@ -1795,6 +2248,32 @@
     }
   }
 
+  // New York backdrop: open harbour water beyond the two far edges, then low mainland shores with distant
+  // blocks. Screen-relative, so it stays behind the map in every rotation. Baked once with the static city.
+  function drawShores() {
+    const th = curTheme();
+    const at = (edge, t, out) => (edge === 0 ? [-out, N - t] : [t, -out]);
+    const quad = (pts, fill) => { rctx.beginPath(); pts.forEach(([x, y, z], i) => (i ? rctx.lineTo(px(x, y), py(x, y, z || 0)) : rctx.moveTo(px(x, y), py(x, y, z || 0)))); rctx.closePath(); rctx.fillStyle = fill; rctx.fill(); };
+    const water = shade(th.waterB, 0.92, 1), shore = '#7b8784', far = '#8d99a3';
+    for (const edge of [0, 1]) {
+      const a0 = at(edge, -6, 0), a1 = at(edge, N + 0.5, 0), b0 = at(edge, -6, 2.4), b1 = at(edge, N + 0.5, 2.4), c0 = at(edge, -6, 7), c1 = at(edge, N + 0.5, 7);
+      quad([a0, a1, b1, b0], water);
+      quad([b0, b1, c1, c0], shore);
+    }
+    quad([[0, 0], [-2.4, 0], [-2.4, -2.4], [0, -2.4]], water); quad([[-2.4, -2.4], [-7, -2.4], [-7, -7], [-2.4, -7]], shore);
+    // Distant blocks: low, hazy boxes; a denser, taller cluster across the river from Lower Manhattan
+    const boxes = [];
+    for (const edge of [0, 1]) for (let t = -4; t < N; t += 0.7) {
+      const hsh = NYC.hash(Math.round(t * 10), edge, 21), hsh2 = NYC.hash(Math.round(t * 10), edge, 22);
+      const dense = edge === 0 && t > N * 0.55 && t < N * 0.8;
+      const out = 2.9 + hsh * 3.4, w = 0.32 + hsh2 * 0.3, hgt = (dense ? 10 + hsh2 * 30 : 3 + hsh * 9);
+      const [cx, cy] = at(edge, t, out);
+      boxes.push({ cx, cy, w, hgt, d: cx + cy });
+    }
+    boxes.sort((p, q) => p.d - q.d);
+    for (const b of boxes) box(b.cx - b.w / 2, b.cy - b.w / 2, b.cx + b.w / 2, b.cy + b.w / 2, 0, b.hgt, far, 1, { roof: '#a3adb5' });
+  }
+
   function buildWorld() {
     const savedW = warm; warm = 0;
     rcam = { x: OX, y: OY, z: 1 };
@@ -1803,23 +2282,36 @@
     rctx = wctx;
     wctx.setTransform(WS, 0, 0, WS, 0, 0);
     wctx.clearRect(0, 0, WW, WH);
-    drawRidge();
+    if (isNYC) drawShores(); else drawRidge();
     drawSlab(1);
 
     rctx = nctx;
     nctx.setTransform(1, 0, 0, 1, 0, 0);
     nctx.clearRect(0, 0, WW, WH);
+    if (isNYC) { litCtx.setTransform(1, 0, 0, 1, 0, 0); litCtx.clearRect(0, 0, WW, WH); }
 
+    if (isNYC) railBakePrep();
     for (let s = 0; s <= 2 * N - 2; s++) {
       for (let x = Math.max(0, s - N + 1); x <= Math.min(N - 1, s); x++) {
         const y = s - x;
         rctx = wctx;
         if (x === cutX && y === cutY) drawGround(x, y, grid[x][y], 1); // building lifted off for the interior view
         else drawTile(x, y, grid[x][y], 1, false);
+        if (isNYC) {
+          drawRailForTile(x, y);
+          const tt = grid[x][y];
+          if (tt && tt !== 'water' && !isRoad(tt)) {
+            rctx = litCtx;
+            litCtx.globalCompositeOperation = 'destination-out'; drawTile(x, y, tt, 1, true);
+            litCtx.globalCompositeOperation = 'source-over';
+            if (isBuilding(tt)) drawBuildingNightWindows(x, y, tt, 1, true);
+          }
+        }
         rctx = nctx;
         drawTileNight(x, y, grid[x][y], L);
       }
     }
+    if (isNYC) { rctx = nctx; drawRailNight(); }
     warm = savedW;
     worldDirty = false;
     winDirty = true;
@@ -1838,7 +2330,7 @@
   let cutX = -1, cutY = -1, bakedCut = -1; // building currently shown as an interior (lifted out of the baked world)
   const seen = new Uint8Array(N * N);
   const ov = [];
-  const boatsVis = [], bridgesOver = [];
+  const boatsVis = [], bridgesOver = [], railOver = new Set();
 
   function addOccluders(rx, ry) {
     if (perfLevel >= 1) return;
@@ -2072,7 +2564,7 @@
 
     seen.fill(0);
     ov.length = 0;
-    boatsVis.length = 0; bridgesOver.length = 0;
+    boatsVis.length = 0; bridgesOver.length = 0; railOver.clear();
     vehicleHits.length = 0;
 
     for (let i = 0; i < wheelsList.length; i++) ov.push({ k: 4, s: wheelsList[i][0] + wheelsList[i][1] + 0.1, x: wheelsList[i][0], y: wheelsList[i][1] });
@@ -2088,6 +2580,19 @@
         const wx0 = px(w.px + 0.5, w.py + 0.5), wy0 = py(w.px + 0.5, w.py + 0.5);
         if (wx0 < -30 || wx0 > W + 30 || wy0 < -30 || wy0 > H + 30) continue;
         ov.push({ k: 2, s: w.px + w.py, w }); addOccluders(Math.floor(w.px), Math.floor(w.py));
+      }
+      if (isNYC) {
+        for (const c of trainCars()) {
+          const tx0 = px(c.pose.x, c.pose.y), ty0 = py(c.pose.x, c.pose.y, c.pose.z);
+          if (tx0 < -60 || tx0 > W + 60 || ty0 < -60 || ty0 > H + 60) continue;
+          ov.push({ k: 10, s: c.pose.x + c.pose.y + 0.2, c }); addOccluders(Math.floor(c.pose.x), Math.floor(c.pose.y));
+        }
+        const fb = ferryBoat(); if (fb) boatsVis.push(fb);
+        // Cars under an elevated line: redraw that tile's rail pieces after them so the deck stays on top
+        for (const c of cars) {
+          const tx = Math.round(c.px), ty = Math.round(c.py), key = tx * N + ty;
+          if (railBake && railBake.has(key) && !railOver.has(key)) { railOver.add(key); ov.push({ k: 11, s: tx + ty + 0.99, x: tx, y: ty }); }
+        }
       }
       for (const b of bots) {
         const bx0 = px(b.px + 0.5, b.py + 0.5), by0 = py(b.px + 0.5, b.py + 0.5);
@@ -2137,6 +2642,8 @@
         else if (it.k === 5) drawMillSpin(it.x, it.y, now, 1);
         else if (it.k === 6) drawBot(it.b, now, false);
         else if (it.k === 7) drawBot(it.b, now, true);
+        else if (it.k === 10) drawTrainCar(it.c, 1, false);
+        else if (it.k === 11) drawRailForTile(it.x, it.y);
         else drawTile(it.x, it.y, it.t, 1, it.t !== 'bridge');
       }
       warm = savedW;
@@ -2193,6 +2700,7 @@
     if (L < 0.72) {
       ctx.globalAlpha = Math.min(1, (0.72 - L) * 2.4);
       ctx.drawImage(nightCanvas, cam.x - OX * cam.z, cam.y - OY * cam.z, WW * cam.z, WH * cam.z);
+      if (isNYC) { ctx.globalAlpha = Math.min(1, Math.max(0, ((1 - L) - 0.25) / 0.2)); ctx.drawImage(litCanvas, cam.x - OX * cam.z, cam.y - OY * cam.z, WW * cam.z, WH * cam.z); }
       ctx.globalAlpha = 1;
       if (winDirty) buildWinSprites();
       for (let i = 0; i < winSprites.length; i++) {
@@ -2210,6 +2718,7 @@
     if (L < 0.5 && cars.length && showAgents) {
       for (const it of ov) if (it.k === 1) drawCar(it.c, L, true);
     }
+    if (L < 0.6 && isNYC) for (const it of ov) if (it.k === 10) drawTrainCar(it.c, L, true);
 
     // Rain weather overlay
     if (!transparentBg && (weather === 'rain' || activeDisaster === 'storm')) {
@@ -3079,6 +3588,8 @@
     b.onclick = () => setPop(b.dataset.target, b.dataset.btn, false);
   });
   $('econBtn').onclick = (e) => { e.stopPropagation(); setPop('econPop', 'econBtn', $('econPop').dataset.open !== 'true'); };
+  // Customize panel entry point for the Cities panel (save slots and switching between the classic and NYC maps)
+  if ($('openCitiesBtn')) $('openCitiesBtn').onclick = (e) => { e.stopPropagation(); setPop('customPop', 'customBtn', false); setPop('citiesPop', '', true); };
   if ($('citiesBtn')) $('citiesBtn').onclick = (e) => { e.stopPropagation(); setPop('citiesPop', 'citiesBtn', $('citiesPop').dataset.open !== 'true'); };
   $('customBtn').onclick = (e) => { e.stopPropagation(); setPop('customPop', 'customBtn', $('customPop').dataset.open !== 'true'); };
   if ($('compareBtn')) $('compareBtn').onclick = (e) => { e.stopPropagation(); setPop('comparePop', 'compareBtn', $('comparePop').dataset.open !== 'true'); };
@@ -3127,9 +3638,54 @@
       const sBtn = document.createElement('button'); sBtn.type = 'button'; sBtn.className = 'chip tiny'; sBtn.textContent = 'Save';
       sBtn.onclick = () => { localStorage.setItem(SLOT_PREFIX + i, JSON.stringify(serializeState())); renderCitiesUI(); audio.sfx('select'); };
       const lBtn = document.createElement('button'); lBtn.type = 'button'; lBtn.className = 'chip tiny primary'; lBtn.textContent = 'Load'; lBtn.disabled = !saved;
-      lBtn.onclick = () => { if (saved && applySaveData(saved)) { worldDirty = true; recompute(); saveNow(); center(true); setPop('citiesPop', 'citiesBtn', false); } };
+      lBtn.onclick = () => { if (saved && loadCityAnySize(saved)) setPop('citiesPop', 'citiesBtn', false); };
       btns.append(sBtn, lBtn); row.append(meta, btns); list.appendChild(row);
     }
+    // Map switching: New York (fresh or with this workspace) and back to the classic city
+    const row = document.createElement('div'); row.className = 'detail-row bookmark-row';
+    const meta = document.createElement('div');
+    const t1 = document.createElement('div'); t1.className = 'detail-title'; t1.textContent = isNYC ? 'New York City map' : 'Classic city map';
+    const t2 = document.createElement('div'); t2.className = 'detail-sub';
+    t2.textContent = isNYC ? 'Four islands, railway and harbour. Your classic city is kept.' : 'Try the New York map. This city is kept and you can come back.';
+    meta.append(t1, t2);
+    const btns = document.createElement('div'); btns.className = 'field-row';
+    const mk = (label, fn, primary) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'chip tiny' + (primary ? ' primary' : ''); b.textContent = label; b.onclick = fn; btns.appendChild(b); };
+    if (!isNYC) {
+      if (NYC) { mk('Open NYC', () => switchToNYC(false), true); mk('Move workspace to NYC', () => switchToNYC(true)); }
+    } else if (localStorage.getItem(CLASSIC_KEY)) mk('Back to classic city', () => switchToClassic(), true);
+    row.append(meta, btns); list.appendChild(row);
+  }
+
+  function reloadInto(saveJson) {
+    switchingCity = true; clearTimeout(saveTimer); saveTimer = 0;
+    if (saveJson) localStorage.setItem(SAVE_KEY, saveJson); else localStorage.removeItem(SAVE_KEY);
+    location.reload();
+  }
+  function loadCityAnySize(d) {
+    if (!d || !Array.isArray(d.grid)) return false;
+    if (d.grid.length === N) { if (!applySaveData(d)) return false; worldDirty = true; recompute(); saveNow(); center(true); return true; }
+    if (d.grid.length === 32 || (d.grid.length === 64 && NYC)) { reloadInto(JSON.stringify(d)); return true; }
+    return false;
+  }
+  function switchToNYC(transfer) {
+    saveNow();
+    localStorage.setItem(CLASSIC_KEY, JSON.stringify(serializeState()));
+    if (transfer) { localStorage.setItem(TRANSFER_KEY, JSON.stringify(serializeState())); reloadInto(null); return; }
+    reloadInto(localStorage.getItem(NYC_KEY) || null);
+  }
+  function switchToClassic() {
+    saveNow();
+    localStorage.setItem(NYC_KEY, JSON.stringify(serializeState()));
+    reloadInto(localStorage.getItem(CLASSIC_KEY));
+  }
+  // After "Move workspace to NYC": a fresh NYC map carrying over items, links, preferences and notes
+  function applyNycTransfer() {
+    let t = null;
+    try { t = JSON.parse(localStorage.getItem(TRANSFER_KEY)); } catch (e) { /* none */ }
+    if (!t || !isNYC) return;
+    localStorage.removeItem(TRANSFER_KEY);
+    applySaveData({ ...t, grid, levels, pins: makePins(), rotSteps: 0 });
+    notify('Your workspace moved to New York. The classic city is saved under Cities.', 4200);
   }
 
   function renderCompareUI() {
@@ -3203,6 +3759,7 @@
   $('cbModeBtn').onclick = () => { cbMode = !cbMode; syncBodyPrefs(); scheduleSave(); };
   $('largeTextBtn').onclick = () => { largeText = !largeText; syncBodyPrefs(); scheduleSave(); };
   $('ghostBtn').onclick = () => {
+    if (isNYC) { notify('Ghost Town is part of the classic city map.'); return; }
     ghostMode = !ghostMode;
     // Move low-activity HTML/old repos to Ghost Town or back
     const targets = ['claude', 'cham-bracelet-plan'];
@@ -3267,7 +3824,7 @@
   // Camera presets, labels, photo, exports, share link, timelapse
   function applyPreset(p) {
     if (p === 'overview') { orbitActive = false; center(true); }
-    else if (p === 'street') { orbitActive = false; flyToTile(selectedTile ? selectedTile[0] : 12, selectedTile ? selectedTile[1] : 16, 1.75, false); }
+    else if (p === 'street') { orbitActive = false; { const [sx0, sy0] = isNYC ? rotPt(16, 31) : [12, 16]; flyToTile(selectedTile ? selectedTile[0] : sx0, selectedTile ? selectedTile[1] : sy0, 1.75, false); } }
   }
   document.querySelectorAll('.preset-btn').forEach((b) => { b.onclick = () => applyPreset(b.dataset.preset); });
   $('labelsBtn').onclick = () => { showLabels = !showLabels; syncBodyPrefs(); scheduleSave(); };
@@ -3334,7 +3891,7 @@
     if (!file) return;
     try {
       const d = JSON.parse(await file.text());
-      if (applySaveData(d)) { worldDirty = true; recompute(); saveNow(); center(true); }
+      loadCityAnySize(d);
     } catch (err) {}
   };
   $('resetBtn').onclick = () => {
@@ -3517,7 +4074,7 @@
     if (Math.abs(cam.z - resLastZ) > 0.002) { resLastZ = cam.z; resStableAt = now; }
     if (now - resStableAt < 350) return;
     const need = cam.z * dpr * 0.9;
-    const want = 1.5; // fixed: re-rasterising the map caused multi-hundred-millisecond freezes
+    const want = isNYC ? 1.25 : 1.5; // fixed: re-rasterising the map caused multi-hundred-millisecond freezes
     if (want === WS) { resWantSince = 0; return; }
     if (want < WS && now - (resWantSince || (resWantSince = now)) < 1500) return;
     resWantSince = 0;
@@ -3616,6 +4173,7 @@
       stepList(bots, simDt, isRoad);
       stepList(dogs, simDt, isRoad);
       stepList(boats, simDt, isWater);
+      stepTrains(simDt);
       stepDronesAndBirds(simDt);
     }
     if (simDt > 0) {
@@ -3756,7 +4314,7 @@
     if (!isBuilding(t) || t === 'windmill' || t === 'wheel') return null;
     const d = TYPES[t];
     if (!d || !d.h) return null;
-    const i = d.inset || 0.12;
+    const i = insetFor(x, y, t) || 0.12;
     const H = Math.max(1, bldHeight(t, levels[x][y] || 1));
     return { x, y, t, i, H, x0: x + i, y0: y + i, x1: x + 1 - i, y1: y + 1 - i, F: 1 };
   }
@@ -4109,6 +4667,8 @@
       cam: () => ({ ...cam }),
       setCam: (x, y, z) => { camAnim = null; cam.x = x; cam.y = y; cam.z = z; },
       worldImage: () => worldCanvas, // the baked map layer (terrain, trees, buildings), for pixel comparisons
+      rail: () => ({ lines: rail.lines.map((l) => ({ id: l.id, len: l.len, stops: l.stops.map((st) => [st.name, +st.s.toFixed(2)]) })), trains: rail.trains.map((t) => ({ li: t.li, s: +t.s.toFixed(2), dir: t.dir, v: +t.v.toFixed(2), state: t.state, at: t.at && t.at.name })), ferry: rail.ferry && { s: +rail.ferry.s.toFixed(2), state: rail.ferry.state } }),
+      railPoint: (li, s) => { const p = rail.lines[li].raw(s); const [x, y] = rotC(p[0], p[1]); return [x, y, p[2]]; },
     };
   }
 
@@ -4169,7 +4729,8 @@
   }
 
   resize();
-  if (!load()) starter();
+  if (!load()) { starter(); applyNycTransfer(); }
+  railInit();
   // One-time switch back to the classic look (cream cards, deep teal, autumn trees).
   try {
     if (!localStorage.getItem('isocity-classic-look-v1')) {
