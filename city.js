@@ -665,10 +665,12 @@
     return null;
   }
   const MAX_ZOOM = 2.0;
+  const maxZoom = () => (cutawayGeom() ? 4.0 : MAX_ZOOM); // look closer while an interior is open
+  let preCutCam = null; // city view to return to when the interior is closed
   const finiteCam = () => Number.isFinite(cam.x) && Number.isFinite(cam.y) && Number.isFinite(cam.z) && cam.z > 0;
   function flyToTile(x, y, targetZ = null, withDrawer = true) {
     if (!finiteCam()) center(false);
-    const tz = Math.max(0.45, Math.min(MAX_ZOOM, targetZ || Math.max(cam.z, W >= 760 ? 1.05 : 0.9)));
+    const tz = Math.max(0.45, Math.min(maxZoom(), targetZ || Math.max(cam.z, W >= 760 ? 1.05 : 0.9)));
     const offsetX = (withDrawer && W >= 760 && !viewInset) ? -150 : 0;
     const centerY = (withDrawer && W < 760) ? H * 0.34 : H * 0.54;
     const tx = viewInset + (W - viewInset) / 2 + offsetX - ((x + 0.5) - (y + 0.5)) * (TW / 2) * tz;
@@ -801,6 +803,11 @@
       return;
     }
     if (t === 'plaza') {
+      for (const [a, b] of [[0.4, 0.4], [0.6, 0.6], [0.4, 0.6], [0.6, 0.4]]) {
+        const lx = px(x + a, y + b), ly = py(x + a, y + b, 0.5), lr = 12 * rcam.z, lg = rctx.createRadialGradient(lx, ly, 0, lx, ly, lr);
+        lg.addColorStop(0, 'rgba(255,214,140,0.4)'); lg.addColorStop(1, 'rgba(255,214,140,0)');
+        rctx.fillStyle = lg; rctx.beginPath(); rctx.ellipse(lx, ly, lr, lr * 0.55, 0, 0, 7); rctx.fill();
+      }
       const ax = px(x + 0.5, y + 0.5), ay = py(x + 0.5, y + 0.5, 11);
       const pr = 24 * rcam.z, pg = rctx.createRadialGradient(ax, ay, 0, ax, ay, pr);
       pg.addColorStop(0, 'rgba(255,214,130,0.55)'); pg.addColorStop(1, 'rgba(255,214,130,0)');
@@ -862,6 +869,7 @@
     const SS = 2;
     for (const [x, y, t] of buildingsList) {
       if (t === 'wheel' || t === 'windmill') continue;
+      if (x === cutX && y === cutY) continue;
       const lv = levels[x][y] || 1;
       const h = bldHeight(t, lv);
       if (!h || !TYPES[t]) continue;
@@ -913,6 +921,12 @@
     if (wallX) quadZ(x, y, x + 0.14, y + 1, WZ + 0.05, 'rgba(10,16,24,0.22)');
     if (wallY) quadZ(x, y, x + 1, y + 0.14, WZ + 0.05, 'rgba(10,16,24,0.22)');
     if ((x * 7 + y * 3) % 4 === 0) quadZ(x + 0.35, y + 0.46, x + 0.62, y + 0.52, WZ + 0.1, 'rgba(230,244,248,0.18)');
+    // Quayside character: steps down to the water on some walls, mooring posts on others
+    const [ux, uy] = unrotPt(x, y), h4 = (ux * 7 + uy * 13) % 5;
+    if (wallY && h4 === 0) for (let k = 0; k < 4; k++) box(x + 0.32 + k * 0.03, y, x + 0.5, y + 0.05 + k * 0.035, WZ, 1.2 - k * 2.1, '#b3ad9f', L);
+    else if (wallX && h4 === 1) for (let k = 0; k < 4; k++) box(x, y + 0.32 + k * 0.03, x + 0.05 + k * 0.035, y + 0.5, WZ, 1.2 - k * 2.1, '#a8a294', L);
+    if (wallY && h4 >= 2) for (const a of [0.25, 0.75]) box(x + a - 0.02, y - 0.06, x + a + 0.02, y - 0.02, 1.2, 3.6, '#3a3632', L, { roof: '#55504a' });
+    if (wallX && h4 >= 3) box(x - 0.06, y + 0.48, x - 0.02, y + 0.52, 1.2, 3.6, '#3a3632', L, { roof: '#55504a' });
   }
 
   function drawRoad(x, y, L, bridge = false, skipWater = false, deckOnly = false) {
@@ -1125,10 +1139,47 @@
       return;
     }
     if (t === 'plaza') {
-      if (!skipGround) castShadow(x + 0.1, y + 0.1, x + 0.9, y + 0.9, 10);
-      quadZ(x + 0.06, y + 0.06, x + 0.94, y + 0.94, 0.5, shade('#c8baa3', 1, L));
-      box(x + 0.25, y + 0.25, x + 0.75, y + 0.75, 0.5, 4, '#a79a86', L, { roof: '#3c7b80' });
-      box(x + 0.45, y + 0.45, x + 0.55, y + 0.55, 4, 11, '#dcd3c2', L, { roof: '#ffd98a' });
+      // Civic square: patterned paving, a tiered fountain, benches facing it, planted corners and lamps
+      const cx = x + 0.5, cy = y + 0.5;
+      quadZ(x, y, x + 1, y + 1, 0.4, shade('#cbbfa8', 1, L));
+      for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) {
+        if ((i + j) % 2) continue;
+        quadZ(x + i / 6 + 0.01, y + j / 6 + 0.01, x + (i + 1) / 6 - 0.01, y + (j + 1) / 6 - 0.01, 0.42, shade('#bfb197', 1, L));
+      }
+      // Paths from the centre to each edge in a warmer stone
+      quadZ(x + 0.44, y, x + 0.56, y + 1, 0.44, shade('#d8c9a8', 1, L));
+      quadZ(x, y + 0.44, x + 1, y + 0.56, 0.44, shade('#d8c9a8', 1, L));
+      const ring = (r, z, fill) => {
+        rctx.beginPath();
+        for (let k = 0; k < 16; k++) { const a = (k / 16) * Math.PI * 2, ex = cx + Math.cos(a) * r, ey = cy + Math.sin(a) * r; k ? rctx.lineTo(px(ex, ey), py(ex, ey, z)) : rctx.moveTo(px(ex, ey), py(ex, ey, z)); }
+        rctx.closePath(); rctx.fillStyle = fill; rctx.fill();
+      };
+      // Basin wall: draw the rim ring as a short stack so it reads as a raised edge
+      for (let z = 0.4; z <= 2.2; z += 0.6) ring(0.26, z, shade('#a39886', 0.85, L));
+      ring(0.26, 2.4, shade('#e4dccb', 1, L));
+      ring(0.22, 1.9, shade('#5f9aa6', 1, L));
+      ring(0.12, 1.95, shade('#7fb6c0', 1, L));
+      box(cx - 0.035, cy - 0.035, cx + 0.035, cy + 0.035, 1.9, 6.5, '#e4dccb', L);
+      ring(0.09, 6.6, shade('#d6cdbb', 1, L)); ring(0.07, 6.7, shade('#7fb6c0', 1, L));
+      box(cx - 0.02, cy - 0.02, cx + 0.02, cy + 0.02, 6.6, 9.4, '#e4dccb', L, { roof: '#f2ece0' });
+      // Benches facing the fountain, set back on the paths' sides
+      const bench = (bx0, by0, bx1, by1) => { box(bx0, by0, bx1, by1, 0.4, 2.1, '#7a5436', L, { roof: '#9a6b44' }); };
+      bench(x + 0.2, y + 0.3, x + 0.25, y + 0.4); bench(x + 0.75, y + 0.6, x + 0.8, y + 0.7);
+      bench(x + 0.6, y + 0.2, x + 0.7, y + 0.25); bench(x + 0.3, y + 0.75, x + 0.4, y + 0.8);
+      // Planted corners: low hedge with flowers
+      for (const [a, b] of [[0.04, 0.04], [0.78, 0.04], [0.04, 0.78], [0.78, 0.78]]) {
+        box(x + a, y + b, x + a + 0.18, y + b + 0.18, 0.4, 2.4, '#3d6e3a', L, { roof: '#4f8a46' });
+        quadZ(x + a + 0.05, y + b + 0.05, x + a + 0.09, y + b + 0.09, 2.45, shade('#e0a04a', 1, L));
+        quadZ(x + a + 0.11, y + b + 0.1, x + a + 0.14, y + b + 0.13, 2.45, shade('#d9707a', 1, L));
+      }
+      // Lamps by the paths
+      for (const [a, b] of [[0.4, 0.4], [0.6, 0.6], [0.4, 0.6], [0.6, 0.4]]) {
+        const lx = px(x + a, y + b), ly0 = py(x + a, y + b, 0.4), ly1 = py(x + a, y + b, 9);
+        rctx.strokeStyle = shade('#2e3338', 1, L); rctx.lineWidth = Math.max(1, 1.1 * rcam.z);
+        rctx.beginPath(); rctx.moveTo(lx, ly0); rctx.lineTo(lx, ly1); rctx.stroke();
+        rctx.fillStyle = L < 0.72 ? '#ffe59c' : shade('#e9e4d4', 1, L);
+        rctx.beginPath(); rctx.arc(lx, ly1, 1.6 * rcam.z, 0, 7); rctx.fill();
+      }
       return;
     }
     if (t === 'wheel') {
@@ -1169,8 +1220,33 @@
     }
     const thresh = 0.25 + ((x * 13 + y * 7) % 24) * 0.015;
     const store = STOREFRONT[t] ? 1 : 0;
+    const dX0 = X0 + (X1 - X0) * 0.42, dX1 = X0 + (X1 - X0) * 0.58; // entrance on the front (y1) face
+    if (pinId) quadZ(dX0 - 0.02, Y1, dX1 + 0.02, y + 1, 0.12, shade('#d8cdb6', 1, L)); // paved path to the pavement
     box(X0, Y0, X1, Y1, 0, H, wall, L, { roof, windows: seed, glass: t === 'office', thresh, startRow: store });
     if (store) storefront(X0, Y0, X1, Y1, shade('#2b2824', 1, L), shade('#8fb0bf', 0.95, L), shade('#6f8f9e', 0.95, L));
+    if (pinId && t !== 'house') {
+      // Recognisable entrance: frame, lobby glass door, canopy in the place's accent colour, steps and planters
+      const accent = item?.customColor || D.LANG_COLORS[item?.lang || item?.cat || 'Web'] || '#3f7f8a';
+      faceL(dX0 - 0.012, dX1 + 0.012, Y1 + 0.002, 0.4, 9.4, shade('#3a3029', 1, L));
+      faceL(dX0, dX1, Y1 + 0.004, 0.6, 8.8, shade('#9cc2cf', 0.9, L));
+      faceL((dX0 + dX1) / 2 - 0.004, (dX0 + dX1) / 2 + 0.004, Y1 + 0.005, 0.6, 8.8, shade('#3a3029', 1, L));
+      box(dX0 - 0.05, Y1, dX1 + 0.05, Y1 + 0.07, 9.6, 10.6, accent, L, { roof: mix(accent, '#ffffff', 0.25) });
+      box(dX0 - 0.03, Y1, dX1 + 0.03, Y1 + 0.03, 0, 0.6, '#cfc6b4', L);
+      box(dX0 - 0.05, Y1 + 0.03, dX1 + 0.05, Y1 + 0.06, 0, 0.3, '#cfc6b4', L);
+      for (const ex of [dX0 - 0.09, dX1 + 0.04]) {
+        box(ex, Y1 + 0.015, ex + 0.05, Y1 + 0.065, 0, 1.6, '#8a7a66', L, { roof: '#4f8a46' });
+      }
+      if (item?.kind === 'github') {
+        // Bike rack beside the entrance
+        rctx.strokeStyle = shade('#5a6068', 1, L); rctx.lineWidth = Math.max(0.6, 0.6 * rcam.z);
+        rctx.beginPath();
+        for (let k = 0; k < 3; k++) { const bx = X0 + 0.06 + k * 0.035, by = Y1 + 0.05; rctx.moveTo(px(bx, by), py(bx, by, 0)); rctx.lineTo(px(bx, by), py(bx, by, 2.4)); rctx.lineTo(px(bx + 0.02, by), py(bx + 0.02, by, 2.4)); rctx.lineTo(px(bx + 0.02, by), py(bx + 0.02, by, 0)); }
+        rctx.stroke();
+      }
+    } else if (pinId && t === 'house') {
+      faceL(dX0, dX1, Y1 + 0.003, 0.3, 8.4, shade('#6b4a30', 1, L));
+      box(dX0 - 0.03, Y1, dX1 + 0.03, Y1 + 0.04, 0, 0.5, '#cfc6b4', L);
+    }
     if (t !== 'house') {
       // Parapet: a lighter coping rim around a slightly darker recessed roof, plus a cornice band under it
       const pi = 0.05;
@@ -1420,7 +1496,8 @@
     };
     if (!backFirst) drawPack();
     // Torso: shoulders wider than hips
-    const top = sy - 5.9 * k - (seated ? 1.4 * k : 0);
+    // Seated: hips at chair height (~0.46 m), torso ~0.65 m above them
+    const top = seated ? hipY - 2.4 * k : sy - 5.9 * k;
     rctx.fillStyle = look.top;
     rctx.beginPath();
     rctx.moveTo(sx - 1.05 * k, top); rctx.lineTo(sx + 1.05 * k, top);
@@ -1432,8 +1509,14 @@
     for (const side of [-1, 1]) {
       const ax = sx + side * 1.0 * k, ay = top + 0.35 * k;
       const s2 = opts.holding && side === 1 ? 0 : -side * sw;
-      const hxp = ax + fx * s2 * 1.1 * k + (opts.holding && side === 1 ? fx * 0.9 * k : 0);
-      const hyp = ay + 2.3 * k + fy * s2 * 0.5 * k - (opts.holding && side === 1 ? 0.6 * k : 0);
+      let hxp = ax + fx * s2 * 1.1 * k + (opts.holding && side === 1 ? fx * 0.9 * k : 0);
+      let hyp = ay + 2.3 * k + fy * s2 * 0.5 * k - (opts.holding && side === 1 ? 0.6 * k : 0);
+      if (opts.typing) {
+        // Forearms forward to the tabletop (0.75 m), small alternating keystrokes
+        const tap = Math.max(0, Math.sin((opts.t || 0) * 0.018 + side * 1.7 + (opts.ph || 0))) * 0.25 * k;
+        hxp = ax - side * 0.35 * k + fx * 1.35 * k;
+        hyp = sy - 3.0 * k + fy * 1.35 * k - tap;
+      }
       rctx.beginPath(); rctx.moveTo(ax, ay); rctx.lineTo(hxp, hyp); rctx.stroke();
       rctx.fillStyle = look.skin; rctx.fillRect(hxp - 0.3 * k, hyp - 0.3 * k, 0.6 * k, 0.6 * k);
       if (opts.holding && side === 1) { rctx.fillStyle = '#5ef2d6'; rctx.fillRect(hxp + fx * 0.3 * k - 0.45 * k, hyp - 0.5 * k, 0.9 * k, 0.65 * k); }
@@ -1640,6 +1723,46 @@
     poly4(cx, cy + dep - plinth, bx, by + dep - plinth, bx, by + dep, cx, cy + dep, shade('#242220', 1, L));
   }
 
+  // Low-poly hills framing the town along the two far edges. Seeded, so they look the same every load,
+  // and drawn in screen-relative grid space, so after a rotation they still sit behind the map.
+  function drawRidge() {
+    let seed = 1337;
+    const rnd = () => ((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 4294967296);
+    const peaks = [];
+    for (const edge of [0, 1]) {
+      let t = -0.5;
+      while (t < N + 0.5) {
+        const w = 4.2 + rnd() * 3.2, end = Math.min(1, Math.sin(Math.PI * Math.max(0, Math.min(1, t / N))) * 1.3 + 0.2);
+        const h = (30 + rnd() * 52) * end;
+        peaks.push({ edge, t: t + w / 2, w, h, j: (rnd() - 0.5) * 1.2, back: 2.2 + rnd() * 1.6, tone: rnd() });
+        t += w * (0.38 + rnd() * 0.18);
+      }
+    }
+    const pt = (edge, a, b) => (edge === 0 ? [a, -b] : [-b, a]); // along the edge, then outward
+    // Continuous foothill band first, so there are no gaps between peaks
+    for (const edge of [0, 1]) {
+      const q = [pt(edge, -0.3, 0.15), pt(edge, N + 0.3, 0.15), pt(edge, N + 0.3, 1.8), pt(edge, -0.3, 1.8)];
+      const zz = [0, 0, 10, 10];
+      rctx.beginPath(); q.forEach(([a, b], i) => (i ? rctx.lineTo(px(a, b), py(a, b, zz[i])) : rctx.moveTo(px(a, b), py(a, b, zz[i])))); rctx.closePath();
+      rctx.fillStyle = edge === 0 ? '#8a7a5c' : '#6f6249'; rctx.fill();
+    }
+    peaks.sort((p, q) => (pt(p.edge, p.t, p.back)[0] + pt(p.edge, p.t, p.back)[1]) - (pt(q.edge, q.t, q.back)[0] + pt(q.edge, q.t, q.back)[1]));
+    for (const m of peaks) {
+      const L0 = pt(m.edge, m.t - m.w / 2, 0.15), R0 = pt(m.edge, m.t + m.w / 2, 0.15), M0 = pt(m.edge, m.t + m.j, 0.15);
+      const K = pt(m.edge, m.t + m.j * 0.6, m.back);
+      const lit = mix('#b89a74', '#9fa07a', m.tone), dark = mix('#7d6650', '#6a6e52', m.tone);
+      const tri = (a, b, c, fill) => { rctx.beginPath(); rctx.moveTo(px(a[0], a[1]), py(a[0], a[1], a[2])); rctx.lineTo(px(b[0], b[1]), py(b[0], b[1], b[2])); rctx.lineTo(px(c[0], c[1]), py(c[0], c[1], c[2])); rctx.closePath(); rctx.fillStyle = fill; rctx.fill(); };
+      const k3 = [K[0], K[1], m.h];
+      // Edge 0 faces +y (lit side on the left of the peak); edge 1 faces +x (mostly in shade)
+      tri([...L0, 0], [...M0, 0], k3, shade(m.edge === 0 ? lit : mix(lit, dark, 0.35), 1, 1));
+      tri([...M0, 0], [...R0, 0], k3, shade(m.edge === 0 ? mix(lit, dark, 0.45) : dark, 1, 1));
+      if (m.h > 62) { // pale cap on the tallest peaks
+        const cap = (a) => [K[0] + (a[0] - K[0]) * 0.22, K[1] + (a[1] - K[1]) * 0.22, m.h * 0.78];
+        tri(cap(L0), cap(M0), k3, '#efe6d6'); tri(cap(M0), cap(R0), k3, '#d9cfbe');
+      }
+    }
+  }
+
   function buildWorld() {
     const savedW = warm; warm = 0;
     rcam = { x: OX, y: OY, z: 1 };
@@ -1648,6 +1771,7 @@
     rctx = wctx;
     wctx.setTransform(WS, 0, 0, WS, 0, 0);
     wctx.clearRect(0, 0, WW, WH);
+    drawRidge();
     drawSlab(1);
 
     rctx = nctx;
@@ -1658,7 +1782,8 @@
       for (let x = Math.max(0, s - N + 1); x <= Math.min(N - 1, s); x++) {
         const y = s - x;
         rctx = wctx;
-        drawTile(x, y, grid[x][y], 1, false);
+        if (x === cutX && y === cutY) drawGround(x, y, grid[x][y], 1); // building lifted off for the interior view
+        else drawTile(x, y, grid[x][y], 1, false);
         rctx = nctx;
         drawTileNight(x, y, grid[x][y], L);
       }
@@ -1678,6 +1803,7 @@
     vc.fillStyle = g; vc.fillRect(0, 0, 256, 256);
   })();
 
+  let cutX = -1, cutY = -1, bakedCut = -1; // building currently shown as an interior (lifted out of the baked world)
   const seen = new Uint8Array(N * N);
   const ov = [];
   const boatsVis = [], bridgesOver = [];
@@ -1696,6 +1822,7 @@
         if (seen[idx]) continue;
         const t = grid[tx][ty];
         if (!t || isRoad(t) || t === 'water') continue;
+        if (tx === cutX && ty === cutY) continue;
         if ((dx > 1 || dy > 1) && t !== 'office' && t !== 'apt') continue;
         seen[idx] = 1;
         ov.push({ k: 0, s: tx + ty, x: tx, y: ty, t });
@@ -1838,6 +1965,12 @@
     const L = daylight(hour);
     warm = Math.max(0, 1 - Math.abs(hour - 17.6) / 2.2, 1 - Math.abs(hour - 6.4) / 1.6);
 
+    {
+      const cg = cutawayGeom();
+      cutX = cg ? cg.x : -1; cutY = cg ? cg.y : -1;
+      const ck = cg ? cg.x * N + cg.y : -1;
+      if (ck !== bakedCut) { bakedCut = ck; worldDirty = true; }
+    }
     if (worldDirty) buildWorld();
 
     const th = curTheme();
@@ -1944,7 +2077,7 @@
     if (selectedTile) {
       const [sx, sy] = selectedTile;
       const st = grid[sx]?.[sy];
-      if (isBuilding(st)) {
+      if (isBuilding(st) && !(sx === cutX && sy === cutY)) {
         if (!seen[sx * N + sy]) { seen[sx * N + sy] = 1; ov.push({ k: 0, s: sx + sy, x: sx, y: sy, t: st }); }
         if (false) {
           for (let i = 0; i < 3; i++) {
@@ -2704,6 +2837,11 @@
     cutawayActive = !cutawayActive;
     $('inspCutBtn').setAttribute('aria-pressed', String(cutawayActive));
     worldDirty = true;
+    lastSelKey = ''; // rebuild who is shown (inside vs at the entrance); opening flies in
+    if (!cutawayActive && preCutCam) {
+      const p = preCutCam; preCutCam = null;
+      camAnim = { sx: cam.x, sy: cam.y, sz: cam.z, tx: p.x, ty: p.y, tz: Math.min(p.z, MAX_ZOOM), start: performance.now(), dur: 380 };
+    }
   };
   $('inspEditBtn').onclick = () => {
     const open = $('inspEditBox').hidden;
@@ -3276,7 +3414,7 @@
     if (!Number.isFinite(f) || f <= 0) return;
     if (!finiteCam()) center(false);
     camAnim = null;
-    const nz = Math.max(0.45, Math.min(MAX_ZOOM, cam.z * f));
+    const nz = Math.max(0.45, Math.min(maxZoom(), cam.z * f));
     const k = nz / cam.z;
     const nx = mx - (mx - cam.x) * k, ny = my - (my - cam.y) * k;
     if (Number.isFinite(nx) && Number.isFinite(ny) && Number.isFinite(nz)) {
@@ -3588,7 +3726,59 @@
     if (!d || !d.h) return null;
     const i = d.inset || 0.12;
     const H = Math.max(1, bldHeight(t, levels[x][y] || 1));
-    return { x, y, t, i, H, x0: x + i, y0: y + i, x1: x + 1 - i, y1: y + 1 - i, F: Math.max(1, Math.min(5, Math.floor(H / 26))) };
+    return { x, y, t, i, H, x0: x + i, y0: y + i, x1: x + 1 - i, y1: y + 1 - i, F: 1 };
+  }
+
+  // ---------- company interior (ground floor, dollhouse cut) ----------
+  // Everything in the room uses the same world scale as people: 4 px per metre of height, ~9 m per tile.
+  // Layout is in local (u, v) across the footprint: u runs along x, v along y; the entrance is on the
+  // front y1 face. Two room kinds so roles read differently: a studio/office and a library.
+  const ROOM_H = 3.5 * MZ;          // one storey, 14 px
+  const DESK_Z = 0.75 * MZ;         // tabletop at seated elbow height
+  const SEAT_Z = 0.46 * MZ;         // chair seat
+  let roomCache = null;
+  function roomLayout(g) {
+    const key = `${g.x},${g.y},${g.t}`;
+    if (roomCache?.key === key) return roomCache;
+    const lib = g.t === 'school';
+    const items = [], seats = [];
+    // Workstation: desk, monitor (facing the worker), lamp, notebook, chair; worker faces -v (toward the back wall)
+    const station = (u, v, accent) => {
+      items.push({ k: 'desk', u0: u - 0.07, v0: v - 0.05, u1: u + 0.07, v1: v + 0.035, accent });
+      items.push({ k: 'chair', u, v: v + 0.1 });
+      seats.push({ u, v: v + 0.095, fx: 0, fy: -1, typing: true });
+    };
+    if (!lib) {
+      station(0.16, 0.26, '#3f7f8a'); station(0.34, 0.26, '#c2553e');
+      station(0.16, 0.6, '#d9b45a'); station(0.34, 0.6, '#3f7f8a');
+      items.push({ k: 'shelf', u0: 0.04, v0: 0.015, u1: 0.42, v1: 0.07, h: 2.0 });
+      items.push({ k: 'table', u0: 0.62, v0: 0.16, u1: 0.86, v1: 0.32, h: DESK_Z, top: '#b07f52' });
+      for (const [u, v, fx, fy] of [[0.66, 0.38, 0, -1], [0.82, 0.38, 0, -1], [0.66, 0.1, 0, 1], [0.82, 0.1, 0, 1]]) items.push({ k: 'chair', u, v, back: fy > 0 ? -1 : 1 });
+      seats.push({ u: 0.66, v: 0.38, fx: 0, fy: -1 });
+      seats.push({ u: 0.82, v: 0.1, fx: 0, fy: 1 });
+      items.push({ k: 'rug', u0: 0.6, v0: 0.56, u1: 0.95, v1: 0.93, c: '#9a5a46' });
+      items.push({ k: 'sofa', u0: 0.64, v0: 0.82, u1: 0.93, v1: 0.93, c: '#4f6f78' });
+      items.push({ k: 'table', u0: 0.7, v0: 0.62, u1: 0.84, v1: 0.72, h: 0.42 * MZ, top: '#8a6a4a' });
+      items.push({ k: 'plant', u: 0.92, v: 0.1, h: 6 });
+      items.push({ k: 'plant', u: 0.61, v: 0.96, h: 4 });
+      items.push({ k: 'plant', u: 0.07, v: 0.93, h: 5 });
+    } else {
+      items.push({ k: 'shelf', u0: 0.04, v0: 0.015, u1: 0.96, v1: 0.07, h: 2.6 });
+      items.push({ k: 'shelfX', u0: 0.015, v0: 0.08, u1: 0.07, v1: 0.92, h: 2.6 });
+      items.push({ k: 'shelf', u0: 0.12, v0: 0.3, u1: 0.42, v1: 0.36, h: 1.9 });
+      items.push({ k: 'shelf', u0: 0.12, v0: 0.56, u1: 0.42, v1: 0.62, h: 1.9 });
+      items.push({ k: 'table', u0: 0.58, v0: 0.34, u1: 0.9, v1: 0.56, h: DESK_Z, top: '#a3714a', lamps: true });
+      for (const [u, v, fy] of [[0.64, 0.64, -1], [0.82, 0.64, -1], [0.64, 0.27, 1], [0.82, 0.27, 1]]) {
+        items.push({ k: 'chair', u, v, back: fy > 0 ? -1 : 1 });
+        seats.push({ u, v, fx: 0, fy, typing: fy < 0 });
+      }
+      items.push({ k: 'rug', u0: 0.55, v0: 0.72, u1: 0.95, v1: 0.95, c: '#5d6e4a' });
+      items.push({ k: 'sofa', u0: 0.66, v0: 0.84, u1: 0.92, v1: 0.94, c: '#8a4b3c' });
+      items.push({ k: 'plant', u: 0.93, v: 0.12, h: 6 });
+      items.push({ k: 'plant', u: 0.08, v: 0.95, h: 4 });
+    }
+    roomCache = { key, lib, items, seats };
+    return roomCache;
   }
   function buildCrew() {
     crew = [];
@@ -3604,15 +3794,15 @@
         info: { name: `${pickOne(FIRST)} ${initial()}.`, role, task: pickOne(ROLE_TASKS[role]), nextTask: 0 } }, extra);
     };
     if (g) {
-      const fh = g.H / g.F;
+      // Seat anchors from the room layout: one worker per seat, plus one person walking the aisle
+      const room = roomLayout(g);
       let k = 0;
-      for (let f = 0; f < g.F && crew.length < 9; f++) {
-        const per = g.F >= 4 ? 2 : 3;
-        for (let j = 0; j < per; j++) {
-          const [u, v] = SLOTS[(j + f) % SLOTS.length];
-          crew.push(mk(g.x0 + (g.x1 - g.x0) * u, g.y0 + (g.y1 - g.y0) * v, f * fh, k++, { inside: true, floor: f, fh, desk: j % 2 === 0, sc: Math.min(1, (fh - 4) / 19) }));
-        }
+      for (const s of room.seats) {
+        const wx = g.x0 + (g.x1 - g.x0) * s.u, wy = g.y0 + (g.y1 - g.y0) * s.v;
+        crew.push(mk(wx, wy, 0.4, k++, { inside: true, floor: 0, desk: true, seat: s, _fx: s.fx, _fy: s.fy }));
       }
+      const ax = g.x0 + (g.x1 - g.x0) * 0.515, ay = g.y0 + (g.y1 - g.y0) * 0.7;
+      crew.push(mk(ax, ay, 0.4, k++, { inside: true, floor: 0, aisle: true }));
     } else {
       for (let k = 0; k < 4; k++) { const [ox, oy] = CREW_SPOTS[k]; crew.push(mk(x + ox, y + oy, 0, k, { sc: 1 })); }
     }
@@ -3632,52 +3822,160 @@
     a._lpx = x; a._lpy = y;
     if (!a._look) a._look = lookFor(a.info?.name || a.color);
     drawHuman(x, y, z, a._fx ?? 0, a._fy ?? 1, a._look, phase, a.desk ? 0 : (a._moving || 0) * 0.5,
-      { seated: !!a.desk, holding: !a.inside, simple: perfLevel >= 2 });
+      { seated: !!a.desk, holding: !a.inside, simple: perfLevel >= 2, typing: !!a.seat?.typing && !reduceMotion, t: now, ph: a.phase });
   }
 
   function drawCutaway(now) {
     const g = cutawayGeom();
     if (!g) return;
-    const { x0, y0, x1, y1, H, F } = g;
-    const fh = H / F;
-    const P = (xx, yy, zz) => [px(xx, yy), py(xx, yy, zz)];
+    const { x0, y0, x1, y1 } = g;
+    const room = roomLayout(g);
+    const L = daylight(hour);
+    const evening = Math.max(0, Math.min(1, (0.7 - L) / 0.5)); // 0 by day, 1 at night
+    const Z0 = 0.4;                                             // floor slab top
+    const WL = (u, v) => [x0 + (x1 - x0) * u, y0 + (y1 - y0) * v];
+    const P = (u, v, z) => { const [a, b] = WL(u, v); return [px(a, b), py(a, b, z)]; };
     const poly = (pts, fill) => { ctx.beginPath(); pts.forEach(([a, b], i) => (i ? ctx.lineTo(a, b) : ctx.moveTo(a, b))); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); };
-    const edge = (pts, c, w) => { ctx.beginPath(); pts.forEach(([a, b], i) => (i ? ctx.lineTo(a, b) : ctx.moveTo(a, b))); ctx.strokeStyle = c; ctx.lineWidth = w; ctx.lineJoin = 'round'; ctx.stroke(); };
-    const lw = Math.max(1.2, 2 * rcam.z);
-    poly([P(x0, y0, H), P(x1, y0, H), P(x1, y1, H), P(x1, y1, 0), P(x0, y1, 0), P(x0, y0, 0)], '#26313a');
-    for (let f = 0; f < F; f++) {
-      const z0 = f * fh, z1 = (f + 1) * fh;
-      poly([P(x0, y0, z0), P(x0, y1, z0), P(x0, y1, z1), P(x0, y0, z1)], f % 2 ? '#51636d' : '#5a6d78');
-      poly([P(x0, y0, z0), P(x1, y0, z0), P(x1, y0, z1), P(x0, y0, z1)], f % 2 ? '#3f505a' : '#46585f');
-      const wz0 = z0 + fh * 0.38, wz1 = z1 - fh * 0.14;
-      for (let c = 0; c < 2; c++) {
-        const a = 0.12 + c * 0.46, b = a + 0.34;
-        const lx0 = x0 + (x1 - x0) * a, lx1 = x0 + (x1 - x0) * b;
-        poly([P(lx0, y0, wz0), P(lx1, y0, wz0), P(lx1, y0, wz1), P(lx0, y0, wz1)], 'rgba(170,215,235,0.55)');
-        const ly0 = y0 + (y1 - y0) * a, ly1 = y0 + (y1 - y0) * b;
-        poly([P(x0, ly0, wz0), P(x0, ly1, wz0), P(x0, ly1, wz1), P(x0, ly0, wz1)], 'rgba(150,200,225,0.5)');
-      }
-      poly([P(x0, y0 + (y1 - y0) * 0.55, z0 + fh * 0.32), P(x0, y0 + (y1 - y0) * 0.85, z0 + fh * 0.32), P(x0, y0 + (y1 - y0) * 0.85, z0 + fh * 0.72), P(x0, y0 + (y1 - y0) * 0.55, z0 + fh * 0.72)], '#eef1ee');
-      poly([P(x0, y0, z0), P(x1, y0, z0), P(x1, y1, z0), P(x0, y1, z0)], f % 2 ? '#cdbb9c' : '#d8c7aa');
-      poly([P(x0, y1, z0), P(x1, y1, z0), P(x1, y1, z0 - 3), P(x0, y1, z0 - 3)], '#8f7f66');
-      poly([P(x1, y0, z0), P(x1, y1, z0), P(x1, y1, z0 - 3), P(x1, y0, z0 - 3)], '#78694f');
-      const here = crew.filter((c) => c.inside && c.floor === f).sort((p, q) => (p.px + p.py) - (q.px + q.py));
-      for (const c of here) {
-        drawPerson(c, now);
-        if (c.desk) {
-          const dxp = c.px + 0.5 + 0.05, dyp = c.py + 0.5 + 0.05;
-          // Desk 0.75 m high, ~1.2 x 0.7 m, with a monitor; same world scale as the people
-          const dh = 0.75 * MZ;
-          box(dxp - 0.02, dyp - 0.02, dxp + 0.11, dyp + 0.06, z0, z0 + dh, '#8a6a4a', 1, { roof: '#b08a62' });
-          const mx = px(dxp + 0.04, dyp + 0.01), my = py(dxp + 0.04, dyp + 0.01, z0 + dh + 1.2);
-          ctx.fillStyle = '#7ef2de'; ctx.fillRect(mx - 1.1 * rcam.z, my - 0.8 * rcam.z, 2.2 * rcam.z, 1.6 * rcam.z);
-        }
-      }
+    const quad = (u0, v0, u1, v1, z, fill) => poly([P(u0, v0, z), P(u1, v0, z), P(u1, v1, z), P(u0, v1, z)], fill);
+    const faceV = (u0, u1, v, z0, z1, fill) => poly([P(u0, v, z0), P(u1, v, z0), P(u1, v, z1), P(u0, v, z1)], fill);
+    const faceU = (u, v0, v1, z0, z1, fill) => poly([P(u, v0, z0), P(u, v1, z0), P(u, v1, z1), P(u, v0, z1)], fill);
+    const lbox = (u0, v0, u1, v1, z0, z1, side, top) => { const [a0, b0] = WL(u0, v0), [a1, b1] = WL(u1, v1); box(a0, b0, a1, b1, z0, z1, side, 1, { roof: top || side }); };
+    const WALL = room.lib ? '#d9cdb5' : '#cfd6d2', WALL2 = room.lib ? '#c8bb9f' : '#bcc5c1', FLOOR = room.lib ? '#9c6b45' : '#b88a5c';
+    const T = Z0 + ROOM_H;
+    const WINS = room.lib ? [[0.3, 0.46], [0.56, 0.72]] : [[0.16, 0.36], [0.6, 0.8]];
+
+    // Foundation edge on the open sides
+    faceV(0, 1, 1, 0, Z0, '#7d7468'); faceU(1, 0, 1, 0, Z0, '#6a6258');
+    // Back walls (x0 and y0), skirting, and the pale cut cap that shows wall thickness
+    faceU(0, 0, 1, Z0, T, WALL2); faceV(0, 1, 0, Z0, T, WALL);
+    faceU(0, 0, 1, Z0, Z0 + 0.5, '#8b7b66'); faceV(0, 1, 0, Z0, Z0 + 0.5, '#9a8a74');
+    poly([P(0, 0, T), P(1, 0, T), P(1, -0.03, T), P(-0.03, -0.03, T), P(-0.03, 1, T), P(0, 1, T)], '#efe9dc');
+    // Tall windows: daylight blue by day, dark glass at night
+    const glass = evening > 0.5 ? '#2c3a4a' : '#a9cde0';
+    for (const [a, b] of WINS) {
+      faceU(0, a - 0.01, b + 0.01, Z0 + 2.6, Z0 + 12.4, '#efe9dc');
+      faceU(0, a, b, Z0 + 3, Z0 + 12, glass);
+      faceU(0, (a + b) / 2 - 0.004, (a + b) / 2 + 0.004, Z0 + 3, Z0 + 12, '#efe9dc');
     }
-    edge([P(x1, y1, 0), P(x1, y1, H)], '#1a232a', lw * 1.4);
-    edge([P(x0, y1, 0), P(x0, y1, H)], '#1a232a', lw * 1.2);
-    edge([P(x1, y0, 0), P(x1, y0, H)], '#1a232a', lw * 1.2);
-    edge([P(x0, y0, H), P(x1, y0, H), P(x1, y1, H), P(x0, y1, H), P(x0, y0, H)], '#1a232a', lw * 1.4);
+    if (!room.lib) {
+      faceV(0.56, 0.9, 0, Z0 + 2.6, Z0 + 12.4, '#efe9dc'); faceV(0.57, 0.89, 0, Z0 + 3, Z0 + 12, glass);
+      // A framed print between the windows: eye-level detail
+      faceU(0, 0.43, 0.53, Z0 + 6, Z0 + 10, '#2f3a40'); faceU(0, 0.44, 0.52, Z0 + 6.4, Z0 + 9.6, '#d9b45a');
+    }
+    // Wall sconces
+    for (const v of [0.08, 0.92]) faceU(0, v - 0.015, v + 0.015, Z0 + 9, Z0 + 10.2, evening > 0.3 ? '#ffd48a' : '#e6dcc4');
+
+    // Wooden floor with plank lines
+    quad(0, 0, 1, 1, Z0, FLOOR);
+    ctx.strokeStyle = 'rgba(60,40,24,0.18)'; ctx.lineWidth = Math.max(0.5, 0.4 * rcam.z);
+    ctx.beginPath();
+    for (let k = 1; k < 9; k++) { const [a, b] = P(0, k / 9, Z0), [c, d] = P(1, k / 9, Z0); ctx.moveTo(a, b); ctx.lineTo(c, d); }
+    ctx.stroke();
+    // Daylight falling through the x0 windows onto the floor (fades out toward evening)
+    if (L > 0.25) {
+      const a = (0.22 * Math.min(1, (L - 0.25) / 0.4)).toFixed(3);
+      for (const [w0, w1] of WINS) poly([P(0, w0, Z0), P(0, w1, Z0), P(0.42, w1 + 0.1, Z0), P(0.42, w0 + 0.1, Z0)], `rgba(255,244,214,${a})`);
+    }
+    // Rugs lie flat; everything else is depth-sorted together with the people
+    for (const it of room.items) if (it.k === 'rug') quad(it.u0, it.v0, it.u1, it.v1, Z0 + 0.05, it.c);
+
+    const draws = [];
+    const depth = (u, v) => { const [a, b] = WL(u, v); return a + b; };
+    for (const it of room.items) {
+      if (it.k === 'rug') continue;
+      if (it.k === 'desk') draws.push({ d: depth(it.u1, it.v1) - 0.02, f: () => {
+        lbox(it.u0, it.v0, it.u1, it.v1, Z0 + DESK_Z - 0.4, Z0 + DESK_Z, '#8a6a4a', '#c49a6c');
+        lbox(it.u0 + 0.005, it.v0 + 0.005, it.u0 + 0.015, it.v1 - 0.005, Z0, Z0 + DESK_Z - 0.4, '#5a4632');
+        lbox(it.u1 - 0.015, it.v0 + 0.005, it.u1 - 0.005, it.v1 - 0.005, Z0, Z0 + DESK_Z - 0.4, '#5a4632');
+        // Monitor facing the worker (+v) with a glowing screen and an accent-coloured app; lamp; notebook
+        const mu = (it.u0 + it.u1) / 2, mv = it.v0 + 0.016;
+        lbox(mu - 0.006, mv - 0.006, mu + 0.006, mv + 0.006, Z0 + DESK_Z, Z0 + DESK_Z + 0.5, '#22282e');
+        lbox(mu - 0.036, mv - 0.004, mu + 0.036, mv + 0.004, Z0 + DESK_Z + 0.5, Z0 + DESK_Z + 2.1, '#22282e');
+        faceV(mu - 0.031, mu + 0.031, mv + 0.0045, Z0 + DESK_Z + 0.65, Z0 + DESK_Z + 1.95, evening > 0.3 ? '#bfe9f2' : '#9fd0dc');
+        faceV(mu - 0.026, mu - 0.004, mv + 0.005, Z0 + DESK_Z + 0.85, Z0 + DESK_Z + 1.75, it.accent);
+        lbox(it.u0 + 0.01, it.v0 + 0.008, it.u0 + 0.02, it.v0 + 0.018, Z0 + DESK_Z, Z0 + DESK_Z + 1.8, '#2f3a40', evening > 0.3 ? '#ffd48a' : '#e0c25b');
+        quad(it.u1 - 0.04, it.v1 - 0.03, it.u1 - 0.015, it.v1 - 0.008, Z0 + DESK_Z + 0.08, '#efe9dc');
+      } });
+      else if (it.k === 'chair') {
+        const b = it.back || 1;
+        draws.push({ d: depth(it.u, it.v) - 0.001, f: () => {
+          lbox(it.u - 0.004, it.v - 0.004, it.u + 0.004, it.v + 0.004, Z0, Z0 + SEAT_Z - 0.4, '#2a2f33');
+          lbox(it.u - 0.022, it.v - 0.022, it.u + 0.022, it.v + 0.022, Z0 + SEAT_Z - 0.4, Z0 + SEAT_Z, '#3b4248', '#4f5860');
+        } });
+        const bv0 = b > 0 ? it.v + 0.02 : it.v - 0.028, bv1 = bv0 + 0.008;
+        draws.push({ d: depth(it.u, (bv0 + bv1) / 2) + 0.002, f: () => lbox(it.u - 0.022, bv0, it.u + 0.022, bv1, Z0 + SEAT_Z, Z0 + SEAT_Z + 1.9, '#3b4248', '#4f5860') });
+      }
+      else if (it.k === 'table') draws.push({ d: depth(it.u1, it.v1) - 0.02, f: () => {
+        for (const [u, v] of [[it.u0 + 0.01, it.v0 + 0.01], [it.u1 - 0.02, it.v0 + 0.01], [it.u0 + 0.01, it.v1 - 0.02], [it.u1 - 0.02, it.v1 - 0.02]]) lbox(u, v, u + 0.01, v + 0.01, Z0, Z0 + it.h - 0.4, '#4a3828');
+        lbox(it.u0, it.v0, it.u1, it.v1, Z0 + it.h - 0.4, Z0 + it.h, '#7a5a3e', it.top);
+        if (it.lamps) for (const u of [it.u0 + 0.08, it.u1 - 0.08]) {
+          const v = (it.v0 + it.v1) / 2;
+          lbox(u - 0.004, v - 0.004, u + 0.004, v + 0.004, Z0 + it.h, Z0 + it.h + 1.6, '#c9a64a');
+          lbox(u - 0.025, v - 0.012, u + 0.025, v + 0.012, Z0 + it.h + 1.6, Z0 + it.h + 2.3, '#3f8a5a', '#5fb07a');
+        } else {
+          quad(it.u0 + 0.03, it.v0 + 0.03, it.u0 + 0.07, it.v0 + 0.06, Z0 + it.h + 0.08, '#efe9dc');
+          lbox(it.u1 - 0.05, it.v0 + 0.03, it.u1 - 0.035, it.v0 + 0.045, Z0 + it.h, Z0 + it.h + 0.8, '#c2553e');
+        }
+      } });
+      else if (it.k === 'shelf' || it.k === 'shelfX') draws.push({ d: depth(it.u1, it.v1) - 0.05, f: () => {
+        const h = it.h * MZ;
+        lbox(it.u0, it.v0, it.u1, it.v1, Z0, Z0 + h, '#6b4a30', '#7d5838');
+        // Rows of book spines on the visible face
+        const along = it.k === 'shelf';
+        const rows = Math.floor(h / 2.2), cols = Math.max(2, Math.round((along ? it.u1 - it.u0 : it.v1 - it.v0) * 60));
+        const BOOK = ['#7a3b32', '#2f5d6a', '#c9a64a', '#4f6b44', '#8a5a7a', '#d8cbb5', '#3a4a5e'];
+        for (let r = 0; r < rows; r++) {
+          const zb = Z0 + 0.6 + r * 2.2;
+          for (let c = 0; c < cols; c++) {
+            const s0 = c / cols, s1 = (c + 0.8) / cols, top = zb + 1.6 - (c % 3) * 0.2;
+            const col = BOOK[(c * 7 + r * 3 + Math.round(it.u0 * 50)) % BOOK.length];
+            if (along) faceV(it.u0 + (it.u1 - it.u0) * s0, it.u0 + (it.u1 - it.u0) * s1, it.v1 + 0.001, zb, top, col);
+            else faceU(it.u1 + 0.001, it.v0 + (it.v1 - it.v0) * s0, it.v0 + (it.v1 - it.v0) * s1, zb, top, col);
+          }
+        }
+      } });
+      else if (it.k === 'sofa') draws.push({ d: depth(it.u1, it.v1) - 0.03, f: () => {
+        lbox(it.u0, it.v0, it.u1, it.v1, Z0, Z0 + 1.8, it.c);
+        lbox(it.u0, it.v1 - 0.03, it.u1, it.v1, Z0 + 1.8, Z0 + 3.4, it.c);
+        lbox(it.u0, it.v0, it.u0 + 0.025, it.v1, Z0 + 1.8, Z0 + 2.6, it.c);
+        lbox(it.u1 - 0.025, it.v0, it.u1, it.v1, Z0 + 1.8, Z0 + 2.6, it.c);
+      } });
+      else if (it.k === 'plant') draws.push({ d: depth(it.u, it.v), f: () => {
+        lbox(it.u - 0.02, it.v - 0.02, it.u + 0.02, it.v + 0.02, Z0, Z0 + 1.8, '#b5653f', '#7a5a3e');
+        const [cx, cy] = P(it.u, it.v, Z0 + it.h), [bx, by] = P(it.u, it.v, Z0 + 1.8);
+        ctx.strokeStyle = '#4a6a3a'; ctx.lineWidth = Math.max(0.6, 0.45 * rcam.z);
+        ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(cx, cy); ctx.stroke();
+        ctx.fillStyle = '#3f7a45'; ctx.beginPath(); ctx.arc(cx, cy, 2.2 * rcam.z, 0, 7); ctx.fill();
+        ctx.fillStyle = '#5a9a55'; ctx.beginPath(); ctx.arc(cx - 0.6 * rcam.z, cy - 0.8 * rcam.z, 1.4 * rcam.z, 0, 7); ctx.fill();
+      } });
+    }
+    for (const c of crew) if (c.inside) draws.push({ d: c.px + c.py + 1, f: () => drawPerson(c, now) });
+    draws.sort((a, b) => a.d - b.d);
+    for (const it of draws) it.f();
+
+    // Front walls cut at knee height so the room reads as a dollhouse, entrance gap on the y1 face
+    const KW = Z0 + 2.4;
+    const front = (u0, u1) => { faceV(u0, u1, 1, Z0, KW, '#b9b2a4'); quad(u0, 1, u1, 1.03, KW, '#efe9dc'); };
+    front(0, 0.44); front(0.6, 1);
+    faceU(1, 0, 1, Z0, KW, '#a39c8f'); quad(1, 0, 1.03, 1, KW, '#efe9dc');
+    // Door frame posts and threshold at the entrance
+    faceV(0.44, 0.6, 1.01, Z0, Z0 + 0.25, '#5a4632');
+    for (const u of [0.44, 0.6]) faceV(u - 0.012, u + 0.012, 1.015, Z0, Z0 + 2.3 * MZ, '#3a3029');
+
+    // Evening: dim the room a little, then warm lamp pools on desks, the reading table and the lounge
+    if (evening > 0) {
+      quad(0, 0, 1, 1, Z0 + 0.06, `rgba(20,26,44,${(0.22 * evening).toFixed(3)})`);
+      ctx.globalCompositeOperation = 'lighter';
+      for (const it of room.items) {
+        if (it.k !== 'desk' && !(it.k === 'table' && it.lamps) && it.k !== 'sofa') continue;
+        const u = it.k === 'desk' ? it.u0 + 0.03 : (it.u0 + it.u1) / 2, v = it.k === 'desk' ? it.v0 + 0.04 : (it.v0 + it.v1) / 2;
+        const [cx, cy] = P(u, v, Z0 + (it.k === 'sofa' ? 1 : DESK_Z));
+        const r = (it.k === 'sofa' ? 16 : 12) * rcam.z, gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+        gr.addColorStop(0, `rgba(255,190,110,${(0.24 * evening).toFixed(3)})`); gr.addColorStop(1, 'rgba(255,190,110,0)');
+        ctx.fillStyle = gr; ctx.beginPath(); ctx.ellipse(cx, cy, r, r * 0.6, 0, 0, 7); ctx.fill();
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    }
   }
 
   function drawExtras(now, tbg) {
@@ -3694,11 +3992,13 @@
       if (selectedTile) {
         buildCrew();
         const g = cutawayGeom();
-        if (g) flyToTile(selectedTile[0], selectedTile[1], Math.max(cam.z, 2.0), true);
-      } else crew = [];
+        if (g) { if (!preCutCam) preCutCam = { ...cam }; flyToTile(selectedTile[0], selectedTile[1], Math.max(cam.z, 2.6), true); }
+      } else { crew = []; preCutCam = null; }
     }
     for (const a of crew) {
-      const amp = a.inside ? (a.desk ? 0.01 : 0.05) : 0.12;
+      if (a.desk) { a.px = a.ox; a.py = a.oy; continue; }                 // seated workers stay on their seat anchor
+      if (a.aisle) { a.px = a.ox; a.py = a.oy + Math.sin(now * 0.0004 + a.phase) * 0.16; continue; } // walks the aisle
+      const amp = a.inside ? 0.05 : 0.12;
       a.px = a.ox + Math.sin(now * 0.0006 + a.phase) * amp;
       a.py = a.oy + Math.cos(now * 0.0005 + a.phase * 1.7) * amp * 0.85;
     }
