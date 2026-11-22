@@ -15,26 +15,42 @@ window.ISOCITY_NYC = (() => {
   };
 
   // ---------- land ----------
+  // Smooth, deterministic coastline wobble (sum of a few sines), so every shore is irregular but stable.
+  const wob = (t, k) => 0.55 * Math.sin(t * 0.61 + k * 1.7) + 0.3 * Math.sin(t * 1.37 + k * 2.9) + 0.15 * Math.sin(t * 2.71 + k * 4.1);
+  // Tiles that must stay land whatever the wobble: bridge landings, tunnel mouths, ferry terminals, el ramps
+  const FORCE_LAND = new Set(['19,27', '25,27', '19,40', '24,40', '25,40', '18,43', '24,43', '25,43', '16,59', '24,59',
+    '25,23', '26,23', '27,23', '16,46', '14,52', '13,52', '14,53', '22,23', '23,23']);
   const MAN_CX = 16.6;
-  const manHalf = (y) => (y < 3 || y > 46 ? -1 : y < 8 ? 2.9 : y <= 40 ? 3.7 : 3.7 - (y - 40) * 0.5);
-  const isManhattan = (x, y) => { const w = manHalf(y); return w > 0 && Math.abs(x + 0.5 - MAN_CX) <= w; };
-  const isRoosevelt = (x, y) => (x === 22 || x === 23) && y >= 14 && y <= 23;
-  const bqWest = (y) => (y < 6 || y > 60 ? 99 : y < 30 ? 25 : 24);
+  const manHalf = (y) => (y < 3 || y > 46 ? -1 : y < 8 ? 2.6 + (y - 3) * 0.06 : y <= 40 ? 3.7 : 3.7 - (y - 40) * 0.5);
+  const isManhattan = (x, y) => {
+    const w = manHalf(y); if (w <= 0) return false;
+    const c = x + 0.5, west = MAN_CX - w - 1.0 * wob(y, 1), east = MAN_CX + w + 0.9 * wob(y, 2);
+    return c >= Math.min(west, 14.4) && c <= Math.max(east, 18.6);       // avenues x=14 and x=18 always on land
+  };
+  const isRoosevelt = (x, y) => (x === 22 || x === 23) && y >= 14 && y <= 23 && !(x === 23 && (y === 14 || y === 23 && false));
+  // Brooklyn–Queens: one broad landmass, framed by water on every side
   const isBQ = (x, y) => {
-    if (y < 6 || y > 60) return false;
-    if (y >= 52 && y <= 58 && x >= 42 && x <= 57) return false;                   // Jamaica Bay
-    if (y <= 7 && x >= 25 && x <= 30) return false;                                // inlet on the north shore
-    return x >= bqWest(y);
+    const c = x + 0.5, r = y + 0.5;
+    const west = (y < 30 ? 25 : 24) + Math.max(0, 0.9 * wob(y, 3));
+    const east = 57.5 + 2.4 * wob(y * 0.7, 5);
+    const north = 6.5 + 1.6 * Math.abs(wob(x * 0.8, 6));
+    const south = 57.5 + 2.2 * wob(x * 0.6, 7);
+    if (c < west || c > east || r < north || r > south) return false;
+    if (y >= 51 && x >= 41 && x <= 53 && r < south - 1) return false;           // Jamaica Bay
+    if (y <= 9 && x >= 25 && x <= 29) return false;                               // inlet on the north shore
+    return true;
   };
   const isStaten = (x, y) => {
-    const dx = (x + 0.5 - 9.5) / 8, dy = (y + 0.5 - 57) / 6.5;
-    return dx * dx + dy * dy <= 1 + (hash(x, y, 3) - 0.5) * 0.12;
+    const dx = (x + 0.5 - 9.5) / 8, dy = (y + 0.5 - 57) / 6.5, ang = Math.atan2(dy, dx);
+    return Math.hypot(dx, dy) <= 1 + 0.1 * wob(ang * 3, 8);
   };
+  const isLand = (x, y) => FORCE_LAND.has(`${x},${y}`) || isManhattan(x, y) || isRoosevelt(x, y) || isBQ(x, y) || isStaten(x, y);
   const regionOf = (x, y) => {
-    if (isManhattan(x, y)) return y >= 37 ? 'lower' : y >= 21 ? 'midtown' : 'uptown';
+    if (!isLand(x, y)) return null;
+    if (isManhattan(x, y) || (x <= 19 && x >= 13 && y <= 46 && !isStaten(x, y))) return y >= 37 ? 'lower' : y >= 21 ? 'midtown' : 'uptown';
     if (isRoosevelt(x, y)) return 'roosevelt';
     if (isStaten(x, y)) return 'staten';
-    if (isBQ(x, y)) return y <= 30 ? (x <= 28 ? 'lic' : 'queens') : (x <= 26 ? 'bkwater' : 'brooklyn');
+    if (isBQ(x, y) || x >= 24) return y <= 30 ? (x <= 28 ? 'lic' : 'queens') : (x <= 26 ? 'bkwater' : 'brooklyn');
     return null;
   };
 
@@ -112,7 +128,7 @@ window.ISOCITY_NYC = (() => {
     for (const y of [5, 9, 20, 24, 27, 30, 33, 36, 38, 40]) for (let x = 13; x <= 20; x++) if (land(x, y)) road(x, y);
     for (let x = 14; x <= 16; x++) road(x, 42);
     for (let x = 15; x <= 17; x++) road(x, 44);
-    for (let k = 0; k <= 12; k++) road(17 - Math.floor(k / 2), 27 + k);           // the diagonal avenue
+    for (let k = 0; k <= 12; k++) { const dx = 17 - Math.floor(k / 2), dy = 27 + k; if (land(dx, dy)) road(dx, dy); } // the diagonal avenue
     // Central Park: a full rectangle between the avenues, with the reservoir
     for (let x = 15; x <= 17; x++) for (let y = 10; y <= 19; y++) set(x, y, (x === 16 && (y === 12 || y === 13)) ? 'water' : (y % 3 === 1 && x !== 16 ? 'park' : 'forest'));
 

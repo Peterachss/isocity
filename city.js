@@ -1037,7 +1037,7 @@
   function drawWater(x, y, L) {
     const th = curTheme();
     const WZ = -7;
-    quadZ(x, y, x + 1, y + 1, WZ, shade((x + y) % 2 ? th.waterA : th.waterB, 1, L));
+    quadZ(x, y, x + 1, y + 1, WZ, shade(isNYC || (x + y) % 2 === 0 ? th.waterB : th.waterA, 1, L));
     // Recessed canal: stone retaining walls on the far banks, a darker wet band and a pale waterline
     const wallX = inb(x - 1, y) && !isWater(grid[x - 1][y]);
     const wallY = inb(x, y - 1) && !isWater(grid[x][y - 1]);
@@ -2251,28 +2251,26 @@
   // New York backdrop: open harbour water beyond the two far edges, then low mainland shores with distant
   // blocks. Screen-relative, so it stays behind the map in every rotation. Baked once with the static city.
   function drawShores() {
-    const th = curTheme();
-    const at = (edge, t, out) => (edge === 0 ? [-out, N - t] : [t, -out]);
-    const quad = (pts, fill) => { rctx.beginPath(); pts.forEach(([x, y, z], i) => (i ? rctx.lineTo(px(x, y), py(x, y, z || 0)) : rctx.moveTo(px(x, y), py(x, y, z || 0)))); rctx.closePath(); rctx.fillStyle = fill; rctx.fill(); };
-    const water = shade(th.waterB, 0.92, 1), shore = '#7b8784', far = '#8d99a3';
+    // Distant mainland (New Jersey beyond one far edge, the Bronx beyond the other): low, muted land with an
+    // irregular shoreline, well out in the harbour so the four islands stay clearly separate.
+    const wob = (t, k) => 0.55 * Math.sin(t * 0.37 + k) + 0.3 * Math.sin(t * 0.91 + k * 2.3) + 0.15 * Math.sin(t * 1.9 + k * 3.1);
+    const land = mix(curTheme().waterB, '#7d8a80', 0.45), far = mix(curTheme().waterB, '#9aa6ad', 0.55); // subtle, hazy
     for (const edge of [0, 1]) {
-      const a0 = at(edge, -6, 0), a1 = at(edge, N + 0.5, 0), b0 = at(edge, -6, 2.4), b1 = at(edge, N + 0.5, 2.4), c0 = at(edge, -6, 7), c1 = at(edge, N + 0.5, 7);
-      quad([a0, a1, b1, b0], water);
-      quad([b0, b1, c1, c0], shore);
+      const pt = (t, out) => (edge === 0 ? [-out, N - t] : [t, -out]);
+      rctx.beginPath();
+      for (let t = -2; t <= N + 2; t += 1) { const [x, y] = pt(t, 5.5 + 1.6 * wob(t, edge * 5)); t === -2 ? rctx.moveTo(px(x, y), py(x, y, 0)) : rctx.lineTo(px(x, y), py(x, y, 0)); }
+      for (let t = N + 2; t >= -2; t -= 2) { const [x, y] = pt(t, 14); rctx.lineTo(px(x, y), py(x, y, 0)); }
+      rctx.closePath(); rctx.fillStyle = land; rctx.fill();
+      const boxes = [];
+      for (let t = 0; t < N; t += 1.1) {
+        const hh = NYC.hash(Math.round(t * 10), edge, 21), out = 7.4 + 1.6 * wob(t, edge * 5) + hh * 2.2;
+        const [cx, cy] = pt(t, out); boxes.push({ cx, cy, w: 0.3 + hh * 0.25, h: 2 + hh * (edge === 0 && t > N * 0.55 && t < N * 0.8 ? 16 : 6), d: cx + cy });
+      }
+      boxes.sort((p, q) => p.d - q.d);
+      for (const b2 of boxes) box(b2.cx - b2.w / 2, b2.cy - b2.w / 2, b2.cx + b2.w / 2, b2.cy + b2.w / 2, 0, b2.h, far, 1, { roof: '#9aa5ab' });
     }
-    quad([[0, 0], [-2.4, 0], [-2.4, -2.4], [0, -2.4]], water); quad([[-2.4, -2.4], [-7, -2.4], [-7, -7], [-2.4, -7]], shore);
-    // Distant blocks: low, hazy boxes; a denser, taller cluster across the river from Lower Manhattan
-    const boxes = [];
-    for (const edge of [0, 1]) for (let t = -4; t < N; t += 0.7) {
-      const hsh = NYC.hash(Math.round(t * 10), edge, 21), hsh2 = NYC.hash(Math.round(t * 10), edge, 22);
-      const dense = edge === 0 && t > N * 0.55 && t < N * 0.8;
-      const out = 2.9 + hsh * 3.4, w = 0.32 + hsh2 * 0.3, hgt = (dense ? 10 + hsh2 * 30 : 3 + hsh * 9);
-      const [cx, cy] = at(edge, t, out);
-      boxes.push({ cx, cy, w, hgt, d: cx + cy });
-    }
-    boxes.sort((p, q) => p.d - q.d);
-    for (const b of boxes) box(b.cx - b.w / 2, b.cy - b.w / 2, b.cx + b.w / 2, b.cy + b.w / 2, 0, b.hgt, far, 1, { roof: '#a3adb5' });
   }
+
 
   // ---------- time-sliced map bake ----------
   // Rebuilding the cached map (rotation, cutaway, edits, theme) used to run in one go and froze the frame for
@@ -2296,8 +2294,7 @@
     if (world) {
       worldDirty = false; // anything that dirties the map again mid-job restarts it
       rctx = wctx; wctx.setTransform(WS, 0, 0, WS, 0, 0); wctx.clearRect(0, 0, WW, WH);
-      if (isNYC) drawShores(); else drawRidge();
-      drawSlab(1);
+      if (isNYC) drawShores(); else { drawRidge(); drawSlab(1); } // NYC floats in open harbour water: no board or rim
       nctx.setTransform(1, 0, 0, 1, 0, 0); nctx.clearRect(0, 0, WW, WH);
       if (isNYC) railBakePrep();
     }
@@ -2559,11 +2556,12 @@
     if (transparentBg) {
       ctx.clearRect(0, 0, W, H);
     } else {
-      ctx.fillStyle = mix(th.skyNight, th.skyDay, L);
+      // NYC: the background is the harbour itself, the same colour as the water tiles, so the map has no edge
+      ctx.fillStyle = isNYC ? shade(th.waterB, 1, 1) : mix(th.skyNight, th.skyDay, L);
       ctx.fillRect(0, 0, W, H);
 
       // Moving stars & Moon arc
-      if (L < 0.5) {
+      if (L < 0.5 && !isNYC) {
         const sa = (0.5 - L) * 1.8;
         ctx.fillStyle = '#e7ecff';
         const drift = (hour / 24) * 0.2;
