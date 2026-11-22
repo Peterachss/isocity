@@ -481,8 +481,8 @@
         buildings++;
         if (t === 'windmill') millsList.push([x, y]);
         else if (t === 'wheel') wheelsList.push([x, y]);
-        else if (t === 'office') beaconsList.push([x, y, bldHeight(t, lv) + (lv >= 3 ? 20 : 12)]);
-        else if (t === 'house') housesList.push([x, y, bldHeight(t, lv) + 12]);
+        else if (t === 'office') beaconsList.push([x, y, towerSpec(x, y, t)?.top ?? bldHeight(t, lv) + (lv >= 3 ? 20 : 12)]);
+        else if (t === 'house') housesList.push([x, y, bh(x, y, t, lv) + 12]);
         if (bldHeight(t, lv) > 0) buildingsList.push([x, y, t]);
         const mult = LVL_MULT[lv] || 1;
         pop += Math.round((d.pop || 0) * mult);
@@ -824,12 +824,163 @@
     const [ux, uy] = unrotPt(x, y);
     return { r: NYC.regionOf(ux, uy), lm: NYC.LANDMARKS[`${ux},${uy}`] || null, h: NYC.hash(ux, uy, 5) };
   }
+  // Queens avenue under the el (original row 23): the blocks either side are low shop-fronted buildings
+  function queensAve(x, y) {
+    if (!isNYC) return false;
+    const [ux, uy] = unrotPt(x, y);
+    return (uy === 22 || uy === 24) && ux >= 28 && NYC.regionOf(ux, uy) === 'queens';
+  }
+  // Type used for drawing: houses on the Queens avenue render as shops with flats above
+  function drawType(x, y, t) { return t === 'house' && queensAve(x, y) ? 'shop' : t; }
+
+  // ----- NYC skyline: per-region tower specs -----
+  // Lower Manhattan: tight older stone blocks with setback tops and copper crowns, and tall glass near the
+  // harbour. Midtown: stepped stone towers, slender residential towers and wide glass offices. A spec is a stack
+  // of tiers (inset, z range, colour, facade kind) plus a crown, read from the original map position so it is
+  // stable under rotation. The day facade, lit windows, shadows, labels and occlusion all use the same spec.
+  var towerCache = null; // var: towerSpec can run from the stats pass before this line is reached
+  function towerSpec(x, y, t) {
+    if (!isNYC || (t !== 'office' && t !== 'apt')) return null;
+    const [ux, uy] = unrotPt(x, y), lv = levels[x][y] || 1, key = `${ux},${uy},${t},${lv}`;
+    if (!towerCache) towerCache = new Map();
+    if (towerCache.has(key)) return towerCache.get(key);
+    const r = NYC.regionOf(ux, uy);
+    let s = null;
+    const STONE_LO = ['#b9ad98', '#a89a84', '#c4b8a2', '#9d8f7a'], STONE_MID = ['#cbbfa9', '#bfae92', '#d3c7b0', '#b5a68c'];
+    const GLASS_LO = ['#7d9db6', '#6a8ba6', '#86a9bf'], GLASS_MID = ['#3e5566', '#4d6a7e', '#445e70'];
+    if ((r === 'lower' || r === 'midtown') && !NYC.LANDMARKS[`${ux},${uy}`]) {
+      const h2 = NYC.hash(ux, uy, 17), h3 = NYC.hash(ux, uy, 23), k = 0.8 + 0.1 * Math.min(2, lv - 1);
+      const pick = (a) => a[Math.floor(h3 * a.length) % a.length];
+      const T = (ins, z0, z1, col, kind) => ({ ins, z0: Math.round(z0), z1: Math.round(z1), col, kind });
+      if (r === 'lower') {
+        const near = uy >= 41;
+        if (t === 'office' && (h2 >= 0.5 || (near && h2 >= 0.25))) {
+          const H = Math.round(((near ? 176 : 138) + h3 * 56) * k);
+          s = { tiers: [T(0.06, 0, H - 8, pick(GLASS_LO), 'ribbon'), T(0.1, H - 8, H, '#4a5157', 'mech')], crown: h3 > 0.7 ? 'mast' : 'plant', lit: '#e8f1ff' };
+        } else {
+          const H = Math.round((t === 'office' ? 88 + h3 * 64 : 66 + h3 * 36) * k);
+          s = { tiers: [T(0.04, 0, H * 0.78, pick(STONE_LO), 'punch'), T(0.13, H * 0.78, H, mix(pick(STONE_LO), '#ffffff', 0.12), 'punch')], crown: h2 < 0.22 ? 'pyramid' : 'cornice', lit: '#ffd98a' };
+        }
+      } else if (t === 'apt') {
+        if (h2 < 0.35) {
+          const H = Math.round((214 + h3 * 70) * k);
+          s = { tiers: [T(0.05, 0, 20, '#cfc8b8', 'punch'), T(0.3, 20, H - 7, '#dcd8cf', 'slender'), T(0.32, H - 7, H, '#2f3539', 'mech')], crown: 'cap', lit: '#ffe2a6' };
+        } else {
+          const H = Math.round((86 + h3 * 40) * k), brick = ['#a5735a', '#94604a', '#b0806a'][Math.floor(h3 * 3) % 3];
+          s = { tiers: [T(0.04, 0, H * 0.72, brick, 'punch'), T(0.15, H * 0.72, H, mix(brick, '#ffffff', 0.1), 'punch')], crown: 'water', lit: '#ffd98a' };
+        }
+      } else if (h2 < 0.45) {
+        const H = Math.round((140 + h3 * 60) * k), c = pick(STONE_MID);
+        s = { tiers: [T(0.04, 0, H * 0.5, c, 'punch'), T(0.12, H * 0.5, H * 0.74, c, 'punch'), T(0.19, H * 0.74, H * 0.9, mix(c, '#ffffff', 0.08), 'punch'), T(0.25, H * 0.9, H, mix(c, '#ffffff', 0.16), 'punch')], crown: 'lantern', lit: '#ffd98a' };
+      } else {
+        const H = Math.round((104 + h3 * 46) * k);
+        s = { tiers: [T(0.03, 0, H - 6, pick(GLASS_MID), 'ribbon'), T(0.07, H - 6, H, '#3a4046', 'mech')], crown: 'plant', lit: '#f4f6ff' };
+      }
+      const H = s.tiers[s.tiers.length - 1].z1;
+      s.H = H; s.ins = s.tiers[0].ins;
+      s.top = H + ({ mast: 46, pyramid: 16, lantern: 30, cap: 4, water: 14, plant: 5, cornice: 2 })[s.crown];
+    }
+    towerCache.set(key, s);
+    return s;
+  }
+  // Region-aware building height (px) for a tile: towers from their spec, low-rise Staten Island houses,
+  // three-storey shop blocks on the Queens avenue; everything else as before.
+  function bh(x, y, t, lv = levels[x][y] || 1) {
+    if (isNYC) {
+      const s = towerSpec(x, y, t); if (s) return s.H;
+      if ((t === 'house' || t === 'shop') && queensAve(x, y)) return 30;
+      if (t === 'house' && nycInfo(x, y).r === 'staten') return 26;
+      if (t === 'apt' && nycInfo(x, y).r === 'roosevelt') return 58; // Roosevelt Island stays low and quiet
+    }
+    return bldHeight(t, lv);
+  }
+  function towerFacade(tr, X0, Y0, X1, Y1, L, seed, startRow, lit) {
+    const x0 = X0 + tr.ins, y0 = Y0 + tr.ins, x1 = X1 - tr.ins, y1 = Y1 - tr.ins, dx = x1 - x0, dy = y1 - y0;
+    if (tr.kind === 'mech') { // mechanical level: dark louvred band
+      if (lit) return;
+      for (const z of [tr.z0 + 2, tr.z0 + 4.5]) { faceL(x0, x1, y1 + 0.002, z, z + 0.7, shade('#8a9095', 1, L)); faceR(x1 + 0.002, y0, y1, z, z + 0.7, shade('#70767b', 1, L)); }
+      return;
+    }
+    const rows = Math.max(1, Math.floor((tr.z1 - tr.z0) / 14));
+    if (tr.kind === 'ribbon') { // curtain wall: continuous glass bands per storey, mullions every ~3 m
+      const cols = Math.max(2, Math.round(dx * 6));
+      for (let r = startRow; r < rows; r++) {
+        const zz0 = tr.z0 + 4 + r * 14, zz1 = zz0 + 9.5;
+        if (!lit) { faceL(x0, x1, y1 + 0.001, zz0, zz1, shade(mix(tr.col, '#1c2a36', 0.45), 1, L)); faceR(x1 + 0.001, y0, y1, zz0, zz1, shade(mix(tr.col, '#141e28', 0.5), 1, L)); continue; }
+        for (let c = 0; c < cols; c++) {
+          if (((seed * 31 + r * 17 + c * 13) % 7) >= 3) continue;
+          const a = c / cols + 0.01, b = (c + 1) / cols - 0.01;
+          faceL(x0 + dx * a, x0 + dx * b, y1 + 0.001, zz0, zz1, lit);
+          faceR(x1 + 0.001, y0 + dy * a, y0 + dy * b, zz0, zz1, mix(lit, '#c0a070', 0.25));
+        }
+      }
+      if (!lit && rcam.z >= 0.9) { // mullions
+        rctx.strokeStyle = shade(mix(tr.col, '#ffffff', 0.35), 1, L); rctx.lineWidth = Math.max(0.4, 0.35 * rcam.z);
+        rctx.beginPath();
+        for (let c = 1; c < cols; c++) {
+          const a = c / cols, lx = x0 + dx * a, ry = y0 + dy * a;
+          rctx.moveTo(px(lx, y1 + 0.002), py(lx, y1 + 0.002, tr.z0 + 4)); rctx.lineTo(px(lx, y1 + 0.002), py(lx, y1 + 0.002, tr.z1));
+          rctx.moveTo(px(x1 + 0.002, ry), py(x1 + 0.002, ry, tr.z0 + 4)); rctx.lineTo(px(x1 + 0.002, ry), py(x1 + 0.002, ry, tr.z1));
+        }
+        rctx.stroke();
+      }
+      return;
+    }
+    // Punched windows in stone or brick; slender towers get tall narrow openings
+    const cols = Math.max(1, Math.round(dx * (tr.kind === 'slender' ? 5 : 3.4)));
+    for (let r = startRow; r < rows; r++) {
+      const zz0 = tr.z0 + 5 + r * 14, zz1 = zz0 + (tr.kind === 'slender' ? 10 : 7);
+      for (let c = 0; c < cols; c++) {
+        const on = ((seed * 31 + r * 17 + c * 13) % 7) < 4;
+        if (lit && !on) continue;
+        const a = (c + 0.24) / cols, b = (c + 0.76) / cols;
+        faceL(x0 + dx * a, x0 + dx * b, y1 + 0.001, zz0, zz1, lit || shade('#27333f', 1, L));
+        faceR(x1 + 0.001, y0 + dy * a, y0 + dy * b, zz0, zz1, lit ? mix(lit, '#c08040', 0.2) : shade('#1f2a35', 1, L));
+      }
+    }
+  }
+  function towerCrown(s, X0, Y0, X1, Y1, L) {
+    const tr = s.tiers[s.tiers.length - 1], x0 = X0 + tr.ins, y0 = Y0 + tr.ins, x1 = X1 - tr.ins, y1 = Y1 - tr.ins, H = s.H;
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    const mast = (z0, z1, col = '#d9d4c9') => { rctx.strokeStyle = shade(col, 1, L); rctx.lineWidth = Math.max(0.8, 1.1 * rcam.z); rctx.beginPath(); rctx.moveTo(px(cx, cy), py(cx, cy, z0)); rctx.lineTo(px(cx, cy), py(cx, cy, z1)); rctx.stroke(); };
+    // Cornice band on every stone/brick tier top
+    for (const t2 of s.tiers) if (t2.kind === 'punch') box(X0 + t2.ins - 0.012, Y0 + t2.ins - 0.012, X1 - t2.ins + 0.012, Y1 - t2.ins + 0.012, t2.z1 - 1.6, t2.z1 + 0.4, mix(t2.col, '#ffffff', 0.2), L);
+    if (s.crown === 'pyramid') { // copper pyramid roof with a finial
+      const t = H + 14;
+      poly4(px(x0, y1), py(x0, y1, H), px(x1, y1), py(x1, y1, H), px(cx, cy), py(cx, cy, t), px(cx, cy), py(cx, cy, t), shade('#6f9a86', 0.95, L));
+      poly4(px(x1, y0), py(x1, y0, H), px(x1, y1), py(x1, y1, H), px(cx, cy), py(cx, cy, t), px(cx, cy), py(cx, cy, t), shade('#6f9a86', 0.72, L));
+      mast(t, t + 3, '#c9b37a');
+    } else if (s.crown === 'lantern') { // stepped crown: small lantern storey then a mast
+      box(cx - 0.08, cy - 0.08, cx + 0.08, cy + 0.08, H, H + 10, mix(tr.col, '#ffffff', 0.2), L, { roof: '#b8ad98' });
+      box(cx - 0.045, cy - 0.045, cx + 0.045, cy + 0.045, H + 10, H + 16, mix(tr.col, '#ffffff', 0.28), L);
+      mast(H + 16, H + 30);
+    } else if (s.crown === 'mast') {
+      box(cx - 0.1, cy - 0.1, cx + 0.1, cy + 0.1, H, H + 5, '#5a6066', L);
+      mast(H + 5, H + 46, '#c8ccd0');
+    } else if (s.crown === 'plant') {
+      box(x0 + 0.06, y0 + 0.08, x0 + 0.3, y0 + 0.3, H, H + 5, '#8f949a', L, { roof: '#b6bbc0' });
+    } else if (s.crown === 'cap') {
+      box(x0 - 0.01, y0 - 0.01, x1 + 0.01, y1 + 0.01, H, H + 1.5, '#c9c4ba', L);
+    } else if (s.crown === 'water') {
+      drawWaterTower(x0 + (x1 - x0) * 0.66, y0 + (y1 - y0) * 0.36, H + 0.4, L);
+    }
+  }
+  function drawTowerBody(s, X0, Y0, X1, Y1, L, seed, store, wall) {
+    s.tiers.forEach((tr, k) => {
+      const col = k === 0 && wall ? wall : tr.col;
+      box(X0 + tr.ins, Y0 + tr.ins, X1 - tr.ins, Y1 - tr.ins, tr.z0, tr.z1, col, L, { roof: mix(col, '#777777', 0.4) });
+      towerFacade({ ...tr, col }, X0, Y0, X1, Y1, L, seed + k * 7, k === 0 ? store : 0, null);
+    });
+    towerCrown(s, X0, Y0, X1, Y1, L);
+  }
   // Street walls: row houses and Manhattan blocks fill their lots so façades read as continuous
   function insetFor(x, y, t) {
     const d = TYPES[t];
     if (!d) return 0.1;
     if (!isNYC) return d.inset;
+    const sp = towerSpec(x, y, t); if (sp) return sp.ins;
     const r = nycInfo(x, y).r;
+    if (t === 'house' && r === 'staten') return 0.2; // detached houses with front yards
     if (t === 'house' && (r === 'brooklyn' || r === 'queens' || r === 'bkwater')) return 0.03;
     if ((t === 'apt' || t === 'shop') && r && r !== 'staten' && r !== 'roosevelt' && r !== 'lic') return 0.04;
     return d.inset;
@@ -909,6 +1060,93 @@
     faceL(x + 0.06, x + 0.94, y + 0.842, 14.5, 17, shade('#e8762b', 1, L));
     for (let k = 0; k < 3; k++) faceL(x + 0.3 + k * 0.14, x + 0.38 + k * 0.14, y + 0.785, 1, 9, shade('#2f3a40', 1, L)); // doors
   }
+  // Midtown office lobby on the street face: stone surround, tall lobby glass, a revolving-door drum and a
+  // canopy out over the pavement on brass poles. Doormen and a waiting cab are added live (see nycDoorList).
+  var nycDoors = new Set(), nycDoorList = [];
+  function drawLobby(dX0, dX1, Y1, accent, L) {
+    const w = dX1 - dX0, a0 = dX0 - w * 0.7, a1 = dX1 + w * 0.7, cx = (dX0 + dX1) / 2;
+    faceL(a0 - 0.02, a1 + 0.02, Y1 + 0.002, 0.3, 15.5, shade('#d6cdbb', 1, L));
+    faceL(a0, a1, Y1 + 0.004, 0.6, 13.8, shade('#9cc2cf', 0.78, L));
+    for (const k of [0.2, 0.4, 0.6, 0.8]) { const m = a0 + (a1 - a0) * k; faceL(m - 0.003, m + 0.003, Y1 + 0.005, 0.6, 13.8, shade('#2c3238', 1, L)); }
+    box(cx - 0.035, Y1 + 0.004, cx + 0.035, Y1 + 0.05, 0.3, 9.2, '#33424a', L, { roof: '#b8a06a' });       // revolving door
+    box(a0 - 0.02, Y1, a1 + 0.02, Y1 + 0.12, 12.2, 13.4, accent, L, { roof: mix(accent, '#ffffff', 0.22) }); // canopy
+    for (const ex of [a0, a1]) box(ex - 0.006, Y1 + 0.106, ex + 0.006, Y1 + 0.118, 0, 12.2, '#c9b37a', L);
+  }
+  // Traffic signals are an overlay drawn above the cached map; skip the ones a building in front would hide
+  // (a building `ahead` diagonals nearer the camera covers the signal if it rises above ahead * TH/2 + 7 px).
+  var sigHidden = new Set();
+  function sigHiddenPrep() {
+    sigHidden = new Set();
+    for (const cidx of crossings) {
+      const cx = (cidx / N) | 0, cy = cidx % N;
+      search: for (let j = 0; j <= 10; j++) for (const [bx, by] of [[cx + j, cy + j + 1], [cx + j + 1, cy + j], [cx + j, cy + j]]) {
+        if (!inb(bx, by) || (bx === cx && by === cy)) continue;
+        const t = grid[bx][by];
+        if (!isBuilding(t)) continue;
+        const ahead = bx + by - cx - cy;
+        if (buildingTopZ(bx, by, t) - 4 > ahead * (TH / 2) + 7) { sigHidden.add(cidx); break search; }
+      }
+    }
+  }
+  // Pick the Midtown office entrances that face a street in the current view (pinned workplaces first)
+  function nycDoorsPrep() {
+    nycDoors = new Set(); nycDoorList = [];
+    if (!isNYC) return;
+    const cand = [];
+    for (let x = 1; x < N - 1; x++) for (let y = 0; y < N - 1; y++) {
+      if (grid[x][y] !== 'office' || nycInfo(x, y).r !== 'midtown' || !towerSpec(x, y, 'office')) continue;
+      if (grid[x][y + 1] !== 'road' || !(isRoad(grid[x - 1][y + 1]) || isRoad(grid[x + 1][y + 1]))) continue;
+      // How much the block across the street hides this entrance from the camera (px of building in front)
+      // (tiles on the door's screen column nearer the camera; one `ahead` diagonals away hides it above ahead*TH/2 px)
+      let block = 0;
+      for (let j = 1; j <= 8; j++) for (const [bx, by] of [[x + j, y + j], [x + j, y + j + 1]]) {
+        if (!inb(bx, by) || !isBuilding(grid[bx][by])) continue;
+        block = Math.max(block, bh(bx, by, grid[bx][by]) - (bx + by - x - y - 1.75) * (TH / 2));
+      }
+      cand.push({ x, y, pin: !!pins[x][y], block, h: NYC.hash(...unrotPt(x, y), 29) });
+    }
+    cand.sort((a, b) => (b.pin - a.pin) || (a.block - b.block) || (a.h - b.h));
+    const pinned = cand.filter((c) => c.pin).slice(0, 3);
+    const open = cand.filter((c) => !c.pin).sort((a, b) => a.block - b.block || a.h - b.h)[0];
+    const pick = [...pinned];
+    if (open && (!pinned.length || pinned.every((c) => c.block > 8))) pick.push(open); // always one lobby in clear view
+    for (const c of pick) {
+      const { x, y } = c, i = insetFor(x, y, 'office'), Y1 = y + 1 - i, mx = x + i + (1 - 2 * i) * 0.66;
+      nycDoors.add(x * N + y);
+      nycDoorList.push({
+        x, y, mx, my: Y1 + 0.16, block: Math.round(c.block), look: { top: '#24303d', pants: '#1f242b', jacket: '#24303d', skin: SKINS[(x + y) % SKINS.length], hair: HAIRS[(x * 3 + y) % HAIRS.length] },
+        cab: { id: `cab-${x}-${y}`, kind: 'car', color: '#f2c230', fx: x, fy: y + 1, tx: x, ty: y + 1, t: 1, px: x - 0.12, py: y + 1, _hx: -1, _hy: 0, speed: 0, wait: 0, route: [], dest: 'Waiting at the kerb', block: c.block },
+      });
+    }
+  }
+  // Waterfront promenade along any edge of a Roosevelt Island lot that meets the river: paving, railing, lamps
+  function drawWaterfrontPath(x, y, L, ny) {
+    if (ny.r !== 'roosevelt') return;
+    for (const [dx, dy] of NB) {
+      if (!inb(x + dx, y + dy) || !isWater(grid[x + dx][y + dy])) continue;
+      const ax0 = dx < 0 ? x : dx > 0 ? x + 0.88 : x, ax1 = dx < 0 ? x + 0.12 : dx > 0 ? x + 1 : x + 1;
+      const ay0 = dy < 0 ? y : dy > 0 ? y + 0.88 : y, ay1 = dy < 0 ? y + 0.12 : dy > 0 ? y + 1 : y + 1;
+      quadZ(ax0, ay0, ax1, ay1, 0.3, shade('#cfc6b2', 1, L));
+      const rx0 = dx ? (dx < 0 ? x + 0.005 : x + 0.987) : x, rx1 = dx ? rx0 + 0.008 : x + 1;
+      const ry0 = dy ? (dy < 0 ? y + 0.005 : y + 0.987) : y, ry1 = dy ? ry0 + 0.008 : y + 1;
+      box(rx0, ry0, rx1, ry1, 2.6, 3.4, '#3d4a44', L);                                               // railing top rail
+      for (const f of [0.15, 0.5, 0.85]) { const qx = dx ? rx0 : x + f, qy = dy ? ry0 : y + f; box(qx, qy, qx + 0.008, qy + 0.008, 0.3, 2.6, '#3d4a44', L); }
+      const lx = dx ? (ax0 + ax1) / 2 : x + 0.5, ly = dy ? (ay0 + ay1) / 2 : y + 0.5;
+      box(lx - 0.006, ly - 0.006, lx + 0.006, ly + 0.006, 0.3, 9, '#2e3338', L, { roof: L < 0.72 ? '#ffe59c' : '#d6d0c0' }); // lamp
+      if (NYC.hash(...unrotPt(x, y), 31 + dx * 3 + dy) < 0.6) box(dx ? (ax0 + ax1) / 2 - 0.02 : x + 0.24, dy ? (ay0 + ay1) / 2 - 0.02 : y + 0.24, dx ? (ax0 + ax1) / 2 + 0.02 : x + 0.36, dy ? (ay0 + ay1) / 2 + 0.02 : y + 0.36, 0.3, 1.9, '#7a5436', L, { roof: '#9a6b44' }); // bench
+    }
+  }
+  // Staten Island: a detached house in its own yard: lawn, a shade tree, then (front=true) the hedge and path
+  function drawYard(x, y, L, ny, front = false) {
+    if (!front) {
+      quadZ(x + 0.04, y + 0.04, x + 0.96, y + 0.96, 0.05, shade('#7fa85a', 1, L));
+      tree(x + 0.84, y + 0.16, 0.8, L, Math.floor(ny.h * 1e6));
+      return;
+    }
+    quadZ(x + 0.44, y + 0.8, x + 0.56, y + 1, 0.1, shade('#cfc6b4', 1, L)); // path to the pavement
+    for (const [a, b] of [[0.06, 0.4], [0.6, 0.94]]) box(x + a, y + 0.9, x + b, y + 0.95, 0, 2.6, '#3d6e3a', L, { roof: '#4f8a46' });
+    if (ny.h > 0.5) box(x + 0.9, y + 0.3, x + 0.95, y + 0.88, 0, 2.6, '#3d6e3a', L, { roof: '#4f8a46' });
+  }
 
   function drawTileNight(x, y, t) {
     if (!t) return;
@@ -963,7 +1201,8 @@
 
   function drawBuildingNightWindows(x, y, t, L, force = false) {
     if (t === 'wheel' || t === 'windmill') return;
-    const h = bldHeight(t, levels[x][y] || 1);
+    t = drawType(x, y, t);
+    const h = bh(x, y, t);
     if (!h) return;
     const winThresh = 0.22 + ((x * 13 + y * 7) % 24) * 0.015;
     if (!force && (1 - L) <= winThresh) return;
@@ -972,6 +1211,21 @@
     const i = insetFor(x, y, t);
     const x0 = x + i, y0 = y + i, x1 = x + 1 - i, y1 = y + 1 - i;
     const seed = x * 11 + y * 5;
+    const sp = towerSpec(x, y, t);
+    if (sp) { // region-coloured lit windows on every tier: cool white glass downtown, warmer stone and homes
+      storefront(x0, y0, x1, y1, 1, '#ffd48a', '#f2b866');
+      sp.tiers.forEach((tr, k) => towerFacade(tr, x, y, x + 1, y + 1, 1, seed + k * 7, k === 0 ? 1 : 0, sp.lit));
+      if (nycDoors.has(x * N + y)) { // lit double-height lobby behind the canopy, with the revolving door against it
+        const dX0 = x0 + (x1 - x0) * 0.42, dX1 = x0 + (x1 - x0) * 0.58, w = dX1 - dX0, a0 = dX0 - w * 0.7, a1 = dX1 + w * 0.7, cx = (dX0 + dX1) / 2;
+        faceL(a0 - 0.02, a1 + 0.02, y1 + 0.002, 0.3, 15.5, '#3a3430');
+        faceL(a0, a1, y1 + 0.004, 0.6, 13.8, '#fff0c8');
+        for (const k of [0.2, 0.4, 0.6, 0.8]) { const m = a0 + (a1 - a0) * k; faceL(m - 0.003, m + 0.003, y1 + 0.005, 0.6, 13.8, '#6a5a48'); }
+        box(cx - 0.035, y1 + 0.004, cx + 0.035, y1 + 0.05, 0.3, 9.2, '#4a4038', 1, { roof: '#d8b878' });
+        box(a0 - 0.02, y1, a1 + 0.02, y1 + 0.12, 12.2, 13.4, '#2a2420', 1, { roof: '#3a322c' });
+        faceL(a0 - 0.02, a1 + 0.02, y1 + 0.121, 12.4, 13.2, '#ffe2a0'); // lit canopy edge
+      }
+      return;
+    }
     const glass = t === 'office' || (!!pins[x][y] && t !== 'house'); // matches the day window geometry
     const rows = Math.max(1, Math.floor(h / 14));
     const cols = Math.max(1, Math.round((x1 - x0) * 3));
@@ -1127,7 +1381,25 @@
     // NYC street kit: green street-sign pole and walk signal at intersections, hydrants and newspaper boxes
     // on the pavement. Placed on the kerb corners so crossings, doorways and station stairs stay clear.
     if (isNYC && !bridge) {
-      const h = NYC.hash(...unrotPt(x, y), 13);
+      const h = NYC.hash(...unrotPt(x, y), 13), rg = nycInfo(x, y).r;
+      if (rg === 'staten' || rg === 'roosevelt') {
+        // Staten Island: grass verges between kerb and lot with the odd street tree. Roosevelt Island: a river
+        // railing along the water side of the road.
+        for (const [dx, dy] of NB) {
+          const n = inb(x + dx, y + dy) ? grid[x + dx][y + dy] : 'water';
+          if (isRoad(n)) continue;
+          const ax0 = dx > 0 ? x + 0.95 : x, ax1 = dx < 0 ? x + 0.05 : x + 1, ay0 = dy > 0 ? y + 0.95 : y, ay1 = dy < 0 ? y + 0.05 : y + 1;
+          if (dx && dy === 0 || dy && dx === 0) {
+            if (rg === 'staten') {
+              quadZ(dx ? ax0 : x + 0.11, dy ? ay0 : y + 0.11, dx ? ax1 : x + 0.89, dy ? ay1 : y + 0.89, SW_Z + 0.02, shade('#7fa85a', 1, L));
+              if (h > 0.3 && h < 0.62 && !crossings.has(x * N + y)) { const sx = dx ? (ax0 + ax1) / 2 : x + 0.3 + h * 0.4, sy = dy ? (ay0 + ay1) / 2 : y + 0.3 + h * 0.4; tree(sx, sy, 0.62, L, Math.floor(h * 1e6) + dx * 7 + dy * 13); }
+            } else if (isWater(n)) {
+              box(dx ? (dx < 0 ? x + 0.004 : x + 0.988) : x, dy ? (dy < 0 ? y + 0.004 : y + 0.988) : y, dx ? (dx < 0 ? x + 0.012 : x + 0.996) : x + 1, dy ? (dy < 0 ? y + 0.012 : y + 0.996) : y + 1, SW_Z + 2.4, SW_Z + 3.2, '#3d4a44', L);
+              for (const f of [0.2, 0.5, 0.8]) { const qx = dx ? (dx < 0 ? x + 0.004 : x + 0.988) : x + f, qy = dy ? (dy < 0 ? y + 0.004 : y + 0.988) : y + f; box(qx, qy, qx + 0.008, qy + 0.008, SW_Z, SW_Z + 2.4, '#3d4a44', L); }
+            }
+          }
+        }
+      }
       if (crossings.has(x * N + y)) {
         const sx = x + 0.06, sy = y + 0.94;
         box(sx - 0.008, sy - 0.008, sx + 0.008, sy + 0.008, 1.4, 11, '#3d4a44', L);
@@ -1287,6 +1559,7 @@
       return;
     }
     if (t === 'park') {
+      if (isNYC && !skipGround) drawWaterfrontPath(x, y, L, nycInfo(x, y));
       quadZ(x + 0.12, y + 0.44, x + 0.88, y + 0.56, 0.2, shade('#cfc3aa', 1, L));
       box(x + 0.44, y + 0.36, x + 0.58, y + 0.42, 0.2, 2.5, '#7a5436', L);
       const [pux, puy] = unrotPt(x, y);
@@ -1367,9 +1640,11 @@
 
     const pinId = pins[x][y];
     const item = pinId ? getItem(pinId) : null;
+    t = drawType(x, y, t);
     const d = TYPES[t];
     const i = insetFor(x, y, t);
     const ny = nycInfo(x, y);
+    const spec = towerSpec(x, y, t);
     const lv = levels[x][y] || 1;
     const seed = x * 11 + y * 5;
     const red = REDS[seed % REDS.length];
@@ -1387,13 +1662,15 @@
     if (ny && !item?.customColor) {
       const hh = ny.h;
       const BRICK = ['#8a4a36', '#7a4434', '#94573f', '#6f3f30', '#a06048'], BROWN = ['#6e4a3a', '#7a5341', '#5f4033', '#84604c', '#8a6a52'];
-      if (t === 'house') { wall = (ny.r === 'brooklyn' || ny.r === 'bkwater') ? BROWN[Math.floor(hh * BROWN.length)] : ny.r === 'queens' ? BRICK[Math.floor(hh * BRICK.length)] : WALLS[seed % WALLS.length]; if (brownstone) roof = '#4b4440'; }
+      if (t === 'house') { wall = (ny.r === 'brooklyn' || ny.r === 'bkwater') ? BROWN[Math.floor(hh * BROWN.length)] : ny.r === 'queens' ? BRICK[Math.floor(hh * BRICK.length)] : ny.r === 'staten' ? ['#e8e2d0', '#cfdbe0', '#e6d6b8', '#d8e0cc', '#f0e6da'][Math.floor(hh * 5)] : WALLS[seed % WALLS.length]; if (brownstone) roof = '#4b4440'; }
       else if (t === 'apt') { wall = ny.r === 'lic' ? '#7f9bb0' : ny.r === 'roosevelt' ? '#c9c2b4' : hh < 0.5 ? '#d8cfbd' : BRICK[Math.floor(hh * 10) % BRICK.length]; roof = '#6d6a66'; }
       else if (t === 'office') { wall = hh < 0.55 ? '#6f8ca3' : hh < 0.8 ? '#c8bfae' : '#4f5f6c'; roof = '#5a5f63'; }
-      else if (t === 'shop') { wall = ny.r === 'bkwater' ? BRICK[Math.floor(hh * BRICK.length)] : hh < 0.5 ? '#e6dcc6' : '#b9653f'; roof = '#5d5954'; }
+      else if (t === 'shop') { wall = ny.r === 'bkwater' || queensAve(x, y) ? BRICK[Math.floor(hh * BRICK.length)] : hh < 0.5 ? '#e6dcc6' : '#b9653f'; roof = '#5d5954'; }
     }
-    const H = Math.max(1, bldHeight(t, lv));
+    const H = Math.max(1, bh(x, y, t, lv));
     const X0 = x + i, Y0 = y + i, X1 = x + 1 - i, Y1 = y + 1 - i;
+    if (ny && !skipGround) drawWaterfrontPath(x, y, L, ny);
+    if (ny && ny.r === 'staten' && t === 'house' && !skipGround) drawYard(x, y, L, ny);
     if (ny && ny.lm && !pinId) {
       if (!skipGround) castShadow(X0, Y0, X1, Y1, ny.lm === 'flatiron' ? 70 : 160);
       if (ny.lm === 'spire') return drawSpireTower(X0, Y0, X1, Y1, L);
@@ -1401,7 +1678,7 @@
       if (ny.lm === 'flatiron') return drawFlatiron(X0, Y0, X1, Y1, L);
     }
     if (!skipGround) {
-      castShadow(X0, Y0, X1, Y1, H);
+      castShadow(X0, Y0, X1, Y1, Math.min(H, 170));
       // Cheap contact shadow hugging the footprint
       quadZ(X0 - 0.05, Y0 - 0.05, X1 + 0.07, Y1 + 0.07, 0.05, 'rgba(12,16,24,0.2)');
     }
@@ -1411,9 +1688,12 @@
     if (pinId) quadZ(dX0 - 0.02, Y1, dX1 + 0.02, y + 1, 0.12, shade('#d8cdb6', 1, L)); // paved path to the pavement
     const office = !!pinId && t !== 'house';
     if (office) box(X0 - 0.025, Y0 - 0.025, X1 + 0.025, Y1 + 0.025, 0, 1.6, '#6f6a63', L, { roof: '#8a857c' }); // solid stone base
-    box(X0, Y0, X1, Y1, 0, H, wall, L, { roof, windows: seed, glass: t === 'office' || office, thresh, startRow: store });
+    if (spec) drawTowerBody(spec, x, y, x + 1, y + 1, L, seed, store, item?.customColor || null);
+    else box(X0, Y0, X1, Y1, 0, H, wall, L, { roof, windows: seed, glass: t === 'office' || office, thresh, startRow: store });
     if (store) storefront(X0, Y0, X1, Y1, shade('#2b2824', 1, L), shade('#8fb0bf', 0.95, L), shade('#6f8f9e', 0.95, L));
-    if (pinId && t !== 'house') {
+    if (!pinId && nycDoors.has(x * N + y)) drawLobby(dX0, dX1, Y1, '#2f3a40', L);
+    if (pinId && t !== 'house' && nycDoors.has(x * N + y)) drawLobby(dX0, dX1, Y1, item?.customColor || D.LANG_COLORS[item?.lang || item?.cat || 'Web'] || '#3f7f8a', L);
+    else if (pinId && t !== 'house') {
       // Recognisable entrance: frame, lobby glass door, canopy in the place's accent colour, steps and planters
       const accent = item?.customColor || D.LANG_COLORS[item?.lang || item?.cat || 'Web'] || '#3f7f8a';
       faceL(dX0 - 0.012, dX1 + 0.012, Y1 + 0.002, 0.4, 9.4, shade('#3a3029', 1, L));
@@ -1436,7 +1716,7 @@
       faceL(dX0, dX1, Y1 + 0.003, 0.3, 8.4, shade('#6b4a30', 1, L));
       box(dX0 - 0.03, Y1, dX1 + 0.03, Y1 + 0.04, 0, 0.5, '#cfc6b4', L);
     }
-    if (office) {
+    if (spec) { /* tiers, cornices and crown already drawn */ } else if (office) {
       // Roof with visible thickness: an overhanging slab, a recessed top and a lit front edge
       box(X0 - 0.035, Y0 - 0.035, X1 + 0.035, Y1 + 0.035, H, H + 2, '#4e4b47', L, { roof: '#d9d3c6' });
       quadZ(X0 + 0.03, Y0 + 0.03, X1 - 0.03, Y1 - 0.03, H + 2.02, shade('#8f8a82', 1, L)); // membrane roof
@@ -1463,7 +1743,8 @@
     if (t === 'shop' && ny && !pinId) {
       faceL(X0 + (X1 - X0) * 0.06, X1 - (X1 - X0) * 0.06, Y1 + 0.003, 0.6, 9, shade('#8a8f94', 0.85, L)); // roll-up shutter band
     }
-    const deli = t === 'shop' && !!ny && !pinId && (ny.r === 'brooklyn' || ny.r === 'queens');
+    const ave = t === 'shop' && !pinId && queensAve(x, y);
+    const deli = t === 'shop' && !!ny && !pinId && (ny.r === 'brooklyn' || ny.r === 'queens') && (!ave || ny.h < 0.22);
     if (deli) {
       // Corner deli: dark green awning over the pavement and produce crates out front
       poly4(px(X0, Y1 + 0.02), py(X0, Y1 + 0.02, 12), px(X1, Y1 + 0.02), py(X1, Y1 + 0.02, 12),
@@ -1471,18 +1752,25 @@
       const CR = ['#d9483b', '#e8a23a', '#7cae4a', '#e8d24a'];
       for (let k = 0; k < 4; k++) box(X0 + 0.1 + k * 0.1, Y1 + 0.03, X0 + 0.18 + k * 0.1, Y1 + 0.1, 0, 2.2, '#8a6a4a', L, { roof: CR[(k + Math.floor(ny.h * 4)) % 4] });
     }
+    if (ave) { // avenue shops under the el: a lit sign band over each shopfront, both street faces
+      const SIGN = ['#c0463a', '#2f5d8a', '#e8b23a', '#3f7f5a', '#8a3f6a', '#d9692f'], sc = SIGN[Math.floor(ny.h * 97) % SIGN.length];
+      faceL(X0 + 0.02, X1 - 0.02, Y1 + 0.004, 9.6, 12.6, shade(sc, 1, L)); faceR(X1 + 0.004, Y0 + 0.02, Y1 - 0.02, 9.6, 12.6, shade(sc, 0.8, L));
+      faceL(X0 + 0.12, X0 + 0.5, Y1 + 0.006, 10.4, 11.8, shade('#f2ece0', 1, L)); faceR(X1 + 0.006, Y0 + 0.3, Y1 - 0.12, 10.4, 11.8, shade('#e6dfd0', 1, L)); // lettering strip
+    }
     if (t === 'shop' && !pinId && !deli) {
-      poly4(px(x + i, y + 1 - i + 0.04), py(x + i, y + 1 - i + 0.04, 16), px(x + 1 - i, y + 1 - i + 0.04), py(x + 1 - i, y + 1 - i + 0.04, 16),
-        px(x + 1 - i, y + 1 - i + 0.13), py(x + 1 - i, y + 1 - i + 0.13, 11), px(x + i, y + 1 - i + 0.13), py(x + i, y + 1 - i + 0.13, 11), shade('#c0463a', 1, L));
+      const awn = ave ? ['#c0463a', '#2f5d8a', '#3f7f5a', '#d9692f'][Math.floor(ny.h * 31) % 4] : '#c0463a', az = ave ? 9.4 : 16, az1 = ave ? 6.6 : 11;
+      poly4(px(x + i, y + 1 - i + 0.04), py(x + i, y + 1 - i + 0.04, az), px(x + 1 - i, y + 1 - i + 0.04), py(x + 1 - i, y + 1 - i + 0.04, az),
+        px(x + 1 - i, y + 1 - i + 0.13), py(x + 1 - i, y + 1 - i + 0.13, az1), px(x + i, y + 1 - i + 0.13), py(x + i, y + 1 - i + 0.13, az1), shade(awn, 1, L));
     }
     if (brownstone) drawRowhouseDetails(X0, Y0, X1, Y1, H, L, ny);
-    else if (ny && t === 'apt' && (ny.r === 'uptown' || ny.r === 'midtown' || ny.r === 'brooklyn' || ny.r === 'bkwater') && lv <= 2 && ny.h > 0.35) drawWaterTower(X0 + (X1 - X0) * 0.62, Y0 + (Y1 - Y0) * 0.38, H + 2, L);
+    else if (ny && !spec && t === 'apt' && (ny.r === 'uptown' || ny.r === 'midtown' || ny.r === 'brooklyn' || ny.r === 'bkwater') && lv <= 2 && ny.h > 0.35) drawWaterTower(X0 + (X1 - X0) * 0.62, Y0 + (Y1 - Y0) * 0.38, H + 2, L);
     if (t === 'house' && !brownstone) {
       const r0x = px(x + i, y + 0.5), r0y = py(x + i, y + 0.5, H + 10);
       const r1x = px(x + 1 - i, y + 0.5), r1y = py(x + 1 - i, y + 0.5, H + 10);
       poly4(px(x + i, y + i), py(x + i, y + i, H), px(x + 1 - i, y + i), py(x + 1 - i, y + i, H), r1x, r1y, r0x, r0y, shade(red, 1.0, L));
       poly4(px(x + i, y + 1 - i), py(x + i, y + 1 - i, H), px(x + 1 - i, y + 1 - i), py(x + 1 - i, y + 1 - i, H), r1x, r1y, r0x, r0y, shade(red, 0.78, L));
       box(x + 0.64, y + 0.34, x + 0.73, y + 0.43, H + 3, H + 13, '#8a4a3a', L, { roof: '#5a3a30' });
+      if (ny && ny.r === 'staten') drawYard(x, y, L, ny, true);
     }
     if (t === 'clinic') {
       quadZ(x + 0.34, y + 0.44, x + 0.66, y + 0.56, H + 0.5, shade('#c8443d', 1, L));
@@ -1491,14 +1779,14 @@
     if (t === 'school') {
       box(x + 0.36, y + 0.36, x + 0.64, y + 0.64, H, H + 9, '#e9e3d5', L, { roof: '#3d5856' });
     }
-    if ((t === 'apt' || t === 'office') && lv >= 2) {
+    if ((t === 'apt' || t === 'office') && lv >= 2 && !spec && !(ny && ny.r === 'roosevelt')) {
       const th = lv >= 3 ? 12 : 7;
       box(x + 0.24, y + 0.24, x + 0.76, y + 0.76, H, H + th, wall, L, { roof });
       // Rooftop solar panel or green garden
       if (t === 'apt') quadZ(x + 0.3, y + 0.3, x + 0.7, y + 0.7, H + th + 0.4, shade('#5a8f49', 1, L));
       else quadZ(x + 0.28, y + 0.28, x + 0.52, y + 0.5, H + th + 0.4, shade('#284c73', 1, L));
     }
-    if (t === 'office') {
+    if (t === 'office' && !spec) {
       const sx = px(x + 0.5, y + 0.5), sy0 = py(x + 0.5, y + 0.5, H + (lv >= 3 ? 12 : 7)), sy1 = py(x + 0.5, y + 0.5, H + (lv >= 3 ? 22 : 14));
       rctx.strokeStyle = shade('#9cb3c9', 1, L);
       rctx.lineWidth = Math.max(1, 1.4 * rcam.z);
@@ -2058,6 +2346,38 @@
     railBake = new Map();
     if (!isNYC) return;
     const add = (x, y, f) => { const k = Math.floor(x) * N + Math.floor(y); if (!railBake.has(k)) railBake.set(k, []); railBake.get(k).push(f); };
+    // Open steel stair: treads stepping down along the track from a platform end to the pavement, with stringers
+    // and a handrail. Grouped per tread into the tile under it so it sorts with the street.
+    const addStair = (ln, s0, dir, side, zTop) => {
+      const RUN = zTop > 22 ? 1.25 : 0.9, n = 9;
+      if (s0 + dir * RUN < 0 || s0 + dir * RUN > ln.len) return; // no room past a terminal end
+      for (let k = 0; k < n; k++) {
+        const sa = s0 + dir * RUN * k / n, sb = s0 + dir * RUN * (k + 1) / n, a = ln.raw(sa), b = ln.raw(sb);
+        let tx = b[0] - a[0], ty = b[1] - a[1]; const l = Math.hypot(tx, ty) || 1; tx /= l; ty /= l;
+        const P = (q, off) => rotC(q[0] - ty * off, q[1] + tx * off);
+        const zt = zTop * (1 - (k + 1) / n) + 0.6, za = zTop * (1 - k / n);
+        const c = [P(a, side * 0.35), P(b, side * 0.35), P(b, side * 0.46), P(a, side * 0.46)];
+        const x0 = Math.min(...c.map((q) => q[0])), x1 = Math.max(...c.map((q) => q[0])), y0 = Math.min(...c.map((q) => q[1])), y1 = Math.max(...c.map((q) => q[1]));
+        add((x0 + x1) / 2 + 0.03, (y0 + y1) / 2 + 0.03, () => {
+          box(x0, y0, x1, y1, Math.max(0, zt - 1.4), zt, '#4f6f6a', 1, { roof: '#9aa7a3' });
+          for (const off of [0.35, 0.46]) { // solid side stringer plates, so the flight reads at street zoom
+            const p0 = P(a, side * off), p1 = P(b, side * off);
+            poly4(px(p0[0], p0[1]), py(p0[0], p0[1], za - 2), px(p1[0], p1[1]), py(p1[0], p1[1], zt - 2), px(p1[0], p1[1]), py(p1[0], p1[1], zt + 0.4), px(p0[0], p0[1]), py(p0[0], p0[1], za + 0.4), off === 0.46 ? '#3f6f6a' : '#36605b');
+          }
+          rctx.strokeStyle = '#2f4a47'; rctx.lineWidth = Math.max(0.6, 0.55 * rcam.z); rctx.beginPath();
+          for (const off of [0.35, 0.46]) {
+            const p0 = P(a, side * off), p1 = P(b, side * off);
+            rctx.moveTo(px(p0[0], p0[1]), py(p0[0], p0[1], za - 0.6)); rctx.lineTo(px(p1[0], p1[1]), py(p1[0], p1[1], zt - 0.6)); // stringer
+            rctx.moveTo(px(p0[0], p0[1]), py(p0[0], p0[1], za + 4)); rctx.lineTo(px(p1[0], p1[1]), py(p1[0], p1[1], zt + 4));     // handrail
+            if (k % 3 === 0) { rctx.moveTo(px(p0[0], p0[1]), py(p0[0], p0[1], za - 0.6)); rctx.lineTo(px(p0[0], p0[1]), py(p0[0], p0[1], za + 4)); }
+          }
+          const pf = P(b, side * 0.405);
+          if (k === n - 1) { rctx.moveTo(px(pf[0], pf[1]), py(pf[0], pf[1], 0)); rctx.lineTo(px(pf[0], pf[1]), py(pf[0], pf[1], 7)); }
+          rctx.stroke();
+          if (k === n - 1) { rctx.fillStyle = ln.color; rctx.beginPath(); rctx.arc(px(pf[0], pf[1]), py(pf[0], pf[1], 7.6), 1.1 * rcam.z, 0, 7); rctx.fill(); } // line globe at the foot
+        });
+      }
+    };
     for (const ln of rail.lines) {
       const sm = ln.samples;
       for (let i = 0; i < sm.length - 1; i++) {
@@ -2091,10 +2411,21 @@
           rctx.stroke();
           // Steel columns with a cross-beam every tile under elevated track over land (clear of the carriageway)
           if (elev && !overWater && i % 10 === 0) {
-            for (const side of [-0.27, 0.27]) { const c = P(a, side); box(c[0] - 0.025, c[1] - 0.025, c[0] + 0.025, c[1] + 0.025, 0, z - 1.8, '#4b5a5e', 1); }
-            const c0 = P(a, -0.29, -1.8), c1 = P(a, 0.29, -1.8);
-            rctx.strokeStyle = '#4b5a5e'; rctx.lineWidth = Math.max(0.8, 0.7 * rcam.z);
-            rctx.beginPath(); rctx.moveTo(px(c0[0], c0[1]), py(c0[0], c0[1], c0[2] - 1)); rctx.lineTo(px(c1[0], c1[1]), py(c1[0], c1[1], c1[2] - 1)); rctx.stroke();
+            // Riveted steel bent: two columns on concrete footings, a box girder under the deck and knee braces
+            for (const side of [-0.27, 0.27]) {
+              const c = P(a, side);
+              box(c[0] - 0.04, c[1] - 0.04, c[0] + 0.04, c[1] + 0.04, 0, 1.2, '#9a958a', 1);
+              box(c[0] - 0.028, c[1] - 0.028, c[0] + 0.028, c[1] + 0.028, 1.2, z - 1.8, '#4b5a5e', 1, { roof: '#5d6d72' });
+            }
+            const c0 = P(a, -0.31, -1.8), c1 = P(a, 0.31, -1.8);
+            rctx.strokeStyle = '#4b5a5e'; rctx.lineWidth = Math.max(1, 1.5 * rcam.z);
+            rctx.beginPath(); rctx.moveTo(px(c0[0], c0[1]), py(c0[0], c0[1], c0[2] - 1.2)); rctx.lineTo(px(c1[0], c1[1]), py(c1[0], c1[1], c1[2] - 1.2)); rctx.stroke();
+            rctx.lineWidth = Math.max(0.6, 0.6 * rcam.z); rctx.beginPath();
+            for (const side of [-0.27, 0.27]) {
+              const k0 = P(a, side, -6.5), k1 = P(a, side * 0.55, -2.2);
+              rctx.moveTo(px(k0[0], k0[1]), py(k0[0], k0[1], k0[2])); rctx.lineTo(px(k1[0], k1[1]), py(k1[0], k1[1], k1[2]));
+            }
+            rctx.stroke();
           }
         });
       }
@@ -2133,15 +2464,31 @@
               quad([P(a, side * 0.25, 14.5), P(b, side * 0.25, 14.5), P(b, side * 0.47, 15.5), P(a, side * 0.47, 15.5)], '#3f6f6a'); // canopy
               if (first || Math.round((s - st.s) * 10) % 6 === 0) { const c = P(a, side * 0.43); box(c[0] - 0.012, c[1] - 0.012, c[0] + 0.012, c[1] + 0.012, a[2] + 2.2, a[2] + 14.6, '#3f6f6a', 1); }
             }
-            if (first && a[2] > 2) { // stairs down to the street at one end
-              const s0 = P(a, 0.46, 2.2), s1 = P(a, 0.62, 0);
-              const [sx0, sy0] = [Math.min(s0[0], s1[0]) - 0.02, Math.min(s0[1], s1[1]) - 0.02];
-              rctx.strokeStyle = '#3f6f6a'; rctx.lineWidth = Math.max(0.8, 0.8 * rcam.z);
-              rctx.beginPath(); rctx.moveTo(px(s0[0], s0[1]), py(s0[0], s0[1], s0[2])); rctx.lineTo(px(s1[0], s1[1]), py(s1[0], s1[1], 0)); rctx.stroke();
-              box(sx0, sy0, sx0 + 0.06, sy0 + 0.06, 0, 1, '#6b6f73', 1);
-            }
           });
         }
+        // Elevated stations: a steel stair down to the pavement on each side of the street, past both platform ends
+        const pe = ln.raw(st.s);
+        if (pe[2] > 2) for (const endDir of [-1, 1]) for (const side of [-1, 1]) addStair(ln, st.s + endDir * half, endDir, side, pe[2] + 2.2);
+      }
+    }
+    // Staten Island: covered walkway from the St. George ferry terminal along the tracks to the SIR platform
+    const sir = rail.lines.find((l) => l.id === 'S');
+    if (sir && sir.stops.length) {
+      const st = sir.stops[0], sEnd = st.s - (TRAIN.LEN / 2 + 0.15);
+      for (let s = 0; s < sEnd; s += 0.12) {
+        const a = sir.raw(s), b = sir.raw(Math.min(sEnd, s + 0.12));
+        let tx = b[0] - a[0], ty = b[1] - a[1]; const l = Math.hypot(tx, ty) || 1; tx /= l; ty /= l;
+        const P = (q, off, z) => { const [vx, vy] = rotC(q[0] - ty * off, q[1] + tx * off); return [vx, vy, z]; };
+        const mid = P([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], 0.56, 0), k = Math.round(s / 0.12);
+        add(mid[0] + 0.02, mid[1] + 0.02, () => {
+          const quad = (q, fill) => { rctx.beginPath(); q.forEach(([x, y, zz], j) => (j ? rctx.lineTo(px(x, y), py(x, y, zz)) : rctx.moveTo(px(x, y), py(x, y, zz)))); rctx.closePath(); rctx.fillStyle = fill; rctx.fill(); };
+          quad([P(a, 0.47, 0.4), P(b, 0.47, 0.4), P(b, 0.66, 0.4), P(a, 0.66, 0.4)], '#cfc6b2');                  // paving
+          quad([P(a, 0.47, 0.45), P(b, 0.47, 0.45), P(b, 0.49, 0.45), P(a, 0.49, 0.45)], '#e2b93b');              // tactile edge
+          if (k % 3 === 0) for (const off of [0.48, 0.65]) { const c = P(a, off, 0); box(c[0] - 0.008, c[1] - 0.008, c[0] + 0.008, c[1] + 0.008, 0.4, 11, '#2f6fd6', 1); }
+          quad([P(a, 0.45, 11.6), P(b, 0.45, 11.6), P(b, 0.68, 11), P(a, 0.68, 11)], 'rgba(170,200,215,0.85)');   // glass canopy
+          quad([P(a, 0.45, 11.6), P(b, 0.45, 11.6), P(b, 0.45, 10.8), P(a, 0.45, 10.8)], '#2f6fd6');             // blue fascia
+          if (k === 4) { const c = P(a, 0.66, 0); box(c[0] - 0.01, c[1] - 0.01, c[0] + 0.01, c[1] + 0.01, 0.4, 8, '#2e3338', 1); box(c[0] - 0.05, c[1] - 0.012, c[0] + 0.05, c[1] + 0.012, 8, 10.5, '#2f6fd6', 1, { roof: '#f2ece0' }); } // wayfinding sign
+        });
       }
     }
     // Manhattan Bridge-style rail crossing: steel towers with an arched portal and suspension cables
@@ -2342,7 +2689,8 @@
       rctx = wctx; wctx.setTransform(WS, 0, 0, WS, 0, 0); wctx.clearRect(0, 0, WW, WH);
       if (isNYC) drawShores(); else { drawRidge(); drawSlab(1); } // NYC floats in open harbour water: no board or rim
       nctx.setTransform(1, 0, 0, 1, 0, 0); nctx.clearRect(0, 0, WW, WH);
-      if (isNYC) railBakePrep();
+      if (isNYC) { railBakePrep(); nycDoorsPrep(); }
+      sigHiddenPrep();
     }
     if (lit) { litCtx.setTransform(1, 0, 0, 1, 0, 0); litCtx.clearRect(0, 0, WW, WH); }
     else if (world && isNYC) litStale = true;
@@ -2443,13 +2791,28 @@
         if ((dx > 1 || dy > 1) && t !== 'office' && t !== 'apt') continue;
         seen[idx] = 1;
         ov.push({ k: 0, s: tx + ty, x: tx, y: ty, t });
+        if (isNYC) coverFront(tx, ty);
       }
+    }
+  }
+  // A redrawn tile must not paint over a taller tower standing in front of it: redraw towers up to four
+  // diagonals ahead in the same screen column too (NYC towers are tall enough to reach that far).
+  function coverFront(rx, ry) {
+    for (let a = 0; a <= 4; a++) for (let b = 0; b <= 4; b++) {
+      if ((!a && !b) || Math.abs(a - b) > 1) continue;
+      const tx = rx + a, ty = ry + b;
+      if (tx >= N || ty >= N) continue;
+      const idx = tx * N + ty, t = grid[tx][ty];
+      if (seen[idx] || (t !== 'office' && t !== 'apt') || (tx === cutX && ty === cutY)) continue;
+      seen[idx] = 1;
+      ov.push({ k: 0, s: tx + ty, x: tx, y: ty, t });
     }
   }
 
   function buildingTopZ(x, y, t) {
     const lv = levels[x][y] || 1;
-    let z = bldHeight(t, lv);
+    const sp = towerSpec(x, y, t); if (sp) return sp.top + 4;
+    let z = bh(x, y, drawType(x, y, t), lv);
     if (t === 'office') z += lv >= 3 ? 22 : 14;
     else if (t === 'apt') z += lv >= 2 ? 10 : 4;
     else if (t === 'house' || t === 'school') z += 12;
@@ -2649,6 +3012,7 @@
     const nsCol = trafficSignalNS() === 'green' ? '#34d399' : trafficSignalNS() === 'yellow' ? '#fbbf24' : '#ef4444';
     const ewCol = trafficSignalEW() === 'green' ? '#34d399' : trafficSignalEW() === 'yellow' ? '#fbbf24' : '#ef4444';
     for (const cidx of crossings) {
+      if (sigHidden.has(cidx)) continue; // behind a taller building in this view
       const cx = (cidx / N) | 0, cy = cidx % N;
       const sx = px(cx + 0.12, cy + 0.88), sy = py(cx + 0.12, cy + 0.88, 7);
       if (sx < -20 || sx > W + 20 || sy < -20 || sy > H + 20) continue;
@@ -2686,6 +3050,13 @@
           ov.push({ k: 10, s: c.pose.x + c.pose.y + 0.2, c }); addOccluders(Math.floor(c.pose.x), Math.floor(c.pose.y));
         }
         const fb = ferryBoat(); if (fb) boatsVis.push(fb);
+        // Doormen at Midtown lobbies, each with a yellow cab waiting at the kerb
+        for (const d of nycDoorList) {
+          const dx0 = px(d.mx, d.my), dy0 = py(d.mx, d.my);
+          if (dx0 < -60 || dx0 > W + 60 || dy0 < -40 || dy0 > H + 40) continue;
+          ov.push({ k: 12, s: d.mx + d.my, d }); addOccluders(Math.floor(d.mx), Math.floor(d.my));
+          ov.push({ k: 1, s: d.cab.px + d.cab.py, c: d.cab });
+        }
         // Cars under an elevated line: redraw that tile's rail pieces after them so the deck stays on top
         for (const c of cars) {
           const tx = Math.round(c.px), ty = Math.round(c.py), key = tx * N + ty;
@@ -2742,6 +3113,7 @@
         else if (it.k === 7) drawBot(it.b, now, true);
         else if (it.k === 10) drawTrainCar(it.c, 1, false);
         else if (it.k === 11) drawRailForTile(it.x, it.y);
+        else if (it.k === 12) drawHuman(it.d.mx, it.d.my, surfaceZ(it.d.mx, it.d.my), 0, 1, it.d.look, 0, 0, { simple: perfLevel >= 2 });
         else drawTile(it.x, it.y, it.t, 1, it.t !== 'bridge');
       }
       warm = savedW;
@@ -2817,6 +3189,17 @@
       for (const it of ov) if (it.k === 1) drawCar(it.c, L, true);
     }
     if (L < 0.6 && isNYC) for (const it of ov) if (it.k === 10) drawTrainCar(it.c, L, true);
+    // Doormen and their waiting cabs stand in front of lit lobbies: draw them again over the lit-window layer,
+    // shaded for the hour, so the glass behind them doesn't paint over them
+    if (L < 0.72 && isNYC) {
+      const n = Math.min(0.7, (1 - L) * 0.8);
+      for (const it of ov) {
+        if (it.k === 12 && it.d.block <= 8) {
+          const lk = it.d.look, dk = { ...lk, top: mix(lk.top, '#0c101a', n), pants: mix(lk.pants, '#0c101a', n), jacket: mix(lk.jacket, '#0c101a', n), skin: mix(lk.skin, '#2a2430', n * 0.8), hair: mix(lk.hair, '#0c101a', n) };
+          drawHuman(it.d.mx, it.d.my, surfaceZ(it.d.mx, it.d.my), 0, 1, dk, 0, 0, { simple: perfLevel >= 2 });
+        } else if (it.k === 1 && it.c.dest === 'Waiting at the kerb' && it.c.block <= 8) { drawCar(it.c, L); drawCar(it.c, L, true); }
+      }
+    }
 
     // Rain weather overlay
     if (!transparentBg && (weather === 'rain' || activeDisaster === 'storm')) {
@@ -4420,7 +4803,7 @@
     const d = TYPES[t];
     if (!d || !d.h) return null;
     const i = insetFor(x, y, t) || 0.12;
-    const H = Math.max(1, bldHeight(t, levels[x][y] || 1));
+    const H = Math.max(1, bh(x, y, drawType(x, y, t)));
     return { x, y, t, i, H, x0: x + i, y0: y + i, x1: x + 1 - i, y1: y + 1 - i, F: 1 };
   }
 
@@ -4774,6 +5157,7 @@
       worldImage: () => worldCanvas, // the baked map layer (terrain, trees, buildings), for pixel comparisons
       rail: () => ({ lines: rail.lines.map((l) => ({ id: l.id, len: l.len, stops: l.stops.map((st) => [st.name, +st.s.toFixed(2)]) })), trains: rail.trains.map((t) => ({ li: t.li, s: +t.s.toFixed(2), dir: t.dir, v: +t.v.toFixed(2), state: t.state, at: t.at && t.at.name })), ferry: rail.ferry && { s: +rail.ferry.s.toFixed(2), state: rail.ferry.state } }),
       railPoint: (li, s) => { const p = rail.lines[li].raw(s); const [x, y] = rotC(p[0], p[1]); return [x, y, p[2]]; },
+      doors: () => nycDoorList.map((d) => ({ x: d.x, y: d.y, mx: d.mx, my: d.my, pinned: !!pins[d.x][d.y], block: d.block })),
     };
   }
 

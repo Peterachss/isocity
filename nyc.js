@@ -83,7 +83,7 @@ window.ISOCITY_NYC = (() => {
     },
     {
       id: 'Q', name: 'Queens El', color: '#a44cc0', trains: 2,
-      pts: [[14.8, 23.5, -14], [17.5, 23.5, -14], [20.0, 23.5, -14], [22.5, 23.5, -14], [24.6, 23.5, -14], [26.0, 23.5, -6], [27.0, 23.5, 4], [28.2, 23.5, 16], [44.2, 23.5, 16]],
+      pts: [[14.8, 23.5, -14], [17.5, 23.5, -14], [20.0, 23.5, -14], [22.5, 23.5, -14], [24.6, 23.5, -14], [26.0, 23.5, -6], [27.0, 23.5, 6], [28.6, 23.5, 24], [44.2, 23.5, 24]],
       stations: [
         { name: 'Lexington Avenue', at: [17.5, 23.5], entrance: [17.82, 23.3] },
         { name: 'Roosevelt Island', at: [22.5, 23.5], entrance: [22.55, 22.2] },
@@ -164,7 +164,7 @@ window.ISOCITY_NYC = (() => {
       else if (r === 'uptown') set(x, y, h < 0.8 ? 'apt' : 'shop', h < 0.8 ? (h2 < 0.5 ? 2 : 1) : 1);
       else if (r === 'roosevelt') set(x, y, h < 0.55 ? 'apt' : 'park', h < 0.55 ? 2 : 1);
       else if (r === 'lic') set(x, y, h < 0.6 ? 'apt' : 'shop', h < 0.6 ? (h2 < 0.6 ? 3 : 2) : 1);
-      else if (r === 'queens') set(x, y, (y === 22 || y === 24) ? (h < 0.6 ? 'shop' : 'house') : h < 0.08 ? 'forest' : h < 0.78 ? 'house' : 'shop', 1);
+      else if (r === 'queens') set(x, y, (y === 22 || y === 24) && x >= 28 ? 'shop' : (y === 22 || y === 24) ? (h < 0.6 ? 'shop' : 'house') : h < 0.08 ? 'forest' : h < 0.78 ? 'house' : 'shop', 1);
       else if (r === 'bkwater') set(x, y, h < 0.75 ? 'shop' : 'apt', h2 < 0.5 ? 2 : 1);
       else if (r === 'brooklyn') {
         const prospect = x >= 33 && x <= 37 && y >= 47 && y <= 51;
