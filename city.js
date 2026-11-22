@@ -541,6 +541,7 @@
         const idx = cars.length;
         const kind = idx % 9 === 0 ? 'bus' : idx % 6 === 0 ? 'bike' : idx === 3 ? 'truck' : 'car';
         const palette = kind === 'bus' ? '#e6d8a8' : kind === 'bike' ? '#38bdf8' : kind === 'truck' ? '#d97706'
+          : isNYC && idx % 2 === 0 ? '#f2c230' // yellow cabs
           : ['#c0463a', '#2f5d8a', '#e6e2d6', '#d89a2b', '#3d3f45', '#4f8f6a'][idx % 6];
         cars.push({ id: idx + 1, kind, fx: x, fy: y, tx: x, ty: y, t: 1, px: x, py: y, wait: 0,
           speed: kind === 'bike' ? rnd(1.3, 1.8) : kind === 'bus' ? 0.72 : rnd(0.85, 1.35), color: palette,
@@ -1123,6 +1124,24 @@
       rctx.setLineDash([]);
     }
 
+    // NYC street kit: green street-sign pole and walk signal at intersections, hydrants and newspaper boxes
+    // on the pavement. Placed on the kerb corners so crossings, doorways and station stairs stay clear.
+    if (isNYC && !bridge) {
+      const h = NYC.hash(...unrotPt(x, y), 13);
+      if (crossings.has(x * N + y)) {
+        const sx = x + 0.06, sy = y + 0.94;
+        box(sx - 0.008, sy - 0.008, sx + 0.008, sy + 0.008, 1.4, 11, '#3d4a44', L);
+        box(sx - 0.002, sy - 0.07, sx + 0.002, sy + 0.07, 10, 11.4, '#2f7a4e', L);        // street name plates
+        box(sx - 0.07, sy - 0.002, sx + 0.07, sy + 0.002, 8.6, 10, '#2f7a4e', L);
+        box(x + 0.92, y + 0.06, x + 0.95, y + 0.09, 1.4, 6.5, '#2e3338', L, { roof: L < 0.6 ? '#ff9a3c' : '#e8e2d2' }); // walk signal
+      } else if (h < 0.22) {
+        const hx = x + 0.08 + h * 2, hy = y + 0.93;
+        box(hx - 0.018, hy - 0.018, hx + 0.018, hy + 0.018, 1.4, 4, '#c23b2a', L, { roof: '#d65a44' });   // hydrant
+      } else if (h > 0.9) {
+        const nx = x + 0.9, ny = y + 0.2 + (h - 0.9) * 4;
+        box(nx - 0.025, ny - 0.03, nx + 0.025, ny + 0.03, 1.4, 5, h > 0.95 ? '#2f5d8a' : '#b8432f', L);    // newspaper box
+      }
+    }
     // Street lamps that illuminate warmly at dusk
     if ((x + y) % 3 === 0) {
       const lx = px(x + 0.14, y + 0.14), ly0 = py(x + 0.14, y + 0.14, z), ly1 = py(x + 0.14, y + 0.14, z + 8);
@@ -2141,6 +2160,23 @@
       });
     }
   }
+  // Station name plates in the line colour, shown at street zoom so the overview stays readable
+  function drawStationNames() {
+    ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.textBaseline = 'middle';
+    for (const ln of rail.lines) for (const st of ln.stops) {
+      const p = ln.raw(st.s), under = p[2] < -2;
+      const [qx, qy] = rotC(...(under ? (st.entrance || st.at) : st.at));
+      const sx = px(qx, qy), sy = py(qx, qy, (under ? 8 : p[2] + 18)) - 6;
+      if (sx < -80 || sx > W + 80 || sy < -20 || sy > H + 20) continue;
+      ctx.font = '600 11px system-ui, sans-serif';
+      const w = ctx.measureText(st.name).width + 24;
+      ctx.fillStyle = 'rgba(20,24,28,0.86)'; ctx.beginPath(); ctx.roundRect(sx - w / 2, sy - 9, w, 18, 4); ctx.fill();
+      ctx.fillStyle = ln.color; ctx.beginPath(); ctx.arc(sx - w / 2 + 9, sy, 5, 0, 7); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.font = '700 8px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText(ln.id, sx - w / 2 + 9, sy + 0.5);
+      ctx.font = '600 11px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.fillText(st.name, sx - w / 2 + 17, sy + 0.5);
+    }
+    ctx.restore();
+  }
   function drawRailForTile(x, y) {
     const list = railBake && railBake.get(x * N + y);
     if (list) for (const f of list) f();
@@ -2829,6 +2865,7 @@
 
     if (!transparentBg) {
       drawMapLabels(now);
+      if (isNYC && showLabels && cam.z >= 1.3) drawStationNames();
       if (showLabels && repoCache.size) {
         const flash = reduceMotion || ((now >> 8) & 1);
         if (flash) {
