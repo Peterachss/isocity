@@ -1463,7 +1463,15 @@
     if (t === 'shop' && ny && !pinId) {
       faceL(X0 + (X1 - X0) * 0.06, X1 - (X1 - X0) * 0.06, Y1 + 0.003, 0.6, 9, shade('#8a8f94', 0.85, L)); // roll-up shutter band
     }
-    if (t === 'shop' && !pinId) {
+    const deli = t === 'shop' && !!ny && !pinId && (ny.r === 'brooklyn' || ny.r === 'queens');
+    if (deli) {
+      // Corner deli: dark green awning over the pavement and produce crates out front
+      poly4(px(X0, Y1 + 0.02), py(X0, Y1 + 0.02, 12), px(X1, Y1 + 0.02), py(X1, Y1 + 0.02, 12),
+        px(X1, Y1 + 0.13), py(X1, Y1 + 0.13, 8.5), px(X0, Y1 + 0.13), py(X0, Y1 + 0.13, 8.5), shade('#2f5a3e', 1, L));
+      const CR = ['#d9483b', '#e8a23a', '#7cae4a', '#e8d24a'];
+      for (let k = 0; k < 4; k++) box(X0 + 0.1 + k * 0.1, Y1 + 0.03, X0 + 0.18 + k * 0.1, Y1 + 0.1, 0, 2.2, '#8a6a4a', L, { roof: CR[(k + Math.floor(ny.h * 4)) % 4] });
+    }
+    if (t === 'shop' && !pinId && !deli) {
       poly4(px(x + i, y + 1 - i + 0.04), py(x + i, y + 1 - i + 0.04, 16), px(x + 1 - i, y + 1 - i + 0.04), py(x + 1 - i, y + 1 - i + 0.04, 16),
         px(x + 1 - i, y + 1 - i + 0.13), py(x + 1 - i, y + 1 - i + 0.13, 11), px(x + i, y + 1 - i + 0.13), py(x + i, y + 1 - i + 0.13, 11), shade('#c0463a', 1, L));
     }
@@ -2069,6 +2077,8 @@
             return;
           }
           const elev = z > 2;
+          // Strip of shade cast by the elevated deck onto the street below
+          if (elev && !overWater) quad([P(a, -0.24, -a[2] + 0.06), P(b, -0.24, -b[2] + 0.06), P(b, 0.36, -b[2] + 0.06), P(a, 0.36, -a[2] + 0.06)], 'rgba(12,16,22,0.2)');
           if (elev) { // deck fascia then deck
             quad([P(a, 0.3, -1.8), P(b, 0.3, -1.8), P(b, 0.3, 0), P(a, 0.3, 0)], shade('#56636a', 0.9, 1));
             quad([P(a, -0.3, -1.8), P(b, -0.3, -1.8), P(b, -0.3, 0), P(a, -0.3, 0)], shade('#56636a', 0.75, 1));
